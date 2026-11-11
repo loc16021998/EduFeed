@@ -9,7 +9,7 @@ import type { RootStackScreenProps } from '@/navigation/types';
 import { useChecklistStore } from '@/store/useChecklistStore';
 import { CATEGORY_LABELS, COLORS } from '@/utils/constants';
 import { haptics } from '@/utils/haptics';
-import { confirmAsync } from '@/utils/platform';
+import { confirmAsync, nativeOnly } from '@/utils/platform';
 
 import ChecklistItemRow from './components/ChecklistItemRow';
 
@@ -97,7 +97,7 @@ export default function ChecklistScreen({ navigation, route }: RootStackScreenPr
 
         {/* Completion */}
         {allDone && (
-          <Animated.View entering={FadeInDown} className="items-center gap-2 rounded-3xl bg-emerald-50 p-4">
+          <Animated.View entering={nativeOnly(FadeInDown)} className="items-center gap-2 rounded-3xl bg-emerald-50 p-4">
             {justCompleted && <SuccessBurst size={56} />}
             <Text className="text-center text-[16px] font-extrabold text-emerald-800">Tuyệt vời! Con đã sẵn sàng 🎉</Text>
             <Text className="text-center text-[13px] leading-5 text-emerald-900">

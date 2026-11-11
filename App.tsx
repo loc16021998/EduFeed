@@ -1,4 +1,5 @@
 import './global.css';
+import '@/lib/nativewindInterop';
 
 import { StatusBar, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';

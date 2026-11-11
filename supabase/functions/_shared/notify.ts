@@ -18,6 +18,7 @@ import {
   OA_CS_ENDPOINT,
   ZNS_ENDPOINT,
   type LeadNotificationInput,
+  type ZnsMode,
 } from './zaloPayloads.ts';
 
 export interface AdminContact {
@@ -31,6 +32,10 @@ export interface NotifyConfig {
   zaloAccessToken: string;
   znsAdminTemplateId: string;
   znsParentTemplateId: string;
+  /** ZNS_MODE=development while testing templates; production otherwise. */
+  znsMode: ZnsMode;
+  /** Centre hotline shown in the parent ZNS (template param PHONE). */
+  centreHotline: string;
   adminWebhookUrl: string;
   adminContacts: AdminContact[];
 }
@@ -132,7 +137,7 @@ export async function notifyNewLead(db: SupabaseClient, leadId: string, cfg: Not
       jobs[`zns_admin:${admin.name || admin.phone}`] = postZalo(
         ZNS_ENDPOINT,
         cfg.zaloAccessToken,
-        buildZnsAdminAlert(input, admin.phone, cfg.znsAdminTemplateId),
+        buildZnsAdminAlert(input, admin.phone, cfg.znsAdminTemplateId, cfg.znsMode),
       );
     }
   }
@@ -140,7 +145,9 @@ export async function notifyNewLead(db: SupabaseClient, leadId: string, cfg: Not
     jobs.webhook_admin = postWebhook(cfg.adminWebhookUrl, buildAdminWebhookBody(input));
   }
   if (cfg.zaloAccessToken && cfg.znsParentTemplateId) {
-    jobs.zns_parent = postZalo(ZNS_ENDPOINT, cfg.zaloAccessToken, buildZnsBookingConfirmation(input, cfg.znsParentTemplateId));
+    jobs.zns_parent = cfg.centreHotline
+      ? postZalo(ZNS_ENDPOINT, cfg.zaloAccessToken, buildZnsBookingConfirmation(input, cfg.znsParentTemplateId, { hotline: cfg.centreHotline, mode: cfg.znsMode }))
+      : Promise.reject(new Error('Chưa đặt CENTRE_HOTLINE (tham số PHONE của mẫu ZNS)'));
   }
   if (cfg.zaloAccessToken && lead.zalo_user_id) {
     jobs.oa_parent = postZalo(OA_CS_ENDPOINT, cfg.zaloAccessToken, buildOaParentConfirmation(input, lead.zalo_user_id));

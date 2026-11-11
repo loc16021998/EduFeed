@@ -2,6 +2,13 @@ import { Alert, Platform, Share, useWindowDimensions } from 'react-native';
 
 export const isWeb = Platform.OS === 'web';
 
+/**
+ * Use for Reanimated `entering` animations: on web, Reanimated hides the element on first render by
+ * merging `visibility: 'hidden'` into its style, which breaks NativeWind `className` on Animated
+ * components (the card ends up stuck hidden / unstyled). Native keeps the animation.
+ */
+export const nativeOnly = <T,>(value: T): T | undefined => (isWeb ? undefined : value);
+
 /** On web the app is shown in a centred phone-width column (see App.tsx). */
 export const MAX_APP_WIDTH = 480;
 

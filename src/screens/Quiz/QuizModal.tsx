@@ -8,7 +8,7 @@ import { Button } from '@/components';
 import type { RootStackScreenProps } from '@/navigation/types';
 import { QUIZ_TOTAL_STEPS, selectCanContinue, useQuizStore } from '@/store/useQuizStore';
 import { COLORS } from '@/utils/constants';
-import { isWeb } from '@/utils/platform';
+import { isWeb, nativeOnly } from '@/utils/platform';
 import { QUIZ_QUESTIONS } from '@/utils/mockData';
 
 import QuizOptionCard from './components/QuizOptionCard';
@@ -70,11 +70,11 @@ export default function QuizModal({ navigation }: RootStackScreenProps<'QuizModa
 
         <View className="flex-1 overflow-hidden">
           {result ? (
-            <Animated.View key="result" entering={entering} exiting={isWeb ? undefined : FadeOut.duration(120)} className="flex-1">
+            <Animated.View key="result" entering={nativeOnly(entering)} exiting={isWeb ? undefined : FadeOut.duration(120)} className="flex-1">
               <QuizResultView result={result} onBook={onBook} onRetake={reset} />
             </Animated.View>
           ) : (
-            <Animated.View key={question.id} entering={entering} exiting={isWeb ? undefined : FadeOut.duration(120)} className="flex-1 gap-5">
+            <Animated.View key={question.id} entering={nativeOnly(entering)} exiting={isWeb ? undefined : FadeOut.duration(120)} className="flex-1 gap-5">
               <View className="gap-1.5">
                 <Text className="text-[22px] font-extrabold leading-8 text-ink">{question.question}</Text>
                 <Text className="text-[13px] text-ink-muted">

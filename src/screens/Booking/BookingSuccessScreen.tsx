@@ -1,4 +1,4 @@
-import { Gift, MapPinned, Phone } from 'lucide-react-native';
+import { Gift, MapPinned, MessageCircleMore, Phone } from 'lucide-react-native';
 import { Linking, Pressable, ScrollView, Text, View } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
 import Animated, { FadeInDown } from 'react-native-reanimated';
@@ -11,6 +11,7 @@ import { buildZaloOAUrl } from '@/services/zalo';
 import { useBookingStore } from '@/store';
 import { COLORS, CONTACT } from '@/utils/constants';
 import { formatPhone } from '@/utils/helpers';
+import { nativeOnly } from '@/utils/platform';
 
 const ZALO_BLUE = '#0068FF';
 /** Shown only in dev when PUBLIC_ZALO_OA_ID isn't configured, so the layout can be reviewed. */
@@ -37,7 +38,7 @@ export default function BookingSuccessScreen({ route, navigation }: RootStackScr
     >
       <SuccessBurst size={84} />
 
-      <Animated.View entering={FadeInDown.delay(250)} className="items-center gap-1">
+      <Animated.View entering={nativeOnly(FadeInDown.delay(250))} className="items-center gap-1">
         <Text className="text-center text-2xl font-extrabold text-ink" accessibilityRole="header">
           Đăng ký thành công! 🎉
         </Text>
@@ -48,8 +49,32 @@ export default function BookingSuccessScreen({ route, navigation }: RootStackScr
         )}
       </Animated.View>
 
+      {/* How the parent will be confirmed — only claim a Zalo message when the server is sending one. */}
       {record && (
-        <Animated.View entering={FadeInDown.delay(380)} className="w-full gap-1 rounded-3xl bg-surface p-4">
+        <Animated.View
+          entering={nativeOnly(FadeInDown.delay(320))}
+          className={`w-full flex-row gap-2.5 rounded-2xl p-3.5 ${record.confirmation === 'ZNS' ? 'bg-blue-50' : 'bg-surface'}`}
+          accessibilityLiveRegion="polite"
+        >
+          {record.confirmation === 'ZNS' ? <MessageCircleMore size={20} color={ZALO_BLUE} /> : <Phone size={20} color={COLORS.brand} />}
+          <Text className="flex-1 text-[13px] leading-5 text-ink">
+            {record.confirmation === 'ZNS' ? (
+              <>
+                Tin nhắn <Text className="font-bold">xác nhận lịch hẹn qua Zalo</Text> đang được gửi tới số{' '}
+                <Text className="font-bold">{formatPhone(record.phone)}</Text>. Nếu sau 15 phút chưa nhận được, trung tâm sẽ gọi điện xác nhận.
+              </>
+            ) : (
+              <>
+                Trung tâm sẽ <Text className="font-bold">gọi điện xác nhận lịch hẹn</Text> tới số{' '}
+                <Text className="font-bold">{formatPhone(record.phone)}</Text> trong giờ làm việc.
+              </>
+            )}
+          </Text>
+        </Animated.View>
+      )}
+
+      {record && (
+        <Animated.View entering={nativeOnly(FadeInDown.delay(380))} className="w-full gap-1 rounded-3xl bg-surface p-4">
           <Row k="Học viên" v={`${record.studentName} (${record.childAge} tuổi)`} />
           <Row k="Khóa học" v={record.display.course} />
           <Row k="Cơ sở" v={record.display.campus} />
@@ -66,7 +91,7 @@ export default function BookingSuccessScreen({ route, navigation }: RootStackScr
 
       {/* Zalo OA QR */}
       {!!zaloUrl && (
-        <Animated.View entering={FadeInDown.delay(500)} className="w-full flex-row items-center gap-4 rounded-3xl border border-slate-200 p-4">
+        <Animated.View entering={nativeOnly(FadeInDown.delay(500))} className="w-full flex-row items-center gap-4 rounded-3xl border border-slate-200 p-4">
           <View className="rounded-2xl bg-white p-2 shadow-sm shadow-black/10">
             <QRCode value={zaloUrl} size={112} color="#0F172A" backgroundColor="#FFFFFF" />
           </View>
@@ -82,7 +107,7 @@ export default function BookingSuccessScreen({ route, navigation }: RootStackScr
         </Animated.View>
       )}
 
-      <Animated.View entering={FadeInDown.delay(620)} className="w-full gap-2.5">
+      <Animated.View entering={nativeOnly(FadeInDown.delay(620))} className="w-full gap-2.5">
         <Pressable
           onPress={openZalo}
           accessibilityRole="link"

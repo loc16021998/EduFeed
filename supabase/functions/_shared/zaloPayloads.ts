@@ -43,7 +43,14 @@ export interface ZnsPayload {
   template_id: string;
   template_data: Record<string, string>;
   tracking_id: string;
+  /** "development" = ZNS test mode (only delivered to numbers Zalo allows for testing, not billed as live). */
+  mode?: 'development';
 }
+
+export type ZnsMode = 'development' | 'production';
+
+/** ZNS template params are short text fields — keep values within a safe length. */
+const param = (v: string, max = 100) => (v.length > max ? `${v.slice(0, max - 1)}…` : v);
 
 export interface OaTextMessage {
   recipient: { user_id: string };
@@ -79,26 +86,29 @@ export function bookingCode(leadId: string): string {
 // ─── Payload builders ───────────────────────────────────────────────────────
 
 /**
- * ZNS confirmation sent to the parent's phone.
- * `template_data` keys must match the template approved on the Zalo Business account —
- * the "Chỉ đường" button is configured inside the template, using `maps_url`.
+ * ZNS booking confirmation sent to the parent's phone.
+ *
+ * `template_data` keys MUST match the parameters of the template approved on Zalo exactly.
+ * TH EDU's approved template uses:  C_NAME · STUDENT_NAME · CAMPUS · TIME · PHONE (centre hotline).
+ * If the template changes on Zalo, change these keys to match.
  */
-export function buildZnsBookingConfirmation(input: LeadNotificationInput, templateId: string): ZnsPayload {
+export function buildZnsBookingConfirmation(
+  input: LeadNotificationInput,
+  templateId: string,
+  opts: { hotline: string; mode?: ZnsMode },
+): ZnsPayload {
   return {
     phone: toZaloPhone(input.phone),
     template_id: templateId,
     template_data: {
-      customer_name: input.parentName,
-      booking_code: input.code,
-      child_name: input.childName,
-      course_name: input.course,
-      schedule: `${input.slot}, ${input.date}`,
-      campus: input.campus,
-      address: input.campusAddress,
-      gift: input.gift,
-      maps_url: input.mapsUrl,
+      C_NAME: param(input.parentName, 30),
+      STUDENT_NAME: param(input.childName, 30),
+      CAMPUS: param(input.campus),
+      TIME: param(`${input.slot}, ${input.date}`),
+      PHONE: opts.hotline.replace(/\s+/g, ''),
     },
     tracking_id: input.leadId,
+    ...(opts.mode === 'development' ? { mode: 'development' as const } : {}),
   };
 }
 
@@ -106,7 +116,7 @@ export function buildZnsBookingConfirmation(input: LeadNotificationInput, templa
  * ZNS alert to a centre administrator's phone (Thầy Tú / Cô Hường).
  * Requires a separate approved "admin alert" template.
  */
-export function buildZnsAdminAlert(input: LeadNotificationInput, adminPhone: string, templateId: string): ZnsPayload {
+export function buildZnsAdminAlert(input: LeadNotificationInput, adminPhone: string, templateId: string, mode: ZnsMode = 'production'): ZnsPayload {
   return {
     phone: toZaloPhone(adminPhone),
     template_id: templateId,
@@ -121,6 +131,7 @@ export function buildZnsAdminAlert(input: LeadNotificationInput, adminPhone: str
     },
     // tracking_id must be unique per message → suffix the admin phone.
     tracking_id: `${input.leadId}:${toZaloPhone(adminPhone)}`,
+    ...(mode === 'development' ? { mode: 'development' as const } : {}),
   };
 }
 

@@ -76,13 +76,18 @@ export async function submitLead(payload: BookingPayload, idempotencyKey?: strin
   const request = toSubmitRequest(record);
   try {
     const res = await callApi<LeadSubmitResponse>('leads/submit', { method: 'POST', body: request });
-    return { ...record, id: res.id, code: res.code, createdAt: res.createdAt };
+    return { ...record, id: res.id, code: res.code, createdAt: res.createdAt, confirmation: res.confirmation };
   } catch (e) {
-    // Edge Function not deployed yet → save the lead directly. Staff notifications (Zalo/webhook)
-    // only happen via the function, so these leads keep notified_at = null until it is deployed.
-    if (e instanceof ApiError && e.code === 'FUNCTION_UNAVAILABLE') {
+    // Edge Function unreachable → save the lead directly in the database.
+    //  • FUNCTION_UNAVAILABLE: function not deployed (native sees the 404).
+    //  • NETWORK: in browsers a missing function fails the CORS preflight, which surfaces as a
+    //    network error. Retrying via RPC is safe: the lead id is an idempotency key, so if the first
+    //    request did reach the server, submit_lead() returns that same lead instead of a duplicate.
+    // Staff notifications (Zalo/webhook) only happen via the function → notified_at stays null.
+    if (e instanceof ApiError && (e.code === 'FUNCTION_UNAVAILABLE' || e.code === 'NETWORK')) {
       const res = await submitLeadViaRpc(request);
-      return { ...record, id: res.id, code: res.code, createdAt: res.createdAt };
+      // Saved directly in the database: no ZNS is sent on this path.
+      return { ...record, id: res.id, code: res.code, createdAt: res.createdAt, confirmation: 'NONE' };
     }
     throw e;
   }
@@ -113,8 +118,11 @@ async function submitLeadViaRpc(r: LeadSubmitRequest): Promise<LeadSubmitRespons
   if (error) {
     if (error.hint?.startsWith('VALIDATION:')) throw new ApiError(error.message, 'VALIDATION', 422, error.hint.slice(11));
     if (error.hint === 'RATE_LIMITED') throw new ApiError(error.message, 'RATE_LIMITED', 429);
+    if (/fetch|network/i.test(error.message)) {
+      throw new ApiError('Mất kết nối mạng. Ba mẹ kiểm tra Internet rồi thử lại nhé.', 'NETWORK');
+    }
     throw new ApiError('Không gửi được đăng ký. Ba mẹ vui lòng thử lại hoặc gọi hotline.', 'INTERNAL');
   }
   const d = data as { id: string; code: string; created_at: string; duplicate: boolean };
-  return { id: d.id, code: d.code, createdAt: d.created_at, duplicate: d.duplicate };
+  return { id: d.id, code: d.code, createdAt: d.created_at, duplicate: d.duplicate, confirmation: 'NONE' };
 }

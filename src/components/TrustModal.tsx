@@ -6,6 +6,7 @@ import Animated, { FadeIn, ZoomIn } from 'react-native-reanimated';
 import { haptics } from '@/utils/haptics';
 
 import Button from './Button';
+import { nativeOnly } from '@/utils/platform';
 
 interface TrustModalProps {
   visible: boolean;
@@ -48,11 +49,11 @@ export default function TrustModal({
 
   return (
     <Modal visible={visible} transparent animationType="none" onRequestClose={onDismiss} statusBarTranslucent>
-      <Animated.View entering={FadeIn.duration(180)} className="flex-1 items-center justify-center bg-black/45 px-6">
+      <Animated.View entering={nativeOnly(FadeIn.duration(180))} className="flex-1 items-center justify-center bg-black/45 px-6">
         <Pressable className="absolute inset-0" onPress={onDismiss} accessibilityLabel="Đóng" />
         {visible && (
           <Animated.View
-            entering={ZoomIn.springify().damping(16)}
+            entering={nativeOnly(ZoomIn.springify().damping(16))}
             className="w-full max-w-[380px] gap-4 rounded-3xl bg-white p-5"
             accessibilityViewIsModal
           >

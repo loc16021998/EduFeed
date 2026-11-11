@@ -5,6 +5,7 @@ import Animated, { FadeIn, useAnimatedStyle, useSharedValue, withSequence, withS
 
 import type { ChecklistItem } from '@/content/checklists';
 import { haptics } from '@/utils/haptics';
+import { nativeOnly } from '@/utils/platform';
 
 interface Props {
   item: ChecklistItem;
@@ -62,7 +63,7 @@ function ChecklistItemRow({ item, checked, onToggle }: Props) {
         </Pressable>
       </View>
       {showTip && (
-        <Animated.View entering={FadeIn.duration(180)} className="ml-9 rounded-xl bg-amber-50 p-2.5">
+        <Animated.View entering={nativeOnly(FadeIn.duration(180))} className="ml-9 rounded-xl bg-amber-50 p-2.5">
           <Text className="text-[12px] leading-[18px] text-amber-900">💡 {item.tip}</Text>
         </Animated.View>
       )}

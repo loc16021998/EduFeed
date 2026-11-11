@@ -6,7 +6,7 @@ import Animated, { FadeIn, LinearTransition, useAnimatedStyle, useSharedValue, w
 import { CURRICULUM, type CurriculumPhase } from '@/content/curriculum';
 import type { CourseCategory } from '@/types';
 import { CATEGORY_COLORS, CATEGORY_LABELS, COLORS, COURSE_CATEGORIES } from '@/utils/constants';
-import { isWeb } from '@/utils/platform';
+import { isWeb, nativeOnly } from '@/utils/platform';
 
 // Layout transitions misplace rows on react-native-web (rows overlap following content).
 const LAYOUT = isWeb ? undefined : LinearTransition.duration(220);
@@ -105,7 +105,7 @@ function PhaseRow({
       </Pressable>
 
       {open && (
-        <Animated.View entering={FadeIn.duration(200)} className="gap-3 px-3.5 pb-4">
+        <Animated.View entering={nativeOnly(FadeIn.duration(200))} className="gap-3 px-3.5 pb-4">
           <View className="gap-1.5">
             <Text className="text-[12px] font-bold text-ink-muted">Con được học</Text>
             {phase.childLearns.map((l) => (

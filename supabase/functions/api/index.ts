@@ -7,6 +7,7 @@
  * Deployed URL: https://<project-ref>.supabase.co/functions/v1/api/…
  * Deploy:       supabase functions deploy api
  * Secrets:      supabase secrets set ZALO_OA_ACCESS_TOKEN=… ZNS_ADMIN_TEMPLATE_ID=… ZNS_PARENT_TEMPLATE_ID=…
+ *                 CENTRE_HOTLINE=0987xxxxxx ZNS_MODE=development (test; remove to go live)
  *                 ADMIN_WEBHOOK_URL=… ADMIN_CONTACTS='[{"name":"Thầy Tú","phone":"09…","courses":["TOAN_TU_DUY","BOI_DUONG_TOAN_TV"]},{"name":"Cô Hường","phone":"09…","courses":["TIEN_TIEU_HOC","LUYEN_CHU_DEP"]}]'
  * (SUPABASE_URL / SUPABASE_ANON_KEY / SUPABASE_SERVICE_ROLE_KEY are injected automatically.)
  */
@@ -40,6 +41,8 @@ const notifyConfig: NotifyConfig = {
   zaloAccessToken: env('ZALO_OA_ACCESS_TOKEN'),
   znsAdminTemplateId: env('ZNS_ADMIN_TEMPLATE_ID'),
   znsParentTemplateId: env('ZNS_PARENT_TEMPLATE_ID'),
+  znsMode: env('ZNS_MODE') === 'development' ? 'development' : 'production',
+  centreHotline: env('CENTRE_HOTLINE'),
   adminWebhookUrl: env('ADMIN_WEBHOOK_URL'),
   adminContacts: parseAdminContacts(env('ADMIN_CONTACTS')),
 };
@@ -185,6 +188,9 @@ async function handleLeadSubmit(req: Request): Promise<Response> {
     code: result.code,
     createdAt: result.created_at,
     duplicate: result.duplicate,
+    // Only promise a ZNS when everything needed to send one is configured.
+    confirmation:
+      notifyConfig.zaloAccessToken && notifyConfig.znsParentTemplateId && notifyConfig.centreHotline ? 'ZNS' : 'NONE',
   };
 
   // Notify admins without making the parent wait. Duplicates were already notified.

@@ -8,6 +8,7 @@ import type { QuizResult } from '@/types';
 import { CATEGORY_COLORS, CATEGORY_LABELS, COLORS } from '@/utils/constants';
 import { COURSES } from '@/utils/mockData';
 import { FORMAT_INFO, teacherFor } from '@/utils/quiz';
+import { nativeOnly } from '@/utils/platform';
 
 interface QuizResultViewProps {
   result: QuizResult;
@@ -25,7 +26,7 @@ export default function QuizResultView({ result, onBook, onRetake }: QuizResultV
     <View className="flex-1">
       <ScrollView contentContainerClassName="gap-4 pb-4" showsVerticalScrollIndicator={false}>
         {/* Recommendation card */}
-        <Animated.View entering={ZoomIn.springify().damping(14)}>
+        <Animated.View entering={nativeOnly(ZoomIn.springify().damping(14))}>
           <Gradient
             colors={['#2F6BFF', '#1A44B3']}
             start={{ x: 0, y: 0 }}
@@ -68,7 +69,7 @@ export default function QuizResultView({ result, onBook, onRetake }: QuizResultV
         </Animated.View>
 
         {/* Why */}
-        <Animated.View entering={FadeInDown.delay(150)} className="gap-2.5 rounded-3xl bg-white p-4">
+        <Animated.View entering={nativeOnly(FadeInDown.delay(150))} className="gap-2.5 rounded-3xl bg-white p-4">
           <Text className="text-[15px] font-bold text-ink">Vì sao phù hợp với bé?</Text>
           {result.reasons.map((r) => (
             <View key={r} className="flex-row gap-2">
@@ -79,7 +80,7 @@ export default function QuizResultView({ result, onBook, onRetake }: QuizResultV
         </Animated.View>
 
         {/* Answer summary (this is what gets attached to the booking) */}
-        <Animated.View entering={FadeInDown.delay(260)} className="gap-2 rounded-3xl bg-white p-4">
+        <Animated.View entering={nativeOnly(FadeInDown.delay(260))} className="gap-2 rounded-3xl bg-white p-4">
           <View className="flex-row items-center">
             <Text className="text-[15px] font-bold text-ink">Tóm tắt chẩn đoán</Text>
             <Pressable onPress={onRetake} hitSlop={8} className="ml-auto flex-row items-center gap-1" accessibilityRole="button">
@@ -93,7 +94,7 @@ export default function QuizResultView({ result, onBook, onRetake }: QuizResultV
         </Animated.View>
       </ScrollView>
 
-      <Animated.View entering={FadeInDown.delay(380)} className="gap-1.5 pt-2">
+      <Animated.View entering={nativeOnly(FadeInDown.delay(380))} className="gap-1.5 pt-2">
         <Button
           title="Nhận Tư Vấn & Đặt Lịch Trải Nghiệm Lớp Này"
           variant="accent"

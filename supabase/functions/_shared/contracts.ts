@@ -106,7 +106,14 @@ export interface LeadSubmitResponse {
   createdAt: string;
   /** True when the same lead was already submitted (retry / double tap). */
   duplicate: boolean;
+  /**
+   * How the parent will be confirmed: 'ZNS' = a Zalo ZNS message is being sent to their phone
+   * (sent in the background right after this response); 'NONE' = no automatic message — staff call.
+   */
+  confirmation: ConfirmationChannel;
 }
+
+export type ConfirmationChannel = 'ZNS' | 'NONE';
 
 // ─── GET /api/feed ──────────────────────────────────────────────────────────
 

@@ -16,13 +16,16 @@ loadEnv();
 // match index.html's inline <style> ("No matching HTML proxy module"), so pin one drive-letter case.
 const root = path.dirname(fileURLToPath(import.meta.url)).replace(/^[a-z]:/, (d) => d.toUpperCase());
 
-/** Some RN libraries (e.g. react-native-qrcode-svg) publish JSX in plain .js files. Compile it for the production build. */
+/**
+ * Some RN libraries publish JSX in plain .js files (e.g. react-native-qrcode-svg, and NativeWind's
+ * doctor.js, which uses a hyphenated tag). Compile it for the production build.
+ */
 const jsxInNodeModules = {
   name: 'rn-jsx-in-node-modules',
   enforce: 'pre',
   async transform(code, id) {
     const file = id.split('?')[0];
-    if (!/node_modules[\\/].+\.js$/.test(file) || !/<\/?[A-Za-z][\w.]*[\s/>]/.test(code)) return null;
+    if (!/node_modules[\\/].+\.js$/.test(file) || !/<\/?[A-Za-z][\w.-]*[\s/>]/.test(code)) return null;
     return transformWithEsbuild(code, file, { loader: 'jsx', jsx: 'automatic' });
   },
 };

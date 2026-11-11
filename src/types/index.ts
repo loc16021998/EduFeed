@@ -262,6 +262,8 @@ export interface BookingRecord extends BookingPayload {
   code: string;
   createdAt: string;
   status: 'NEW';
+  /** 'ZNS' when the server is sending a Zalo confirmation to the parent's phone. */
+  confirmation?: 'ZNS' | 'NONE';
   /** Denormalised labels — what CRM / Zalo notifications display. */
   display: {
     course: string;
