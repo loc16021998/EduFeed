@@ -1,0 +1,49 @@
+# Dependencies & builds
+node_modules/
+dist/
+.tmp/
+npm-debug.*
+*.orig.*
+.DS_Store
+
+# Secrets
+.env
+.env*.local
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+# Release keystore must never be committed (debug.keystore is fine)
+android/app/*.keystore
+!android/app/debug.keystore
+
+# Android (the android/ folder itself IS source — commit it)
+android/.gradle/
+android/build/
+android/app/build/
+android/.idea/
+android/local.properties
+android/.cxx/
+android/app/.cxx/
+*.hprof
+
+# iOS (the ios/ folder itself IS source — commit it)
+ios/Pods/
+ios/build/
+ios/.xcode.env.local
+**/xcuserdata/
+*.xcuserstate
+vendor/bundle/
+.bundle/
+
+# Metro
+.metro-health-check*
+
+# Supabase
+supabase/.env*
+supabase/.temp/
+supabase/.branches/
+
+# Leftovers from the Expo era
+.expo/

@@ -1,0 +1,136 @@
+-- ═══════════════════════════════════════════════════════════════════════════
+-- TH EDU Companion — core schema
+--   categories · branches · videos · portfolios · leads
+-- Column names follow the API spec; extra columns marked (+) support the app UI.
+-- ═══════════════════════════════════════════════════════════════════════════
+
+-- gen_random_uuid() is built into Postgres 13+ (Supabase runs 15+), so no extension needed.
+
+-- ─── Shared trigger: keep updated_at fresh ──────────────────────────────────
+create or replace function public.set_updated_at()
+returns trigger
+language plpgsql
+as $$
+begin
+  new.updated_at := now();
+  return new;
+end;
+$$;
+
+-- ─── categories ─────────────────────────────────────────────────────────────
+create table public.categories (
+  id          smallint generated always as identity primary key,
+  code        text not null unique check (code ~ '^[A-Z_]+$'),
+  name        text not null,
+  icon        text not null,                         -- lucide icon name, e.g. 'pencil-line'
+  color       text not null default '#2F6BFF',       -- (+) chip / badge colour
+  sort_order  smallint not null default 0            -- (+)
+);
+
+comment on table public.categories is 'Course subjects. "ALL" is a UI filter, not a row.';
+
+-- ─── branches (+) ───────────────────────────────────────────────────────────
+-- Not in the original spec, but leads/portfolios reference a branch and notifications
+-- need its address + map link; a lookup table keeps that data in one place.
+create table public.branches (
+  code           text primary key check (code ~ '^[A-Z_]+$'),   -- 'XA_LA', 'NGO_THI_NHAM'
+  short_code     text not null unique,                          -- 'CS1', 'CS2'
+  name           text not null,
+  short_address  text not null,
+  address        text not null,
+  maps_url       text not null
+);
+
+-- ─── videos ─────────────────────────────────────────────────────────────────
+create table public.videos (
+  id                  uuid primary key default gen_random_uuid(),
+  title               text not null check (char_length(title) between 3 and 200),
+  video_url           text not null check (video_url ~ '^https://'),
+  thumbnail_url       text not null check (thumbnail_url ~ '^https://'),
+  category_code       text not null references public.categories (code) on update cascade,
+  teacher_name        text not null,
+  cta_text            text not null,
+  created_at          timestamptz not null default now(),
+
+  teacher_avatar_url  text,                                     -- (+)
+  tags                text[] not null default '{}',             -- (+) '#ToanTuDuy', …
+  cta_link            text,                                     -- (+) thedu://booking?course=…
+  is_published        boolean not null default true,            -- (+)
+  published_at        timestamptz not null default now(),       -- (+) feed sort key
+  updated_at          timestamptz not null default now()        -- (+)
+);
+
+-- Keyset pagination: newest first, optionally per category.
+create index videos_feed_idx      on public.videos (published_at desc, id desc) where is_published;
+create index videos_feed_cat_idx  on public.videos (category_code, published_at desc, id desc) where is_published;
+
+create trigger videos_updated_at before update on public.videos
+  for each row execute function public.set_updated_at();
+
+-- ─── portfolios ─────────────────────────────────────────────────────────────
+create table public.portfolios (
+  id                  uuid primary key default gen_random_uuid(),
+  student_name        text not null,
+  course_code         text not null references public.categories (code) on update cascade,
+  branch_location     text not null references public.branches (code) on update cascade,
+  before_image_url    text not null check (before_image_url ~ '^https://'),
+  after_image_url     text not null check (after_image_url ~ '^https://'),
+  teacher_note        text not null,
+  created_at          timestamptz not null default now(),
+
+  display_name        text not null,                            -- (+) 'Bé Gia Bảo'
+  class_name          text not null default '',                 -- (+) 'Lớp 1'
+  before_label        text not null default 'TRƯỚC',            -- (+) slider overlay
+  after_label         text not null default 'SAU',              -- (+)
+  teacher_name        text not null,                            -- (+)
+  teacher_avatar_url  text,                                     -- (+)
+  assessments         jsonb not null default '[]'               -- (+) [{skill, before, after}]
+                        check (jsonb_typeof(assessments) = 'array'),
+  duration_label      text not null default '',                 -- (+) '2 tháng'
+  -- Children's names and work are personal data: never public without written parent consent.
+  parent_consent      boolean not null default false,           -- (+)
+  is_published        boolean not null default false,           -- (+)
+  updated_at          timestamptz not null default now()        -- (+)
+);
+
+create index portfolios_public_idx on public.portfolios (course_code, created_at desc)
+  where is_published and parent_consent;
+
+create trigger portfolios_updated_at before update on public.portfolios
+  for each row execute function public.set_updated_at();
+
+-- ─── leads ──────────────────────────────────────────────────────────────────
+create type public.lead_status as enum ('NEW', 'CONTACTED', 'ENROLLED');
+
+create table public.leads (
+  id                 uuid primary key default gen_random_uuid(),   -- client may supply → idempotency key
+  parent_name        text not null check (char_length(btrim(parent_name)) between 2 and 60),
+  phone_number       text not null check (phone_number ~ '^0[35789][0-9]{8}$'),  -- normalised 0xxxxxxxxx
+  student_name       text not null check (char_length(btrim(student_name)) between 2 and 60),
+  student_age        smallint not null check (student_age between 3 and 12),
+  course_code        text not null references public.categories (code) on update cascade,
+  branch_location    text not null references public.branches (code) on update cascade,
+  quiz_summary       jsonb check (quiz_summary is null or jsonb_typeof(quiz_summary) = 'object'),
+  status             public.lead_status not null default 'NEW',
+  created_at         timestamptz not null default now(),
+
+  -- (+) human booking code, same formula as the app: 'TH-' + last 6 hex of the uuid
+  code               text generated always as ('TH-' || upper(right(replace(id::text, '-', ''), 6))) stored,
+  preferred_date     date,                                             -- (+)
+  preferred_slot     text,                                             -- (+) slot id, e.g. 'wd-1730'
+  source             text not null default 'DIRECT'
+                       check (source in ('FEED', 'QUIZ', 'PORTFOLIO', 'DIRECT')),  -- (+)
+  zalo_user_id       text,                                             -- (+)
+  quiz_answers       jsonb,                                            -- (+)
+  notified_at        timestamptz,                                      -- (+) set by the api function
+  notification_log   jsonb,                                            -- (+)
+  updated_at         timestamptz not null default now()                -- (+)
+);
+
+create index leads_created_at_idx   on public.leads (created_at desc);
+create index leads_phone_recent_idx on public.leads (phone_number, created_at desc);
+create index leads_status_idx       on public.leads (status) where status <> 'ENROLLED';
+create index leads_code_idx         on public.leads (code);   -- not unique: 6 hex chars can collide
+
+create trigger leads_updated_at before update on public.leads
+  for each row execute function public.set_updated_at();

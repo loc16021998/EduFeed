@@ -1,0 +1,12 @@
+# Keep LF line endings in the repo (shell scripts like android/gradlew break with CRLF on macOS/Linux).
+* text=auto eol=lf
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Binary assets
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.webp binary
+*.jar binary
+*.keystore binary
