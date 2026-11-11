@@ -5,7 +5,8 @@
  */
 export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
 
-type LeadStatus = 'NEW' | 'CONTACTED' | 'ENROLLED';
+// leads.status is text + CHECK (see 20261114090000_crm_automation.sql).
+type LeadStatus = 'NEW' | 'CONTACTED' | 'CONFIRMED' | 'REMINDED_24H' | 'REMINDED_2H' | 'COMPLETED_TRIAL' | 'ENROLLED' | 'CANCELLED';
 
 export type Database = {
   public: {
@@ -108,6 +109,11 @@ export type Database = {
           branch_location: string;
           quiz_summary: Json | null;
           status: LeadStatus;
+          appointment_time: string | null;
+          teacher_note: string | null;
+          staff_note: string | null;
+          trial_completed_at: string | null;
+          trial_completed_by: string | null;
           created_at: string;
           code: string;
           preferred_date: string | null;
@@ -143,6 +149,24 @@ export type Database = {
           { foreignKeyName: 'leads_course_code_fkey'; columns: ['course_code']; isOneToOne: false; referencedRelation: 'categories'; referencedColumns: ['code'] },
           { foreignKeyName: 'leads_branch_location_fkey'; columns: ['branch_location']; isOneToOne: false; referencedRelation: 'branches'; referencedColumns: ['code'] },
         ];
+      };
+      crm_logs: {
+        Row: {
+          id: string;
+          lead_id: string;
+          kind: 'CONFIRMATION' | 'REMINDER_24H' | 'REMINDER_2H' | 'POST_TRIAL';
+          channel: 'ZNS' | 'OA' | 'SMS';
+          status: 'PENDING' | 'SENT' | 'FAILED' | 'SKIPPED';
+          attempt: number;
+          provider_message_id: string | null;
+          error: string | null;
+          payload: Json | null;
+          created_at: string;
+          sent_at: string | null;
+        };
+        Insert: never;
+        Update: never;
+        Relationships: [];
       };
       trust_stats: {
         Row: {
@@ -193,6 +217,8 @@ export type Database = {
       };
       submit_lead: { Args: { p: Json }; Returns: Json };
       is_staff: { Args: Record<PropertyKey, never>; Returns: boolean };
+      crm_complete_trial: { Args: { p_lead_id: string; p_teacher_note: string }; Returns: Json };
+      crm_set_status: { Args: { p_lead_id: string; p_status: string; p_note?: string | null }; Returns: Json };
       staff_video_stats: {
         Args: Record<PropertyKey, never>;
         Returns: { video_id: string; lead_count: number; last_lead_at: string | null }[];
@@ -202,7 +228,7 @@ export type Database = {
         Returns: { actor_label: string; course_code: string; course_name: string; branch_code: string; branch_name: string; created_at: string }[];
       };
     };
-    Enums: { lead_status: LeadStatus };
+    Enums: { [_ in never]: never };
     CompositeTypes: { [_ in never]: never };
   };
 };

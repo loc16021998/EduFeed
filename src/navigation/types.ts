@@ -24,6 +24,8 @@ export type RootStackParamList = {
   // ── Staff (centre employees) ──
   StaffLogin: undefined;
   StaffVideos: undefined;
+  /** Trial schedule: confirm / cancel / complete with teacher feedback / enrolled. */
+  StaffTrials: undefined;
   /** No id → create a new video. */
   VideoEditor: { id?: string } | undefined;
 };

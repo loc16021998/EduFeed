@@ -147,7 +147,41 @@ export type ApiErrorCode =
   | 'RATE_LIMITED'
   | 'NOT_FOUND'
   | 'METHOD_NOT_ALLOWED'
+  | 'UNAUTHORIZED'
+  | 'FORBIDDEN'
+  | 'CONFLICT'
+  | 'SERVICE_UNAVAILABLE'
   | 'INTERNAL';
+
+// ─── CRM (staff) ────────────────────────────────────────────────────────────
+
+/** Lead lifecycle. Reminder states are set by the system; staff set the others. */
+export const LEAD_STATUSES = [
+  'NEW', 'CONTACTED', 'CONFIRMED', 'REMINDED_24H', 'REMINDED_2H', 'COMPLETED_TRIAL', 'ENROLLED', 'CANCELLED',
+] as const;
+export type LeadStatus = (typeof LEAD_STATUSES)[number];
+export const STAFF_SETTABLE_STATUSES = ['NEW', 'CONTACTED', 'CONFIRMED', 'ENROLLED', 'CANCELLED'] as const;
+
+/** POST /api/leads/:id/complete-trial */
+export interface CompleteTrialRequest {
+  /** Qualitative feedback shown to the parent in the post-trial message (10–1000 chars). */
+  teacherNote: string;
+}
+export interface CompleteTrialResponse {
+  id: string;
+  status: 'COMPLETED_TRIAL';
+  /** When the T+2h message is due (appointment + 2h). */
+  postTrialDueAt: string;
+  /** SENT/FAILED/SKIPPED if attempted now; SCHEDULED if the cron will send it at postTrialDueAt. */
+  postTrialMessage: 'SENT' | 'FAILED' | 'SKIPPED' | 'SCHEDULED';
+  detail?: string;
+}
+
+/** POST /api/leads/:id/status */
+export interface SetLeadStatusRequest {
+  status: (typeof STAFF_SETTABLE_STATUSES)[number];
+  note?: string;
+}
 
 export interface ApiErrorBody {
   error: { code: ApiErrorCode; message: string; field?: string };

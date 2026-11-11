@@ -178,6 +178,41 @@ export interface QuizResult {
 
 export type AsyncStatus = 'idle' | 'loading' | 'success' | 'error';
 
+// ─── CRM (staff) ─────────────────────────────────────────────────────────────
+
+export type LeadStatus =
+  | 'NEW' | 'CONTACTED' | 'CONFIRMED' | 'REMINDED_24H' | 'REMINDED_2H' | 'COMPLETED_TRIAL' | 'ENROLLED' | 'CANCELLED';
+
+export type CrmMessageKind = 'CONFIRMATION' | 'REMINDER_24H' | 'REMINDER_2H' | 'POST_TRIAL';
+
+/** Latest delivery state of one automated parent message. */
+export interface CrmMessageState {
+  status: 'PENDING' | 'SENT' | 'FAILED' | 'SKIPPED';
+  error: string | null;
+  at: string;
+}
+
+/** A booking as staff see it in the trial schedule. */
+export interface CrmLead {
+  id: string;
+  code: string;
+  parentName: string;
+  phone: string;
+  studentName: string;
+  studentAge: number;
+  course: CourseCategory;
+  campus: CampusLocation;
+  appointmentTime: string | null;
+  status: LeadStatus;
+  teacherNote: string | null;
+  staffNote: string | null;
+  source: string;
+  createdAt: string;
+  messages: Partial<Record<CrmMessageKind, CrmMessageState>>;
+}
+
+export type CrmFilter = 'TODAY' | 'UPCOMING' | 'PENDING' | 'COMPLETED';
+
 // ─── Video publishing (staff) ───────────────────────────────────────────────
 
 /** A file chosen from the phone library or the browser file picker. */

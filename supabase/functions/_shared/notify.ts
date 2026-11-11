@@ -1,21 +1,19 @@
 /**
  * New-lead notifications. Runtime-agnostic (only uses fetch); config is injected so it's testable.
  *
- * Channels (each optional, enabled by config):
+ * STAFF alerts only (each optional, enabled by config):
  *   • ZNS alert → each responsible admin's phone   (ZNS_ADMIN_TEMPLATE_ID + ADMIN_CONTACTS)
  *   • Generic webhook → staff group (n8n / Google Chat / Slack-style `text`)  (ADMIN_WEBHOOK_URL)
- *   • ZNS confirmation → parent's phone             (ZNS_PARENT_TEMPLATE_ID)
- *   • OA chat message → parent, if signed in with Zalo
+ *
+ * Messages to PARENTS (T+0 confirmation, reminders, post-trial) live in reminderCron.ts / znsService.ts
+ * so they are logged in crm_logs, never sent twice, and retried on failure.
  */
 import type { SupabaseClient } from 'npm:@supabase/supabase-js@2.119.0';
 
 import { formatDateLongVN, GIFT_BY_COURSE, PROMO_CODES, TIME_SLOTS, type CourseCode, type PromoCode } from './contracts.ts';
 import {
   buildAdminWebhookBody,
-  buildOaParentConfirmation,
   buildZnsAdminAlert,
-  buildZnsBookingConfirmation,
-  OA_CS_ENDPOINT,
   ZNS_ENDPOINT,
   type LeadNotificationInput,
   type ZnsMode,
@@ -31,11 +29,8 @@ export interface AdminContact {
 export interface NotifyConfig {
   zaloAccessToken: string;
   znsAdminTemplateId: string;
-  znsParentTemplateId: string;
   /** ZNS_MODE=development while testing templates; production otherwise. */
   znsMode: ZnsMode;
-  /** Centre hotline shown in the parent ZNS (template param PHONE). */
-  centreHotline: string;
   adminWebhookUrl: string;
   adminContacts: AdminContact[];
 }
@@ -144,21 +139,13 @@ export async function notifyNewLead(db: SupabaseClient, leadId: string, cfg: Not
   if (cfg.adminWebhookUrl) {
     jobs.webhook_admin = postWebhook(cfg.adminWebhookUrl, buildAdminWebhookBody(input));
   }
-  if (cfg.zaloAccessToken && cfg.znsParentTemplateId) {
-    jobs.zns_parent = cfg.centreHotline
-      ? postZalo(ZNS_ENDPOINT, cfg.zaloAccessToken, buildZnsBookingConfirmation(input, cfg.znsParentTemplateId, { hotline: cfg.centreHotline, mode: cfg.znsMode }))
-      : Promise.reject(new Error('Chưa đặt CENTRE_HOTLINE (tham số PHONE của mẫu ZNS)'));
-  }
-  if (cfg.zaloAccessToken && lead.zalo_user_id) {
-    jobs.oa_parent = postZalo(OA_CS_ENDPOINT, cfg.zaloAccessToken, buildOaParentConfirmation(input, lead.zalo_user_id));
-  }
 
   const names = Object.keys(jobs);
   const settled = await Promise.allSettled(Object.values(jobs));
   const log = Object.fromEntries(
     settled.map((s, i) => [names[i], s.status === 'fulfilled' ? s.value : String(s.reason)]),
   );
-  if (names.length === 0) console.warn('[notify] no channels configured — lead saved without notification', lead.code);
+  if (names.length === 0) console.warn('[notify] no staff alert channels configured', lead.code);
 
   const { error: updErr } = await db
     .from('leads')

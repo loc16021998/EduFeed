@@ -6,3 +6,4 @@ export { useTrustStore } from './useTrustStore';
 export { useChecklistStore } from './useChecklistStore';
 export { useStaffStore } from './useStaffStore';
 export { useVideoAdminStore } from './useVideoAdminStore';
+export { useCrmStore } from './useCrmStore';

@@ -1,6 +1,6 @@
-import { LogOut, Plus } from 'lucide-react-native';
+import { CalendarClock, ChevronRight, LogOut, Plus } from 'lucide-react-native';
 import { useCallback, useEffect } from 'react';
-import { ActivityIndicator, FlatList, RefreshControl, Text, View } from 'react-native';
+import { ActivityIndicator, FlatList, Pressable, RefreshControl, Text, View } from 'react-native';
 
 import { Button, HeaderIconButton, ScreenHeader } from '@/components';
 import type { RootStackScreenProps } from '@/navigation/types';
@@ -75,6 +75,18 @@ export default function StaffVideosScreen({ navigation }: RootStackScreenProps<'
                 Chế độ thử: video chỉ lưu tạm trên máy này, mất khi tải lại. Kết nối Supabase để đăng thật.
               </Text>
             )}
+            <Pressable
+              onPress={() => navigation.navigate('StaffTrials')}
+              accessibilityRole="button"
+              className="flex-row items-center gap-3 rounded-2xl border border-brand-100 bg-brand-50 p-3.5 active:opacity-90"
+            >
+              <CalendarClock size={22} color={COLORS.brand} />
+              <View className="flex-1">
+                <Text className="text-[15px] font-bold text-ink">Lịch học thử & khách hàng</Text>
+                <Text className="text-xs text-ink-muted">Xác nhận lịch, hoàn thành học thử, ghi nhận nhập học</Text>
+              </View>
+              <ChevronRight size={18} color={COLORS.muted} />
+            </Pressable>
             <View className="flex-row gap-3">
               <Stat value={published} label="video đang hiển thị" />
               <Stat value={totalLeads} label="lượt đăng ký từ video" />

@@ -9,11 +9,16 @@
 | `migrations/20261111090200_functions.sql` | `get_feed()` keyset pagination, `submit_lead()` validated/idempotent/rate-limited insert |
 | `migrations/20261112090000_trust.sql` | `trust_stats`, `testimonials`, `recent_activity()`, `leads.promo_code` |
 | `migrations/20261113090000_video_publishing.sql` | Storage bucket `feed-media` (staff-only upload), `videos.share_slug`, `leads.source_ref`, `staff_video_stats()` |
+| `migrations/20261114090000_crm_automation.sql` | Lead lifecycle statuses, `appointment_time`, `trial_slots`, `crm_logs`, `crm_*()` functions |
 | `seed.sql` | Dev data generated from `src/utils/mockData.ts` (deliberately **no** trust stats/testimonials — those must be real) |
-| `functions/api/index.ts` | Edge Function: `GET /api/feed`, `POST /api/leads/submit` |
+| `sql/` | Paste-ready SQL: `01_setup.sql` (fresh), `upgrades/<migration>.sql` (existing projects), `schedule_reminders_cron.sql` |
+| `functions/api/index.ts` | Edge Function: feed, lead submit, staff CRM actions, cron entry point |
 | `functions/_shared/contracts.ts` | Request/response types + validation, **shared with the app** |
 | `functions/_shared/zaloPayloads.ts` | ZNS / OA payload builders, **shared with the app** |
-| `functions/_shared/notify.ts` | Admin/parent notifications after a lead is saved |
+| `functions/_shared/znsService.ts` | Parent messages: template mapping per message kind, delivery planning, Zalo gateway |
+| `functions/_shared/reminderCron.ts` | Claim → send → record orchestration; the 15-minute reminder tick |
+| `functions/_shared/security.ts` | Cron secret (constant-time) + bearer token helpers |
+| `functions/_shared/notify.ts` | Staff alerts (ZNS to admins, webhook) after a lead is saved |
 
 `_shared/contracts.ts` and `_shared/zaloPayloads.ts` must stay import-free — Metro and Deno both load them.
 
@@ -104,6 +109,66 @@ Base URL: `https://<ref>.supabase.co/functions/v1`. Send `Authorization: Bearer 
 
 Leads are invisible to the public. To let a staff account read/update leads in a dashboard, set
 `raw_app_meta_data = '{"role":"staff"}'` on their `auth.users` row (SQL editor or Admin API).
+
+## CRM automation (lead lifecycle + Zalo reminders)
+
+```
+NEW ──T+0 confirmation sent──▶ CONFIRMED ──T-24h──▶ REMINDED_24H ──T-2h──▶ REMINDED_2H
+ │  (or staff confirms by phone)     └──────────────── T-2h ───────────────────┘   │
+ │                                                                                ▼
+ └─▶ CONTACTED / CANCELLED (staff)        teacher: complete-trial ──▶ COMPLETED_TRIAL ──T+2h message──▶ ENROLLED (staff)
+```
+
+| Message | When | Sent by |
+|---|---|---|
+| T+0 confirmation | right after booking | `POST /api/leads/submit` (background) — success sets `CONFIRMED` |
+| T-24h reminder + video link | appointment within 24h (and > 3h), only if booked ≥ 26h ahead | cron |
+| T-2h reminder + Google Maps | appointment within 2h | cron |
+| T+2h feedback + voucher | ≥ 2h after the trial, 07:00–21:00 VN, within 3 days of completion | cron (or immediately when the teacher completes it late) |
+
+- **Reminders only go to `CONFIRMED` leads.** Without ZNS configured, staff confirm by phone:
+  `POST /api/leads/:id/status {"status":"CONFIRMED"}`.
+- **Never twice:** each message is claimed in `crm_logs` first (unique per lead + kind). Failures are retried on
+  the next ticks, at most 3 attempts. Messages that can't be sent (template / voucher / hotline missing, invalid
+  phone) are logged as `SKIPPED` with the reason.
+- **Channel:** approved ZNS template for that kind → ZNS to the phone; otherwise, if the parent linked Zalo → OA
+  message; otherwise skipped.
+- **Voucher:** the post-trial message is only sent when `POST_TRIAL_VOUCHER` holds a real offer — nothing is invented.
+- **Scheduling:** run `sql/schedule_reminders_cron.sql` once (pg_cron every 15 min → `/api/cron/reminders`,
+  authenticated with `CRON_SECRET` stored in Vault).
+
+Staff endpoints (send the staff user's access token as `Authorization: Bearer …`):
+
+```bash
+curl -X POST "$URL/functions/v1/api/leads/<lead-id>/complete-trial" -H "Authorization: Bearer $STAFF_JWT" \
+  -H "Content-Type: application/json" -d '{"teacherNote":"Bé cầm bút đúng, viết đều nét; cần luyện thêm nét khuyết."}'
+# → { id, status: "COMPLETED_TRIAL", postTrialDueAt, postTrialMessage: "SCHEDULED" | "SENT" | "SKIPPED" | "FAILED" }
+
+curl -X POST "$URL/functions/v1/api/leads/<lead-id>/status" -H "Authorization: Bearer $STAFF_JWT" \
+  -H "Content-Type: application/json" -d '{"status":"CANCELLED","note":"Phụ huynh báo bận"}'
+```
+
+Message history per lead: `select * from crm_logs where lead_id = '…' order by created_at;` (staff only).
+
+**In the app:** staff open *Quản lý video → Lịch học thử & khách hàng* (web: `/quan-ly/hoc-thu`) to confirm, cancel,
+complete a trial with feedback, and mark enrolment. It calls `crm_set_status()` / `crm_complete_trial()` with the staff
+session, so it works even before the Edge Function is deployed.
+
+## Zalo access token (automatic refresh)
+
+Zalo rotates tokens: each refresh returns a new access token **and** a new refresh token, and the old refresh token
+stops working. The token pair therefore lives in `zalo_oa_tokens` (server-only) and is refreshed under a database lock
+(`zalo_token_begin_refresh`), so two requests can never refresh at once and invalidate the pair.
+
+1. Set `ZALO_APP_ID` and `ZALO_APP_SECRET` (Edge Function secrets).
+2. Get a first token pair from Zalo (OAuth authorisation or the API Explorer on developers.zalo.me) and store it once:
+   `select zalo_token_set('<access_token>', '<refresh_token>', <expires_in_seconds>);`
+3. The 15-minute cron refreshes it whenever less than 20 minutes remain (uses Zalo's `expires_in`; sources disagree
+   on 1h vs 25h, so nothing is hard-coded). Each refresh also renews the refresh token, keeping it alive.
+
+Check health: `select access_expires_at, refreshed_at, last_error from zalo_oa_tokens;` — if `last_error` says the
+refresh token is invalid/expired, repeat step 2 (re-authorise). Until then, messages are skipped, never sent with a
+dead token.
 
 ## Trust content (stats, testimonials, activity ticker)
 

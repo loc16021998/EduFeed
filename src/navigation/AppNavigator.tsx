@@ -7,6 +7,7 @@ import BookingSuccessScreen from '@/screens/Booking/BookingSuccessScreen';
 import QuizModal from '@/screens/Quiz/QuizModal';
 import VideoShareScreen from '@/screens/Share/VideoShareScreen';
 import StaffLoginScreen from '@/screens/Staff/StaffLoginScreen';
+import StaffTrialsScreen from '@/screens/Staff/StaffTrialsScreen';
 import StaffVideosScreen from '@/screens/Staff/StaffVideosScreen';
 import VideoEditorScreen from '@/screens/Staff/VideoEditorScreen';
 import ChecklistScreen from '@/screens/Trust/ChecklistScreen';
@@ -47,6 +48,7 @@ const linking: LinkingOptions<RootStackParamList> = {
       VideoShare: 'v/:slug',
       StaffLogin: 'quan-ly/dang-nhap',
       StaffVideos: 'quan-ly',
+      StaffTrials: 'quan-ly/hoc-thu',
       VideoEditor: 'quan-ly/video/:id?',
     },
   },
@@ -71,6 +73,7 @@ export default function AppNavigator() {
         <Stack.Screen name="VideoShare" component={VideoShareScreen} options={{ headerShown: false }} />
         <Stack.Screen name="StaffLogin" component={StaffLoginScreen} options={{ headerShown: false }} />
         <Stack.Screen name="StaffVideos" component={StaffVideosScreen} options={{ headerShown: false }} />
+        <Stack.Screen name="StaffTrials" component={StaffTrialsScreen} options={{ headerShown: false }} />
         <Stack.Screen name="VideoEditor" component={VideoEditorScreen} options={{ headerShown: false }} />
         <Stack.Screen
           name="QuizModal"
