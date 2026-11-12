@@ -24,6 +24,8 @@ export type RootStackParamList = {
   // ── Staff (centre employees) ──
   /** next = 'createAdmin': after an admin signs in, continue to creating an admin account. */
   StaffLogin: { next?: 'createAdmin' } | undefined;
+  /** Admin sign-in (same screen, admin wording; non-admin accounts are told so). */
+  AdminLogin: { next?: 'createAdmin' } | undefined;
   StaffRegister: { type?: 'staff' | 'admin' } | undefined;
   StaffVideos: undefined;
   /** Trial schedule: confirm / cancel / complete with teacher feedback / enrolled. */

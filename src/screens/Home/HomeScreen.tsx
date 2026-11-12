@@ -46,10 +46,10 @@ export default function HomeScreen(_: TabScreenProps<'Home'>) {
     if (url) shareText(shareMessage(item.title, url));
   }, []);
 
-  /** Hidden staff entry: long-press the TH EDU logo. */
+  /** Hidden admin entry: long-press the TH EDU logo (teachers / staff sign in at /quan-ly/dang-nhap). */
   const openStaffArea = useCallback(() => {
     const { isStaff, isAdmin } = useStaffStore.getState();
-    navigation.navigate(!isStaff ? 'StaffLogin' : isAdmin ? 'AdminHome' : 'StaffVideos');
+    navigation.navigate(isStaff && isAdmin ? 'AdminHome' : 'AdminLogin');
   }, [navigation]);
 
   const [activeId, setActiveId] = useState<string | null>(null);

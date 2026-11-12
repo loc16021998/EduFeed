@@ -31,7 +31,7 @@ export default function StaffAccountsScreen({ navigation }: RootStackScreenProps
   const [resetting, setResetting] = useState<StaffAccount | null>(null);
 
   useEffect(() => {
-    if (authStatus === 'signedOut' || (authStatus === 'signedIn' && !isStaff)) navigation.replace('StaffLogin');
+    if (authStatus === 'signedOut' || (authStatus === 'signedIn' && !isStaff)) navigation.replace('AdminLogin');
     else if (authStatus === 'signedIn' && !isAdmin) navigation.replace('StaffVideos');
   }, [authStatus, isStaff, isAdmin, navigation]);
 

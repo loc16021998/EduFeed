@@ -58,6 +58,7 @@ const linking: LinkingOptions<RootStackParamList> = {
       StaffTrials: 'quan-ly/hoc-thu',
       // Admin area (owner / manager) — separate from the teacher / staff area under /quan-ly.
       AdminHome: 'quan-tri',
+      AdminLogin: 'quan-tri/dang-nhap',
       AdminDashboard: 'quan-tri/tong-quan',
       StaffAccounts: 'quan-tri/tai-khoan',
       StaffRequests: 'quan-tri/duyet-tai-khoan',
@@ -69,7 +70,7 @@ const linking: LinkingOptions<RootStackParamList> = {
 const navigationRef = createNavigationContainerRef<RootStackParamList>();
 
 /** Staff screens are not part of the parent funnel. */
-const STAFF_ROUTES = new Set(['StaffLogin', 'StaffVideos', 'StaffTrials', 'VideoEditor', 'AdminHome', 'AdminDashboard', 'StaffAccounts', 'StaffRegister', 'StaffRequests']);
+const STAFF_ROUTES = new Set(['StaffLogin', 'StaffVideos', 'StaffTrials', 'VideoEditor', 'AdminHome', 'AdminLogin', 'AdminDashboard', 'StaffAccounts', 'StaffRegister', 'StaffRequests']);
 
 /** Count one anonymous "app open" per session for the dashboard funnel (parents only). */
 function onNavigationReady() {
@@ -102,6 +103,7 @@ export default function AppNavigator() {
         <Stack.Screen name="StaffVideos" component={StaffVideosScreen} options={{ headerShown: false }} />
         <Stack.Screen name="StaffTrials" component={StaffTrialsScreen} options={{ headerShown: false }} />
         <Stack.Screen name="AdminHome" component={AdminHomeScreen} options={{ headerShown: false }} />
+        <Stack.Screen name="AdminLogin" component={StaffLoginScreen} options={{ headerShown: false }} />
         <Stack.Screen name="AdminDashboard" component={DashboardScreen} options={{ headerShown: false }} />
         <Stack.Screen name="StaffAccounts" component={StaffAccountsScreen} options={{ headerShown: false }} />
         <Stack.Screen name="StaffRegister" component={StaffRegisterScreen} options={{ headerShown: false }} />

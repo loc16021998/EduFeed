@@ -46,7 +46,7 @@ export default function DashboardScreen({ navigation }: RootStackScreenProps<'Ad
   const [feesOpen, setFeesOpen] = useState(false);
 
   useEffect(() => {
-    if (authStatus === 'signedOut' || (authStatus === 'signedIn' && !isStaff)) navigation.replace('StaffLogin');
+    if (authStatus === 'signedOut' || (authStatus === 'signedIn' && !isStaff)) navigation.replace('AdminLogin');
     // Business data is for admins only (the database enforces this too).
     else if (authStatus === 'signedIn' && !isAdmin) navigation.replace('StaffVideos');
   }, [authStatus, isStaff, isAdmin, navigation]);

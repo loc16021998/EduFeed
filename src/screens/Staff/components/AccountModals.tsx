@@ -10,9 +10,13 @@ import { COLORS } from '@/utils/constants';
 import { shareText } from '@/utils/platform';
 
 const msg = (e: unknown) => (e instanceof Error ? e.message : 'Đã có lỗi xảy ra');
-const loginUrl = () => (ENV.webUrl ? `${ENV.webUrl}/quan-ly/dang-nhap` : 'app TH EDU (nhấn giữ logo ở EduFeed)');
-const credentialsText = (email: string, password: string) =>
-  `Tài khoản TH EDU của bạn\nĐăng nhập: ${loginUrl()}\nEmail: ${email}\nMật khẩu: ${password}\n(Vui lòng không chia sẻ mật khẩu này.)`;
+/** Where each role signs in: admins at /quan-tri/dang-nhap (long-press the logo), teachers at /quan-ly/dang-nhap. */
+const loginUrl = (role: StaffRole) =>
+  role === 'admin'
+    ? ENV.webUrl ? `${ENV.webUrl}/quan-tri/dang-nhap` : 'app TH EDU → nhấn giữ chữ TH EDU 1 giây'
+    : ENV.webUrl ? `${ENV.webUrl}/quan-ly/dang-nhap` : 'app TH EDU → nhấn giữ chữ TH EDU → "Bạn là giáo viên / nhân viên?"';
+const credentialsText = (email: string, password: string, role: StaffRole) =>
+  `Tài khoản TH EDU của bạn\nĐăng nhập: ${loginUrl(role)}\nEmail: ${email}\nMật khẩu: ${password}\n(Vui lòng không chia sẻ mật khẩu này.)`;
 
 // ─── Shared pieces ──────────────────────────────────────────────────────────
 
@@ -73,7 +77,7 @@ function PasswordInput({ value, onChange, error }: { value: string; onChange: (v
 }
 
 /** Shown once after creating / resetting: the admin passes these on to the person. */
-function CredentialsCard({ title, email, password, onDone }: { title: string; email: string; password: string; onDone: () => void }) {
+function CredentialsCard({ title, email, password, role, onDone }: { title: string; email: string; password: string; role: StaffRole; onDone: () => void }) {
   return (
     <>
       <View className="items-center gap-2 pt-2">
@@ -93,7 +97,7 @@ function CredentialsCard({ title, email, password, onDone }: { title: string; em
         <Text className="mt-2 text-xs text-ink-muted">Mật khẩu</Text>
         <Text selectable className="font-mono text-[17px] font-bold tracking-wider text-ink" testID="new-password">{password}</Text>
       </View>
-      <Button title="Sao chép / gửi thông tin đăng nhập" variant="outline" icon={<Copy size={16} color={COLORS.ink} />} onPress={() => shareText(credentialsText(email, password))} />
+      <Button title="Sao chép / gửi thông tin đăng nhập" variant="outline" icon={<Copy size={16} color={COLORS.ink} />} onPress={() => shareText(credentialsText(email, password, role))} />
       <Button title="Xong" onPress={onDone} />
     </>
   );
@@ -126,7 +130,7 @@ export function CreateStaffModal({
   const [role, setRole] = useState<StaffRole>('staff');
   const [errors, setErrors] = useState<{ email?: string; password?: string; form?: string }>({});
   const [busy, setBusy] = useState(false);
-  const [created, setCreated] = useState<{ email: string; password: string } | null>(null);
+  const [created, setCreated] = useState<{ email: string; password: string; role: StaffRole } | null>(null);
 
   useEffect(() => {
     if (!visible) return;
@@ -145,7 +149,7 @@ export function CreateStaffModal({
     setErrors({});
     try {
       const acc = await createStaff({ email, password, role, displayName: name });
-      setCreated({ email: acc.email, password });
+      setCreated({ email: acc.email, password, role: acc.role });
       onCreated(acc);
     } catch (e) {
       const field = e instanceof ApiError ? e.field : undefined;
@@ -158,7 +162,7 @@ export function CreateStaffModal({
   return (
     <Sheet visible={visible} onClose={onClose}>
       {created ? (
-        <CredentialsCard title="Đã tạo tài khoản" email={created.email} password={created.password} onDone={onClose} />
+        <CredentialsCard title="Đã tạo tài khoản" email={created.email} password={created.password} role={created.role} onDone={onClose} />
       ) : (
         <>
           <Text className="text-lg font-extrabold text-ink" accessibilityRole="header">
@@ -261,7 +265,7 @@ export function ResetPasswordModal({ account, onClose }: { account: StaffAccount
   return (
     <Sheet visible={!!account} onClose={onClose}>
       {account && done ? (
-        <CredentialsCard title="Đã đặt lại mật khẩu" email={account.email} password={password} onDone={onClose} />
+        <CredentialsCard title="Đã đặt lại mật khẩu" email={account.email} password={password} role={account.role} onDone={onClose} />
       ) : account ? (
         <>
           <Text className="text-lg font-extrabold text-ink" accessibilityRole="header">

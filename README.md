@@ -32,7 +32,8 @@ npm run ios          # iOS (chỉ trên macOS)
 
 ## Đăng video (dành cho giáo viên / nhân viên)
 
-- **Vào khu quản lý:** trên web mở `/quan-ly`; trong app **nhấn giữ logo TH EDU 1 giây** ở EduFeed.
+- **Đăng nhập:** quản trị viên **nhấn giữ chữ TH EDU 1 giây** ở EduFeed (hoặc mở `/quan-tri/dang-nhap`); giáo viên / nhân viên mở
+  `/quan-ly/dang-nhap` (trong app: giữ chữ TH EDU → "Bạn là giáo viên / nhân viên?").
   Khi đã đăng nhập, EduFeed có thêm nút **"+ Đăng video"**.
 - **Đăng video:** chọn video (MP4/MOV, ≤ 50 MB — nên quay dọc, 30–90 giây, xuất 720p) → ảnh bìa
   (trên web tự lấy từ video) → tiêu đề, khóa học, giáo viên, hashtag, nút kêu gọi → xem trước → **Đăng ngay** hoặc **Lưu nháp**.

@@ -35,7 +35,7 @@ export default function HomeHeader({
   return (
     <View style={{ paddingTop: insets.top }} className="bg-surface">
       <View className="h-14 flex-row items-center gap-2 px-4">
-        {/* Brand mark. Long-press (1s) opens the staff area — staff only, parents never need it. */}
+        {/* Brand mark. Long-press (1s) opens the admin sign-in — parents never need it. */}
         <Pressable
           onLongPress={onBrandLongPress}
           delayLongPress={1000}

@@ -23,7 +23,7 @@ export default function AdminHomeScreen({ navigation }: RootStackScreenProps<'Ad
   const insets = useSafeAreaInsets();
 
   useEffect(() => {
-    if (status === 'signedOut' || (status === 'signedIn' && !isStaff)) navigation.replace('StaffLogin');
+    if (status === 'signedOut' || (status === 'signedIn' && !isStaff)) navigation.replace('AdminLogin');
     else if (status === 'signedIn' && !isAdmin) navigation.replace('StaffVideos');
   }, [status, isStaff, isAdmin, navigation]);
 

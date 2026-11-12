@@ -1,5 +1,5 @@
-import { CheckCircle2, Lock, ShieldCheck, UserRound } from 'lucide-react-native';
-import { useState, type ReactNode } from 'react';
+import { CheckCircle2, Lock, ShieldCheck } from 'lucide-react-native';
+import { useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, View } from 'react-native';
 
 import { Button, ScreenHeader } from '@/components';
@@ -13,18 +13,17 @@ import { COLORS } from '@/utils/constants';
 
 import { CreateStaffModal } from './components/AccountModals';
 
-type Kind = 'staff' | 'admin';
-
 const EMPTY: RegisterStaffInput = { displayName: '', email: '', phone: '', password: '', confirmPassword: '', note: '' };
 
 /**
- * Account registration from the staff login page.
- *  - Teacher / staff: self-registration → pending until an admin approves (admin sees it in /quan-tri).
- *  - Admin: locked — only a signed-in admin can create another admin account.
+ * Account registration, one kind per page:
+ *  - type 'staff' (from the teacher / staff sign-in): self-registration → pending until an admin approves.
+ *  - type 'admin' (from the admin sign-in, dark look): locked — only a signed-in admin can create an admin account.
  */
 export default function StaffRegisterScreen({ navigation, route }: RootStackScreenProps<'StaffRegister'>) {
   const { status, isAdmin, email: signedInEmail } = useStaffStore();
-  const [kind, setKind] = useState<Kind>(route.params?.type ?? 'staff');
+  const kind = route.params?.type ?? 'staff';
+  const adminKind = kind === 'admin';
   const [form, setForm] = useState<RegisterStaffInput>(EMPTY);
   const [errors, setErrors] = useState<RegisterErrors>({});
   const [busy, setBusy] = useState(false);
@@ -53,16 +52,16 @@ export default function StaffRegisterScreen({ navigation, route }: RootStackScre
     }
   };
 
-  const goBack = () => (navigation.canGoBack() ? navigation.goBack() : navigation.navigate('StaffLogin'));
+  const goBack = () => (navigation.canGoBack() ? navigation.goBack() : navigation.navigate(adminKind ? 'AdminLogin' : 'StaffLogin'));
 
   return (
-    <KeyboardAvoidingView className="flex-1 bg-surface" behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <ScreenHeader title="Đăng ký tài khoản" onBack={goBack} />
+    <KeyboardAvoidingView className={`flex-1 ${adminKind ? 'bg-ink' : 'bg-surface'}`} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <ScreenHeader
+        tone={adminKind ? 'dark' : 'light'}
+        title={adminKind ? 'Đăng ký tài khoản quản trị' : 'Đăng ký giáo viên / nhân viên'}
+        onBack={goBack}
+      />
       <ScrollView contentContainerClassName="gap-4 px-5 pb-10 pt-2" keyboardShouldPersistTaps="handled">
-        <View className="flex-row gap-2 rounded-2xl bg-slate-200/70 p-1" accessibilityRole="tablist">
-          <KindTab active={kind === 'staff'} onPress={() => setKind('staff')} icon={<UserRound size={16} color={kind === 'staff' ? COLORS.ink : COLORS.muted} />} label="Giáo viên / nhân viên" />
-          <KindTab active={kind === 'admin'} onPress={() => setKind('admin')} icon={isAdmin ? <ShieldCheck size={16} color={kind === 'admin' ? COLORS.ink : COLORS.muted} /> : <Lock size={15} color={kind === 'admin' ? COLORS.ink : COLORS.muted} />} label="Quản trị viên" />
-        </View>
 
         {kind === 'staff' ? (
           done ? (
@@ -118,31 +117,20 @@ export default function StaffRegisterScreen({ navigation, route }: RootStackScre
             <Text className="text-center text-[15px] font-bold text-ink">Chỉ quản trị viên được tạo tài khoản quản trị</Text>
             <Text className="text-center text-[13px] leading-5 text-ink-muted">
               {status === 'signedIn'
-                ? `Tài khoản ${signedInEmail} không phải quản trị viên. Nếu bạn là giáo viên / nhân viên, hãy dùng thẻ "Giáo viên / nhân viên".`
-                : 'Đăng nhập bằng tài khoản quản trị để mở khóa. Nếu bạn là giáo viên / nhân viên, hãy dùng thẻ "Giáo viên / nhân viên".'}
+                ? `Tài khoản ${signedInEmail} không phải quản trị viên nên không tạo được tài khoản quản trị.`
+                : 'Đăng nhập bằng tài khoản quản trị để mở khóa.'}
             </Text>
             {status !== 'signedIn' && (
-              <Button title="Đăng nhập quản trị để mở khóa" className="self-stretch" onPress={() => navigation.navigate('StaffLogin', { next: 'createAdmin' })} />
+              <Button title="Đăng nhập quản trị để mở khóa" className="self-stretch" onPress={() => navigation.navigate('AdminLogin', { next: 'createAdmin' })} />
             )}
+            <Pressable onPress={() => navigation.navigate('StaffRegister', { type: 'staff' })} accessibilityRole="link" className="py-1">
+              <Text className="text-center text-[13px] font-semibold text-brand-600">Bạn là giáo viên / nhân viên? Đăng ký tại đây</Text>
+            </Pressable>
           </View>
         )}
       </ScrollView>
 
       <CreateStaffModal visible={creatingAdmin} initialRole="admin" lockRole onClose={() => setCreatingAdmin(false)} onCreated={() => {}} />
     </KeyboardAvoidingView>
-  );
-}
-
-function KindTab({ active, onPress, icon, label }: { active: boolean; onPress: () => void; icon: ReactNode; label: string }) {
-  return (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="tab"
-      accessibilityState={{ selected: active }}
-      className={`flex-1 flex-row items-center justify-center gap-1.5 rounded-xl py-2.5 ${active ? 'bg-white shadow-sm shadow-black/10' : ''}`}
-    >
-      {icon}
-      <Text className={`text-[13px] font-semibold ${active ? 'text-ink' : 'text-ink-muted'}`}>{label}</Text>
-    </Pressable>
   );
 }
