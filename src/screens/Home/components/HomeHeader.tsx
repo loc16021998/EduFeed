@@ -1,9 +1,14 @@
 import { Bell, Search, Trophy, X } from 'lucide-react-native';
 import { useEffect, useRef } from 'react';
-import { Pressable, Text, TextInput, View } from 'react-native';
+import { Image, Pressable, Text, TextInput, View, type ImageSourcePropType } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import mark from '@/assets/branding/logo-th-mark.png';
 import { COLORS } from '@/utils/constants';
+
+const MARK: ImageSourcePropType = typeof mark === 'string' ? { uri: mark } : mark;
+// logo-th-mark.png is 430 × 256.
+const MARK_RATIO = 430 / 256;
 
 interface HomeHeaderProps {
   unreadCount: number;
@@ -47,9 +52,8 @@ export default function HomeHeader({
           accessibilityRole="header"
           className="flex-1 flex-row items-center gap-2"
         >
-          <View className="h-9 w-9 items-center justify-center rounded-xl bg-brand-500">
-            <Text className="text-base font-black text-white">TH</Text>
-          </View>
+          {/* TH EDU mark (white background removed; the wordmark is the text next to it). */}
+          <Image source={MARK} style={{ width: 54, height: 54 / MARK_RATIO }} resizeMode="contain" accessibilityIgnoresInvertColors testID="brand-mark" />
           <View>
             <Text className="text-lg font-black leading-5 text-ink">
               TH <Text className="text-accent-500">EDU</Text>
