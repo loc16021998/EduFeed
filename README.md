@@ -38,8 +38,27 @@ npm run ios          # iOS (chỉ trên macOS)
   (trên web tự lấy từ video) → tiêu đề, khóa học, giáo viên, hashtag, nút kêu gọi → xem trước → **Đăng ngay** hoặc **Lưu nháp**.
 - **Chia sẻ:** mỗi video có link `PUBLIC_WEB_URL/v/<mã>` để đăng Facebook, Zalo, nhóm phụ huynh.
   Lượt đăng ký học thử qua link (và qua nút trên EduFeed) được tính cho từng video trong danh sách quản lý.
-- **Tài khoản nhân viên:** tạo trong Supabase và cấp quyền `staff` — xem [supabase/README.md](supabase/README.md#staff-accounts-who-can-publish-videos).
+- **Tài khoản:** hai quyền, hai khu riêng — **Quản trị** (`/quan-tri`: tổng quan kinh doanh, học phí, tài khoản; vẫn dùng được
+  công cụ giáo viên) và **Giáo viên / nhân viên** (`/quan-ly`: video, lịch học thử). Đăng nhập xong app tự mở đúng khu theo quyền.
+  Tài khoản quản trị đầu tiên tạo một lần trong Supabase + chạy `supabase/sql/make_admin.sql`; sau đó quản trị viên tạo tài khoản
+  ngay trong app: *Trang quản trị → Tài khoản nhân viên* (web: `/quan-tri/tai-khoan`).
+  Giáo viên / nhân viên cũng có thể **tự đăng ký** ở trang đăng nhập (`/quan-ly/dang-ky`); tài khoản chờ quản trị viên duyệt
+  ở *Trang quản trị → Duyệt tài khoản*. Cần bật *Allow new users to sign up* trong Supabase (xem supabase/README.md). Tạo tài khoản / đặt lại mật khẩu cần triển khai
+  Edge Function `api` — xem [supabase/README.md](supabase/README.md#staff-accounts-who-can-publish-videos).
 - **Chưa kết nối Supabase:** bản dev có *chế độ thử* (email bất kỳ, mật khẩu ≥ 6 ký tự); video thử chỉ lưu tạm, mất khi tải lại.
+
+## Tổng quan kinh doanh (chủ trung tâm / quản lý)
+
+Web: `/quan-tri/tong-quan` (rộng toàn màn hình trên máy tính) · App: *Trang quản trị → Tổng quan kinh doanh* (chỉ tài khoản Quản trị).
+
+- **Đăng ký mới** (so với kỳ trước), **tỉ lệ chốt sau học thử**, **học thử hôm nay**, **doanh thu dự kiến** của tháng.
+- **Nguồn khách hàng** theo link quảng cáo, **phễu chuyển đổi**, **danh sách đăng ký** (lọc cơ sở / thời gian / trạng thái, nút Gọi và Chat Zalo).
+- Số liệu chỉ lấy từ dữ liệu thật. Ba việc cần làm để các ô có số:
+  1. **Gắn UTM vào link quảng cáo**, ví dụ `PUBLIC_WEB_URL/feed?utm_source=facebook&utm_medium=cpc&utm_campaign=khai-giang-t11`
+     (`tiktok`, `zalo`, `referral` tương tự). Link không gắn sẽ hiện là *Chưa gắn nguồn*.
+  2. **Nhập học phí** từng khóa (nút *Nhập học phí* trên ô doanh thu). Khóa nào chưa có giá sẽ được báo thiếu, không tự đoán.
+  3. **Đánh dấu "Đã nhập học"** trong *Lịch học thử* khi phụ huynh đóng tiền.
+- Lượt vào app / xem video được đếm **ẩn danh** (mỗi phiên 1 lần, không gắn với phụ huynh), bắt đầu từ khi nâng cấp cơ sở dữ liệu.
 
 ## Build bản phát hành
 

@@ -1,4 +1,4 @@
-import { CalendarClock, ChevronRight, LogOut, Plus } from 'lucide-react-native';
+import { CalendarClock, ChevronLeft, ChevronRight, LogOut, Plus, ShieldCheck } from 'lucide-react-native';
 import { useCallback, useEffect } from 'react';
 import { ActivityIndicator, FlatList, Pressable, RefreshControl, Text, View } from 'react-native';
 
@@ -13,7 +13,7 @@ import { confirmAsync, shareText } from '@/utils/platform';
 import AdminVideoRow from './components/AdminVideoRow';
 
 export default function StaffVideosScreen({ navigation }: RootStackScreenProps<'StaffVideos'>) {
-  const { status: authStatus, isStaff, email, demo, signOut } = useStaffStore();
+  const { status: authStatus, isStaff, isAdmin, email, demo, signOut } = useStaffStore();
   const { videos, status, error, load, togglePublished, remove } = useVideoAdminStore();
 
   // Not (or no longer) signed in as staff → back to login.
@@ -53,7 +53,7 @@ export default function StaffVideosScreen({ navigation }: RootStackScreenProps<'
   return (
     <View className="flex-1 bg-surface">
       <ScreenHeader
-        title="Quản lý video"
+        title="Khu giáo viên"
         onBack={() => (navigation.canGoBack() ? navigation.goBack() : navigation.navigate('MainTabs', { screen: 'Home' }))}
         right={
           <HeaderIconButton label="Đăng xuất" onPress={onSignOut}>
@@ -69,11 +69,24 @@ export default function StaffVideosScreen({ navigation }: RootStackScreenProps<'
         refreshControl={<RefreshControl refreshing={status === 'loading'} onRefresh={load} tintColor={COLORS.brand} />}
         ListHeaderComponent={
           <View className="gap-3 pb-1">
-            <Text className="text-xs text-ink-subtle">Đăng nhập: {email}</Text>
+            <Text className="text-xs text-ink-subtle">
+              Đăng nhập: {email} · {isAdmin ? 'Quản trị' : 'Giáo viên / nhân viên'}
+            </Text>
             {demo && (
               <Text className="rounded-xl bg-amber-50 p-2.5 text-xs leading-[18px] text-amber-800">
                 Chế độ thử: video chỉ lưu tạm trên máy này, mất khi tải lại. Kết nối Supabase để đăng thật.
               </Text>
+            )}
+            {isAdmin && (
+              <Pressable
+                onPress={() => navigation.navigate('AdminHome')}
+                accessibilityRole="button"
+                className="flex-row items-center gap-2 self-start rounded-full bg-ink px-3.5 py-2 active:opacity-90"
+              >
+                <ChevronLeft size={16} color="#fff" />
+                <ShieldCheck size={14} color="#93B4FF" />
+                <Text className="text-[13px] font-semibold text-white">Về trang quản trị</Text>
+              </Pressable>
             )}
             <Pressable
               onPress={() => navigation.navigate('StaffTrials')}

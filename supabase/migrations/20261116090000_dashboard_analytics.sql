@@ -1,0 +1,274 @@
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Admin dashboard: the data behind each KPI, collected for real (nothing estimated by the app).
+--
+--   leads.utm_source / utm_medium / utm_campaign   ad link that brought the parent (from the URL)
+--   leads.channel        FACEBOOK | TIKTOK | ZALO | REFERRAL | OTHER | UNTRACKED (derived from UTM)
+--   leads.enrolled_at    set automatically when a lead becomes ENROLLED
+--   course_fees          monthly tuition per course, entered by staff → revenue estimate
+--   funnel_events        anonymous app opens / video views (random session id, no personal data)
+--   track_event()        anon-callable, at most once per session + kind (+ video)
+--   dashboard_summary()  staff-only KPI aggregate for one campus (or all) and a period
+--
+-- submit_lead() becomes a thin wrapper around the previous implementation (renamed
+-- submit_lead_core) that also stores the UTM fields. Later migrations that change lead
+-- validation should replace submit_lead_core, not submit_lead.
+-- ─────────────────────────────────────────────────────────────────────────────
+
+-- ─── Channel classification ─────────────────────────────────────────────────
+create or replace function public.clean_utm(p_value text, p_max int default 100)
+returns text
+language sql
+immutable
+as $$
+  select nullif(left(regexp_replace(lower(btrim(coalesce(p_value, ''))), '[^a-z0-9._ -]', '', 'g'), p_max), '');
+$$;
+
+-- Keep in sync with CHANNEL_LABELS (src/utils/constants.ts) and the UTM guide in supabase/README.md.
+create or replace function public.lead_channel(p_source text, p_medium text)
+returns text
+language sql
+immutable
+as $$
+  select case
+    when coalesce(p_medium, '') in ('referral', 'gioi-thieu', 'gioi_thieu')
+      or coalesce(p_source, '') in ('referral', 'ref', 'gioi-thieu', 'gioi_thieu')        then 'REFERRAL'
+    when coalesce(p_source, '') ~ '^(facebook|instagram|messenger|meta|fb|ig)([._ -]|ads|$)' then 'FACEBOOK'
+    when coalesce(p_source, '') ~ '^tiktok'                                               then 'TIKTOK'
+    when coalesce(p_source, '') ~ '^zalo'                                                 then 'ZALO'
+    when coalesce(p_source, '') = ''                                                      then 'UNTRACKED'
+    else 'OTHER'
+  end;
+$$;
+
+-- ─── leads: attribution + enrolment date ────────────────────────────────────
+alter table public.leads
+  add column utm_source   text check (utm_source is null or char_length(utm_source) <= 100),
+  add column utm_medium   text check (utm_medium is null or char_length(utm_medium) <= 100),
+  add column utm_campaign text check (utm_campaign is null or char_length(utm_campaign) <= 150),
+  add column enrolled_at  timestamptz;
+
+alter table public.leads
+  add column channel text generated always as (public.lead_channel(utm_source, utm_medium)) stored;
+
+create index if not exists leads_created_at_idx on public.leads (created_at desc);
+create index if not exists leads_branch_created_idx on public.leads (branch_location, created_at desc);
+create index if not exists leads_enrolled_at_idx on public.leads (enrolled_at) where enrolled_at is not null;
+
+create or replace function public.leads_track_enrolment()
+returns trigger
+language plpgsql
+as $$
+begin
+  if new.status = 'ENROLLED' and old.status is distinct from 'ENROLLED' then
+    new.enrolled_at := now();
+  elsif new.status <> 'ENROLLED' then
+    new.enrolled_at := null;
+  end if;
+  return new;
+end;
+$$;
+
+create trigger leads_track_enrolment
+  before update of status on public.leads
+  for each row execute function public.leads_track_enrolment();
+
+-- Existing students: best available date is the last change to the row.
+update public.leads set enrolled_at = updated_at where status = 'ENROLLED' and enrolled_at is null;
+
+-- ─── submit_lead: store UTM ─────────────────────────────────────────────────
+alter function public.submit_lead(jsonb) rename to submit_lead_core;
+revoke all on function public.submit_lead_core(jsonb) from public, anon, authenticated;
+
+create function public.submit_lead(p jsonb)
+returns jsonb
+language plpgsql
+volatile
+security definer
+set search_path = public
+as $$
+declare
+  v_res jsonb;
+begin
+  v_res := public.submit_lead_core(p);
+  if not coalesce((v_res ->> 'duplicate')::boolean, false) then
+    update public.leads
+       set utm_source   = public.clean_utm(p ->> 'utm_source'),
+           utm_medium   = public.clean_utm(p ->> 'utm_medium'),
+           utm_campaign = nullif(left(btrim(coalesce(p ->> 'utm_campaign', '')), 150), '')
+     where id = (v_res ->> 'id')::uuid;
+  end if;
+  return v_res;
+end;
+$$;
+
+revoke all on function public.submit_lead(jsonb) from public;
+grant execute on function public.submit_lead(jsonb) to anon, authenticated, service_role;
+
+-- ─── Tuition (staff-managed) ────────────────────────────────────────────────
+create table public.course_fees (
+  course_code      text primary key references public.categories (code) on update cascade on delete cascade,
+  monthly_fee_vnd  integer not null check (monthly_fee_vnd between 100000 and 50000000),
+  updated_at       timestamptz not null default now(),
+  updated_by       uuid default auth.uid() references auth.users (id) on delete set null
+);
+
+create trigger course_fees_set_updated_at
+  before update on public.course_fees
+  for each row execute function public.set_updated_at();
+
+alter table public.course_fees enable row level security;
+create policy "staff read course fees"   on public.course_fees for select to authenticated using (public.is_staff());
+create policy "staff insert course fees" on public.course_fees for insert to authenticated with check (public.is_staff());
+create policy "staff update course fees" on public.course_fees for update to authenticated
+  using (public.is_staff()) with check (public.is_staff());
+create policy "staff delete course fees" on public.course_fees for delete to authenticated using (public.is_staff());
+revoke all on public.course_fees from anon;
+
+-- ─── Anonymous funnel events ────────────────────────────────────────────────
+-- No foreign key on video_id: deleting a video must not collide with the uniqueness rule below.
+create table public.funnel_events (
+  id          bigint generated always as identity primary key,
+  session_id  uuid not null,
+  kind        text not null check (kind in ('APP_OPEN', 'VIDEO_VIEW')),
+  video_id    uuid,
+  channel     text not null default 'UNTRACKED',
+  created_at  timestamptz not null default now()
+);
+
+create unique index funnel_events_once_idx
+  on public.funnel_events (session_id, kind, coalesce(video_id, '00000000-0000-0000-0000-000000000000'::uuid));
+create index funnel_events_created_idx on public.funnel_events (created_at);
+
+-- Written only through track_event(), read only through dashboard_summary().
+alter table public.funnel_events enable row level security;
+revoke all on public.funnel_events from anon, authenticated;
+
+create or replace function public.track_event(
+  p_session_id  uuid,
+  p_kind        text,
+  p_video_id    uuid default null,
+  p_utm_source  text default null,
+  p_utm_medium  text default null
+)
+returns void
+language plpgsql
+volatile
+security definer
+set search_path = public
+as $$
+begin
+  if p_session_id is null or p_kind is null or p_kind not in ('APP_OPEN', 'VIDEO_VIEW') then
+    raise exception 'Sự kiện không hợp lệ' using hint = 'VALIDATION:kind';
+  end if;
+  if p_kind = 'VIDEO_VIEW'
+     and (p_video_id is null or not exists (select 1 from public.videos where id = p_video_id and is_published)) then
+    return;
+  end if;
+  -- Flood guard: one browser session cannot add more than 200 rows.
+  if (select count(*) from public.funnel_events where session_id = p_session_id) >= 200 then
+    return;
+  end if;
+
+  insert into public.funnel_events (session_id, kind, video_id, channel)
+  values (
+    p_session_id,
+    p_kind,
+    case when p_kind = 'VIDEO_VIEW' then p_video_id end,
+    public.lead_channel(public.clean_utm(p_utm_source), public.clean_utm(p_utm_medium))
+  )
+  on conflict do nothing;
+end;
+$$;
+
+revoke all on function public.track_event(uuid, text, uuid, text, text) from public;
+grant execute on function public.track_event(uuid, text, uuid, text, text) to anon, authenticated;
+
+-- ─── Dashboard aggregate (staff only) ───────────────────────────────────────
+-- p_branch: branch code or null (all campuses). p_days: period length (1–365), compared with the
+-- period of the same length just before it. Dates are Vietnam time.
+create or replace function public.dashboard_summary(
+  p_branch  text default null,
+  p_days    int default 30,
+  p_now     timestamptz default now()
+)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+declare
+  v_days        int := least(greatest(coalesce(p_days, 30), 1), 365);
+  v_from        timestamptz := p_now - make_interval(days => v_days);
+  v_prev_from   timestamptz := p_now - make_interval(days => 2 * v_days);
+  v_today       date := (p_now at time zone 'Asia/Ho_Chi_Minh')::date;
+  v_month_start timestamptz := date_trunc('month', p_now at time zone 'Asia/Ho_Chi_Minh') at time zone 'Asia/Ho_Chi_Minh';
+  v_result      jsonb;
+begin
+  if not public.is_staff() then
+    raise exception 'Chỉ nhân viên TH EDU được xem số liệu' using hint = 'FORBIDDEN';
+  end if;
+  if p_branch is not null and not exists (select 1 from public.branches where code = p_branch) then
+    raise exception 'Cơ sở không tồn tại' using hint = 'VALIDATION:branch';
+  end if;
+
+  with l as (
+    select * from public.leads where p_branch is null or branch_location = p_branch
+  ),
+  cur as (
+    select * from l where created_at >= v_from and created_at < p_now
+  )
+  select jsonb_build_object(
+    'generated_at', p_now,
+    'period', jsonb_build_object('from', v_from, 'to', p_now, 'days', v_days),
+    'leads', jsonb_build_object(
+      'current',  (select count(*) from cur),
+      'previous', (select count(*) from l where created_at >= v_prev_from and created_at < v_from)
+    ),
+    'trials_today', jsonb_build_object(
+      'scheduled', (select count(*) from l
+                     where (appointment_time at time zone 'Asia/Ho_Chi_Minh')::date = v_today
+                       and status <> 'CANCELLED'),
+      'completed', (select count(*) from l
+                     where (appointment_time at time zone 'Asia/Ho_Chi_Minh')::date = v_today
+                       and status in ('COMPLETED_TRIAL', 'ENROLLED'))
+    ),
+    'trial_conversion', jsonb_build_object(
+      'completed', (select count(*) from l where trial_completed_at >= v_from and trial_completed_at < p_now),
+      'enrolled',  (select count(*) from l where trial_completed_at >= v_from and trial_completed_at < p_now
+                                              and status = 'ENROLLED')
+    ),
+    'revenue', (
+      select jsonb_build_object(
+        'month_start', v_month_start,
+        'enrolled',    count(*),
+        'priced',      count(f.course_code),
+        'total_vnd',   coalesce(sum(f.monthly_fee_vnd), 0),
+        'missing_fee_courses', coalesce(jsonb_agg(distinct e.course_code) filter (where f.course_code is null), '[]'::jsonb)
+      )
+      from l e
+      left join public.course_fees f on f.course_code = e.course_code
+      where e.status = 'ENROLLED' and e.enrolled_at >= v_month_start and e.enrolled_at <= p_now
+    ),
+    'channels', (
+      select coalesce(jsonb_object_agg(channel, n), '{}'::jsonb)
+      from (select channel, count(*) as n from cur group by channel) s
+    ),
+    'funnel', jsonb_build_object(
+      'app_sessions',   (select count(distinct session_id) from public.funnel_events
+                          where kind = 'APP_OPEN' and created_at >= v_from and created_at < p_now),
+      'video_sessions', (select count(distinct session_id) from public.funnel_events
+                          where kind = 'VIDEO_VIEW' and created_at >= v_from and created_at < p_now),
+      'leads',          (select count(*) from cur),
+      'trials_done',    (select count(*) from cur where trial_completed_at is not null or status = 'ENROLLED'),
+      'enrolled',       (select count(*) from cur where status = 'ENROLLED'),
+      'tracking_since', (select min(created_at) from public.funnel_events)
+    )
+  ) into v_result;
+
+  return v_result;
+end;
+$$;
+
+revoke all on function public.dashboard_summary(text, int, timestamptz) from public, anon;
+grant execute on function public.dashboard_summary(text, int, timestamptz) to authenticated;

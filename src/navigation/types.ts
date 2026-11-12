@@ -22,10 +22,16 @@ export type RootStackParamList = {
   /** Public share link target: one video + booking CTA. */
   VideoShare: { slug: string };
   // ── Staff (centre employees) ──
-  StaffLogin: undefined;
+  /** next = 'createAdmin': after an admin signs in, continue to creating an admin account. */
+  StaffLogin: { next?: 'createAdmin' } | undefined;
+  StaffRegister: { type?: 'staff' | 'admin' } | undefined;
   StaffVideos: undefined;
   /** Trial schedule: confirm / cancel / complete with teacher feedback / enrolled. */
   StaffTrials: undefined;
+  AdminHome: undefined;
+  AdminDashboard: undefined;
+  StaffAccounts: undefined;
+  StaffRequests: undefined;
   /** No id → create a new video. */
   VideoEditor: { id?: string } | undefined;
 };

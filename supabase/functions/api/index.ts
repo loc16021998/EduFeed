@@ -5,7 +5,11 @@
  *   GET  /api/feed?category=TOAN_TU_DUY&limit=10&cursor=…   → FeedPageResponse
  *   POST /api/leads/submit   (LeadSubmitRequest)             → LeadSubmitResponse (201 | 200 duplicate)
  *
- * Staff (Authorization: Bearer <staff user JWT>, app_metadata.role = 'staff'):
+ * Admin (Authorization: Bearer <admin user JWT>, app_metadata.role = 'admin'):
+ *   POST /api/admin/users                 (CreateStaffRequest) → StaffAccountDTO (201)
+ *   POST /api/admin/users/:id/password    { password }        → { id }
+ *
+ * Staff (Authorization: Bearer <staff or admin user JWT>, app_metadata.role = 'staff' | 'admin'):
  *   POST /api/leads/:id/complete-trial  (CompleteTrialRequest)  → CompleteTrialResponse
  *   POST /api/leads/:id/status          (SetLeadStatusRequest)  → { id, status }
  *
@@ -23,12 +27,15 @@ import {
   COURSE_CODES,
   normalizePhone,
   STAFF_SETTABLE_STATUSES,
+  staffPasswordProblem,
+  validateCreateStaff,
   validateLeadRequest,
   type ApiErrorBody,
   type ApiErrorCode,
   type CompleteTrialResponse,
   type FeedPageResponse,
   type LeadSubmitResponse,
+  type StaffAccountDTO,
   type VideoDTO,
 } from '../_shared/contracts.ts';
 import { corsHeaders } from '../_shared/cors.ts';
@@ -160,7 +167,8 @@ async function requireStaff(req: Request): Promise<{ db: SupabaseClient; userId:
   if (!token) return fail('UNAUTHORIZED', 'Cần đăng nhập tài khoản nhân viên', 401);
   const { data, error } = await adminDb.auth.getUser(token);
   if (error || !data.user) return fail('UNAUTHORIZED', 'Phiên đăng nhập không hợp lệ hoặc đã hết hạn', 401);
-  if ((data.user.app_metadata as { role?: string } | undefined)?.role !== 'staff') {
+  const role = (data.user.app_metadata as { role?: string } | undefined)?.role;
+  if (role !== 'staff' && role !== 'admin') {
     return fail('FORBIDDEN', 'Tài khoản không có quyền nhân viên', 403);
   }
   const db = createClient(SUPABASE_URL, ANON_KEY, {
@@ -168,6 +176,18 @@ async function requireStaff(req: Request): Promise<{ db: SupabaseClient; userId:
     global: { headers: { Authorization: `Bearer ${token}` } },
   });
   return { db, userId: data.user.id };
+}
+
+/** Verify the caller is an admin (manages staff accounts). */
+async function requireAdmin(req: Request): Promise<{ userId: string } | Response> {
+  const token = bearerToken(req);
+  if (!token) return fail('UNAUTHORIZED', 'Cần đăng nhập tài khoản quản trị', 401);
+  const { data, error } = await adminDb.auth.getUser(token);
+  if (error || !data.user) return fail('UNAUTHORIZED', 'Phiên đăng nhập không hợp lệ hoặc đã hết hạn', 401);
+  if ((data.user.app_metadata as { role?: string } | undefined)?.role !== 'admin') {
+    return fail('FORBIDDEN', 'Chỉ quản trị viên được quản lý tài khoản', 403);
+  }
+  return { userId: data.user.id };
 }
 
 // ─── Cursor (opaque base64url of "published_at|id") ─────────────────────────
@@ -277,6 +297,9 @@ async function handleLeadSubmit(req: Request): Promise<Response> {
       promo_code: r.promoCode ?? null,
       quiz_answers: r.quizAnswers ?? null,
       quiz_summary: r.quizSummary ?? null,
+      utm_source: r.utmSource ?? null,
+      utm_medium: r.utmMedium ?? null,
+      utm_campaign: r.utmCampaign ?? null,
     },
   });
 
@@ -384,10 +407,68 @@ async function handleSetStatus(req: Request, leadId: string): Promise<Response> 
   return json(data);
 }
 
+// ─── Admin: staff accounts ──────────────────────────────────────────────────
+
+async function handleCreateStaff(req: Request): Promise<Response> {
+  const admin = await requireAdmin(req);
+  if (admin instanceof Response) return admin;
+  const parsed = validateCreateStaff(await readJson(req));
+  if (!parsed.ok) return fail('VALIDATION', parsed.message, 422, parsed.field);
+  const r = parsed.value;
+
+  const { data, error } = await adminDb.auth.admin.createUser({
+    email: r.email,
+    password: r.password,
+    email_confirm: true, // created by an admin: no confirmation e-mail round trip
+    app_metadata: { role: r.role },
+    user_metadata: r.displayName ? { display_name: r.displayName } : {},
+  });
+  if (error || !data.user) {
+    const msg = error?.message ?? '';
+    if (/already|registered|exists/i.test(msg)) return fail('CONFLICT', 'Email này đã có tài khoản', 409, 'email');
+    if (/password/i.test(msg)) return fail('VALIDATION', 'Mật khẩu chưa đủ mạnh theo cấu hình Supabase', 422, 'password');
+    throw error ?? new Error('createUser returned no user');
+  }
+  const u = data.user;
+  const account: StaffAccountDTO = {
+    id: u.id,
+    email: u.email ?? r.email,
+    role: r.role,
+    displayName: r.displayName ?? null,
+    createdAt: u.created_at,
+    lastSignInAt: null,
+  };
+  console.log('[admin] account created', { by: admin.userId, id: u.id, role: r.role });
+  return json(account, 201);
+}
+
+async function handleResetPassword(req: Request, userId: string): Promise<Response> {
+  const admin = await requireAdmin(req);
+  if (admin instanceof Response) return admin;
+  const body = await readJson(req);
+  const problem = staffPasswordProblem(body?.password);
+  if (problem) return fail('VALIDATION', problem, 422, 'password');
+
+  // Only accounts that are staff / admin — never arbitrary users.
+  const { data: found, error: getErr } = await adminDb.auth.admin.getUserById(userId);
+  if (getErr || !found.user) return fail('NOT_FOUND', 'Không tìm thấy tài khoản', 404);
+  const role = (found.user.app_metadata as { role?: string } | undefined)?.role;
+  if (role !== 'staff' && role !== 'admin') return fail('FORBIDDEN', 'Tài khoản này không phải nhân viên', 403);
+
+  const { error } = await adminDb.auth.admin.updateUserById(userId, { password: body!.password as string });
+  if (error) {
+    if (/password/i.test(error.message)) return fail('VALIDATION', 'Mật khẩu chưa đủ mạnh theo cấu hình Supabase', 422, 'password');
+    throw error;
+  }
+  console.log('[admin] password reset', { by: admin.userId, id: userId });
+  return json({ id: userId });
+}
+
 // ─── Router ─────────────────────────────────────────────────────────────────
 
 const UUID = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
 const LEAD_ACTION = new RegExp(`^/leads/(${UUID})/(complete-trial|status)$`, 'i');
+const USER_PASSWORD = new RegExp(`^/admin/users/(${UUID})/password$`, 'i');
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
@@ -403,6 +484,10 @@ Deno.serve(async (req) => {
     }
     if (path === '/leads/submit') return req.method === 'POST' ? await handleLeadSubmit(req) : postOnly();
     if (path === '/cron/reminders') return req.method === 'POST' ? await handleCronReminders(req) : postOnly();
+
+    if (path === '/admin/users') return req.method === 'POST' ? await handleCreateStaff(req) : postOnly();
+    const pw = USER_PASSWORD.exec(path);
+    if (pw) return req.method === 'POST' ? await handleResetPassword(req, pw[1]) : postOnly();
 
     const action = LEAD_ACTION.exec(path);
     if (action) {

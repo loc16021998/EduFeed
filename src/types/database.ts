@@ -123,6 +123,11 @@ export type Database = {
           quiz_answers: Json | null;
           promo_code: string | null;
           source_ref: string | null;
+          utm_source: string | null;
+          utm_medium: string | null;
+          utm_campaign: string | null;
+          channel: 'FACEBOOK' | 'TIKTOK' | 'ZALO' | 'REFERRAL' | 'OTHER' | 'UNTRACKED';
+          enrolled_at: string | null;
           notified_at: string | null;
           notification_log: Json | null;
           updated_at: string;
@@ -149,6 +154,29 @@ export type Database = {
           { foreignKeyName: 'leads_course_code_fkey'; columns: ['course_code']; isOneToOne: false; referencedRelation: 'categories'; referencedColumns: ['code'] },
           { foreignKeyName: 'leads_branch_location_fkey'; columns: ['branch_location']; isOneToOne: false; referencedRelation: 'branches'; referencedColumns: ['code'] },
         ];
+      };
+      staff_requests: {
+        Row: {
+          user_id: string;
+          email: string;
+          display_name: string;
+          phone: string | null;
+          note: string | null;
+          status: 'PENDING' | 'APPROVED' | 'REJECTED';
+          created_at: string;
+          decided_at: string | null;
+          decided_by: string | null;
+          decision_note: string | null;
+        };
+        Insert: never;
+        Update: never;
+        Relationships: [];
+      };
+      course_fees: {
+        Row: { course_code: string; monthly_fee_vnd: number; updated_at: string; updated_by: string | null };
+        Insert: { course_code: string; monthly_fee_vnd: number };
+        Update: { monthly_fee_vnd?: number };
+        Relationships: [];
       };
       crm_logs: {
         Row: {
@@ -216,7 +244,33 @@ export type Database = {
         Returns: Database['public']['Tables']['videos']['Row'][];
       };
       submit_lead: { Args: { p: Json }; Returns: Json };
+      track_event: {
+        Args: { p_session_id: string; p_kind: string; p_video_id?: string | null; p_utm_source?: string | null; p_utm_medium?: string | null };
+        Returns: undefined;
+      };
+      dashboard_summary: { Args: { p_branch?: string | null; p_days?: number; p_now?: string }; Returns: Json };
       is_staff: { Args: Record<PropertyKey, never>; Returns: boolean };
+      is_admin: { Args: Record<PropertyKey, never>; Returns: boolean };
+      admin_list_staff: {
+        Args: Record<PropertyKey, never>;
+        Returns: { id: string; email: string; role: 'admin' | 'staff'; display_name: string | null; created_at: string; last_sign_in_at: string | null }[];
+      };
+      admin_set_role: { Args: { p_user_id: string; p_role: 'admin' | 'staff' | 'none' }; Returns: Json };
+      admin_list_staff_requests: {
+        Args: { p_status?: string | null };
+        Returns: {
+          user_id: string;
+          email: string;
+          display_name: string;
+          phone: string | null;
+          note: string | null;
+          status: string;
+          created_at: string;
+          decided_at: string | null;
+          email_confirmed_at: string | null;
+        }[];
+      };
+      admin_decide_staff_request: { Args: { p_user_id: string; p_approve: boolean; p_note?: string | null }; Returns: Json };
       crm_complete_trial: { Args: { p_lead_id: string; p_teacher_note: string }; Returns: Json };
       crm_set_status: { Args: { p_lead_id: string; p_status: string; p_note?: string | null }; Returns: Json };
       staff_video_stats: {

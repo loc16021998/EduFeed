@@ -98,6 +98,10 @@ export interface LeadSubmitRequest {
   promoCode?: PromoCode;
   quizAnswers?: Record<string, string[]>;
   quizSummary?: { ageGroup: string; painPoints: string[]; goal: string; recommendation: string };
+  /** UTM of the ad / link the parent arrived through (dashboard: traffic sources). */
+  utmSource?: string;
+  utmMedium?: string;
+  utmCampaign?: string;
 }
 
 export interface LeadSubmitResponse {
@@ -233,5 +237,58 @@ export function validateLeadRequest(body: unknown): Result {
     return fail('quizAnswers', 'Câu trả lời quiz không hợp lệ');
   }
 
+  for (const k of ['utmSource', 'utmMedium', 'utmCampaign'] as const) {
+    if (b[k] !== undefined && !(typeof b[k] === 'string' && (b[k] as string).length <= 150)) return fail(k, 'Nguồn quảng cáo không hợp lệ');
+  }
+
   return { ok: true, value: b as unknown as LeadSubmitRequest };
+}
+
+// ─── Staff accounts (admin) ─────────────────────────────────────────────────
+
+/** admin = owner / manager (also manages accounts); staff = teacher / employee. */
+export const STAFF_ROLES = ['admin', 'staff'] as const;
+export type StaffRole = (typeof STAFF_ROLES)[number];
+
+export const MIN_STAFF_PASSWORD = 8;
+
+export interface CreateStaffRequest {
+  email: string;
+  password: string;
+  role: StaffRole;
+  /** Shown in the account list, e.g. "Cô Hường". */
+  displayName?: string;
+}
+
+export interface StaffAccountDTO {
+  id: string;
+  email: string;
+  role: StaffRole;
+  displayName: string | null;
+  createdAt: string;
+  lastSignInAt: string | null;
+}
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+
+/** Returns a Vietnamese message for an unacceptable password, or null. */
+export function staffPasswordProblem(password: unknown): string | null {
+  if (typeof password !== 'string' || password.length < MIN_STAFF_PASSWORD) return `Mật khẩu cần ít nhất ${MIN_STAFF_PASSWORD} ký tự`;
+  if (password.length > 72) return 'Mật khẩu tối đa 72 ký tự';
+  if (!/[A-Za-z]/.test(password) || !/\d/.test(password)) return 'Mật khẩu cần có cả chữ và số';
+  return null;
+}
+
+export function validateCreateStaff(body: unknown):
+  | { ok: true; value: CreateStaffRequest }
+  | { ok: false; field: string; message: string } {
+  if (!body || typeof body !== 'object') return { ok: false, field: 'body', message: 'Dữ liệu không hợp lệ' };
+  const b = body as Record<string, unknown>;
+  const email = typeof b.email === 'string' ? b.email.trim().toLowerCase() : '';
+  if (!EMAIL_RE.test(email) || email.length > 254) return { ok: false, field: 'email', message: 'Email không hợp lệ' };
+  const pw = staffPasswordProblem(b.password);
+  if (pw) return { ok: false, field: 'password', message: pw };
+  if (!includes(STAFF_ROLES, b.role)) return { ok: false, field: 'role', message: 'Quyền không hợp lệ' };
+  const displayName = typeof b.displayName === 'string' ? b.displayName.trim().slice(0, 60) : '';
+  return { ok: true, value: { email, password: b.password as string, role: b.role, ...(displayName ? { displayName } : {}) } };
 }

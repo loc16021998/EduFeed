@@ -4,7 +4,9 @@ import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-nati
 import { Button, ScreenHeader, StickyCta } from '@/components';
 import type { RootStackScreenProps } from '@/navigation/types';
 import FeedVideoCard from '@/screens/Home/components/FeedVideoCard';
+import { trackEvent } from '@/services/analytics';
 import { fetchVideoBySlug } from '@/services/videoAdmin';
+import { useStaffStore } from '@/store';
 import type { FeedItem } from '@/types';
 import { CATEGORY_LABELS, COLORS } from '@/utils/constants';
 import { useAppWidth } from '@/utils/platform';
@@ -34,6 +36,15 @@ export default function VideoShareScreen({ navigation, route }: RootStackScreenP
       alive = false;
     };
   }, [route.params.slug]);
+
+  // Dashboard funnel: a video counts as "viewed" after 3 s on screen (once per session; staff excluded).
+  useEffect(() => {
+    if (state !== 'ready' || !video) return undefined;
+    const t = setTimeout(() => {
+      if (!useStaffStore.getState().isStaff) trackEvent('VIDEO_VIEW', video.id);
+    }, 3000);
+    return () => clearTimeout(t);
+  }, [state, video]);
 
   const goHome = () => navigation.navigate('MainTabs', { screen: 'Home' });
   const book = () =>

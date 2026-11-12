@@ -10,6 +10,11 @@
 | `migrations/20261112090000_trust.sql` | `trust_stats`, `testimonials`, `recent_activity()`, `leads.promo_code` |
 | `migrations/20261113090000_video_publishing.sql` | Storage bucket `feed-media` (staff-only upload), `videos.share_slug`, `leads.source_ref`, `staff_video_stats()` |
 | `migrations/20261114090000_crm_automation.sql` | Lead lifecycle statuses, `appointment_time`, `trial_slots`, `crm_logs`, `crm_*()` functions |
+| `migrations/20261115090000_zalo_tokens.sql` | `zalo_oa_tokens` + locked refresh helpers |
+| `migrations/20261116090000_dashboard_analytics.sql` | UTM + `channel` + `enrolled_at` on leads, `course_fees`, anonymous `funnel_events`, `track_event()`, `dashboard_summary()` |
+| `migrations/20261117090000_admin_accounts.sql` | `admin` role (`is_staff()` includes it), `is_admin()`, `admin_list_staff()`, `admin_set_role()` |
+| `migrations/20261118090000_admin_only_business.sql` | `dashboard_summary()` and `course_fees` restricted to admins |
+| `migrations/20261119090000_staff_signup_requests.sql` | Teacher / staff self-registration: `staff_requests`, sign-up trigger, `admin_list_staff_requests()`, `admin_decide_staff_request()` |
 | `seed.sql` | Dev data generated from `src/utils/mockData.ts` (deliberately **no** trust stats/testimonials — those must be real) |
 | `sql/` | Paste-ready SQL: `01_setup.sql` (fresh), `upgrades/<migration>.sql` (existing projects), `schedule_reminders_cron.sql` |
 | `functions/api/index.ts` | Edge Function: feed, lead submit, staff CRM actions, cron entry point |
@@ -53,6 +58,48 @@ Local: `npx supabase start && npx supabase db reset` (runs migrations + seed).
 
 ## Staff accounts (who can publish videos)
 
+Two roles in `app_metadata.role`: **`admin`** (owner / manager — everything, plus managing accounts) and **`staff`**
+(teachers — videos, trial schedule). Accounts without a role can sign in but see nothing (RLS).
+
+The app has two separate areas: **admin** at `/quan-tri` (business overview, tuition, accounts — plus links to the
+teacher tools) and **teacher / staff** at `/quan-ly` (videos, trial schedule). Signing in opens the area for the role.
+Business data (`dashboard_summary()`, `course_fees`) is admin-only in the database as well, not just hidden in the UI.
+
+**First admin (once):** Dashboard → Authentication → Users → *Add user* (tick *Auto Confirm User*), then run
+`sql/make_admin.sql` with that e-mail. Everything after that is done in the app: *Trang quản trị → Tài khoản nhân viên*
+(web: `/quan-tri/tai-khoan`).
+
+| In the app | How |
+|---|---|
+| List accounts, promote / demote, revoke access | `admin_list_staff()` / `admin_set_role()` with the admin's session — works without the Edge Function. You cannot change your own role; the last admin cannot be removed. |
+| Create account, reset password | `POST /api/admin/users`, `POST /api/admin/users/:id/password` — these need the Auth admin API (service role), so the **`api` Edge Function must be deployed**: `npx supabase login` → `npx supabase functions deploy api --no-verify-jwt --project-ref <ref>`. Passwords: ≥ 8 characters, letters + digits. |
+
+Role changes reach a signed-in user when their token refreshes (≤ 1 hour) or when they sign in again.
+
+### Self-registration (teachers / staff) + approval
+
+The login page has **Đăng ký giáo viên / nhân viên** (`/quan-ly/dang-ky`) and **Đăng ký tài khoản quản trị**.
+
+- **Teacher / staff:** `supabase.auth.signUp()` with `user_metadata.signup_kind = 'staff'`. The trigger
+  `on_auth_user_staff_signup` files a `PENDING` row in `staff_requests`. The account has **no role**, so it can sign in but
+  sees nothing until approved. Admins see a notification (count + banner) on `/quan-tri` and approve / reject in
+  *Duyệt tài khoản* (`/quan-tri/duyet-tai-khoan`). Approval sets `app_metadata.role = 'staff'`; the applicant signs in again.
+  `user_metadata` is written by the client and is never used for permissions.
+- **Admin:** locked. Only a signed-in admin can open it (others are asked to sign in as admin first); it uses
+  `POST /api/admin/users`, so the Edge Function must be deployed.
+
+**Required Supabase settings** (Dashboard → Authentication):
+1. *Sign In / Providers* → **Allow new users to sign up = ON** (otherwise the form shows "Trung tâm chưa mở đăng ký").
+   This is safe here because new accounts get no permissions until an admin approves them.
+2. *Email* → keep **Confirm email = ON** so applicants prove they own the address. Supabase's built-in mailer only sends a
+   few e-mails per hour (testing only) — configure your own SMTP (*Authentication → Emails → SMTP Settings*) before staff
+   start registering.
+3. *URL Configuration* → add `PUBLIC_WEB_URL` to *Redirect URLs* so the confirmation link returns to `/quan-ly/dang-nhap`.
+
+Notifications are in-app (admin area). Push / Zalo alerts to admins are not sent for sign-ups.
+
+Manual alternative (no app):
+
 Parents never sign in. Staff (teachers, admins) sign in with email + password to publish videos.
 
 1. Dashboard → **Authentication → Users → Add user** → email + password, tick *Auto Confirm User*.
@@ -62,8 +109,6 @@ Parents never sign in. Staff (teachers, admins) sign in with email + password to
    set raw_app_meta_data = raw_app_meta_data || '{"role":"staff"}'
    where email = 'co.huong@thedu.vn';
    ```
-3. Disable public sign-ups: **Authentication → Providers → Email → "Allow new users to sign up" = off**.
-   Staff accounts are created only by an admin.
 
 A user without the role can sign in but cannot upload or create videos (Storage + table RLS).
 Removing the role takes effect when their session token refreshes (≤ 1 hour), or immediately if you also delete the user.
@@ -169,6 +214,35 @@ stops working. The token pair therefore lives in `zalo_oa_tokens` (server-only) 
 Check health: `select access_expires_at, refreshed_at, last_error from zalo_oa_tokens;` — if `last_error` says the
 refresh token is invalid/expired, repeat step 2 (re-authorise). Until then, messages are skipped, never sent with a
 dead token.
+
+## Admin dashboard (`/quan-tri/tong-quan`)
+
+Every number comes from `dashboard_summary(p_branch, p_days)` (staff only) or the `leads` table — nothing is estimated in the app.
+Apply `sql/upgrades/20261116090000_dashboard_analytics.sql` on existing projects.
+
+| KPI | Definition |
+|---|---|
+| Đăng ký mới | leads created in the last *N* days vs the *N* days before |
+| Tỉ lệ chốt sau học thử | of the trials completed in the period (`trial_completed_at`), the share now `ENROLLED` |
+| Học thử hôm nay | `appointment_time` today (Vietnam time), not cancelled; and how many are done |
+| Doanh thu dự kiến | Σ `course_fees.monthly_fee_vnd` of leads with `enrolled_at` this month. Courses without a fee are listed as missing, never guessed. First-month tuition of new students only — not total centre revenue. |
+| Nguồn khách hàng | `leads.channel`, derived from UTM by `lead_channel()` |
+| Phễu | anonymous sessions that opened the app / watched a video ≥ 3 s (`funnel_events`), then the period's leads → trial done → enrolled |
+
+**Traffic sources.** The app reads `utm_source` / `utm_medium` / `utm_campaign` from the link a parent opens (kept 30 days on the
+device) and sends them with the booking. `lead_channel()`: `facebook|fb|instagram|ig|meta|messenger…` → FACEBOOK, `tiktok…` → TIKTOK,
+`zalo…` → ZALO, `utm_source`/`utm_medium` = `referral` (or `?ref=…`) → REFERRAL, any other source → OTHER, none → UNTRACKED.
+Without UTM, Facebook/TikTok click ids (`fbclid`, `ttclid`) still count for that network. Leads created before this upgrade are UNTRACKED.
+
+**Funnel events** are anonymous: a random per-session id, no phone, no link to the booking. `track_event()` stores at most one row per
+session + kind (+ video) and ignores unpublished videos. Anyone can call it, so visit counts can be inflated by someone scripting
+requests — treat them as indicative; the booking stages are exact.
+
+**Enrolment date.** `leads.enrolled_at` is set by a trigger whenever the status becomes `ENROLLED` (cleared if it changes back).
+Existing enrolled leads were back-filled with their last update time.
+
+`submit_lead()` is now a wrapper that calls `submit_lead_core()` (the previous implementation, no longer callable by clients) and then
+stores the UTM fields. Change validation in `submit_lead_core`.
 
 ## Trust content (stats, testimonials, activity ticker)
 

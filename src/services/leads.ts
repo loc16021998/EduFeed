@@ -12,6 +12,7 @@ import { CAMPUSES, TIME_SLOTS } from '@/utils/mockData';
 import { formatDateLong } from '@/utils/schedule';
 
 import type { LeadSubmitRequest, LeadSubmitResponse } from '../../supabase/functions/_shared/contracts';
+import { getAttribution } from './analytics';
 import { ApiError, callApi } from './apiClient';
 import { bookingCode } from './zalo';
 
@@ -74,6 +75,12 @@ export async function submitLead(payload: BookingPayload, idempotencyKey?: strin
   }
 
   const request = toSubmitRequest(record);
+  const utm = await getAttribution();
+  if (utm?.source) {
+    request.utmSource = utm.source;
+    if (utm.medium) request.utmMedium = utm.medium;
+    if (utm.campaign) request.utmCampaign = utm.campaign;
+  }
   try {
     const res = await callApi<LeadSubmitResponse>('leads/submit', { method: 'POST', body: request });
     return { ...record, id: res.id, code: res.code, createdAt: res.createdAt, confirmation: res.confirmation };
@@ -113,6 +120,9 @@ async function submitLeadViaRpc(r: LeadSubmitRequest): Promise<LeadSubmitRespons
       promo_code: r.promoCode ?? null,
       quiz_answers: r.quizAnswers ?? null,
       quiz_summary: r.quizSummary ?? null,
+      utm_source: r.utmSource ?? null,
+      utm_medium: r.utmMedium ?? null,
+      utm_campaign: r.utmCampaign ?? null,
     },
   });
   if (error) {

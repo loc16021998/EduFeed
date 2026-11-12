@@ -4,11 +4,11 @@
 -- HOW TO RUN: Supabase Dashboard → project → SQL Editor → New query → paste this whole file → Run.
 -- Run ONCE on a fresh project. It is wrapped in a transaction: if anything fails, nothing is applied.
 --
--- Includes migrations: 20261111090000_core_schema.sql, 20261111090100_rls_policies.sql, 20261111090200_functions.sql, 20261112090000_trust.sql, 20261113090000_video_publishing.sql, 20261114090000_crm_automation.sql, 20261115090000_zalo_tokens.sql
+-- Includes migrations: 20261111090000_core_schema.sql, 20261111090100_rls_policies.sql, 20261111090200_functions.sql, 20261112090000_trust.sql, 20261113090000_video_publishing.sql, 20261114090000_crm_automation.sql, 20261115090000_zalo_tokens.sql, 20261116090000_dashboard_analytics.sql, 20261117090000_admin_accounts.sql, 20261118090000_admin_only_business.sql, 20261119090000_staff_signup_requests.sql
 -- plus required reference data (course categories, branches).
 --
 -- If you later switch to the Supabase CLI (supabase db push), first mark these as applied:
---   npx supabase migration repair --status applied 20261111090000 20261111090100 20261111090200 20261112090000 20261113090000 20261114090000 20261115090000
+--   npx supabase migration repair --status applied 20261111090000 20261111090100 20261111090200 20261112090000 20261113090000 20261114090000 20261115090000 20261116090000 20261117090000 20261118090000 20261119090000
 -- ═══════════════════════════════════════════════════════════════════════════
 
 begin;
@@ -1296,6 +1296,612 @@ grant execute on function public.zalo_token_begin_refresh(int) to service_role;
 grant execute on function public.zalo_token_store(text, text, int) to service_role;
 grant execute on function public.zalo_token_fail(text) to service_role;
 grant execute on function public.zalo_token_set(text, text, int) to service_role;
+
+-- ───────────────── 20261116090000_dashboard_analytics.sql ─────────────────
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Admin dashboard: the data behind each KPI, collected for real (nothing estimated by the app).
+--
+--   leads.utm_source / utm_medium / utm_campaign   ad link that brought the parent (from the URL)
+--   leads.channel        FACEBOOK | TIKTOK | ZALO | REFERRAL | OTHER | UNTRACKED (derived from UTM)
+--   leads.enrolled_at    set automatically when a lead becomes ENROLLED
+--   course_fees          monthly tuition per course, entered by staff → revenue estimate
+--   funnel_events        anonymous app opens / video views (random session id, no personal data)
+--   track_event()        anon-callable, at most once per session + kind (+ video)
+--   dashboard_summary()  staff-only KPI aggregate for one campus (or all) and a period
+--
+-- submit_lead() becomes a thin wrapper around the previous implementation (renamed
+-- submit_lead_core) that also stores the UTM fields. Later migrations that change lead
+-- validation should replace submit_lead_core, not submit_lead.
+-- ─────────────────────────────────────────────────────────────────────────────
+
+-- ─── Channel classification ─────────────────────────────────────────────────
+create or replace function public.clean_utm(p_value text, p_max int default 100)
+returns text
+language sql
+immutable
+as $$
+  select nullif(left(regexp_replace(lower(btrim(coalesce(p_value, ''))), '[^a-z0-9._ -]', '', 'g'), p_max), '');
+$$;
+
+-- Keep in sync with CHANNEL_LABELS (src/utils/constants.ts) and the UTM guide in supabase/README.md.
+create or replace function public.lead_channel(p_source text, p_medium text)
+returns text
+language sql
+immutable
+as $$
+  select case
+    when coalesce(p_medium, '') in ('referral', 'gioi-thieu', 'gioi_thieu')
+      or coalesce(p_source, '') in ('referral', 'ref', 'gioi-thieu', 'gioi_thieu')        then 'REFERRAL'
+    when coalesce(p_source, '') ~ '^(facebook|instagram|messenger|meta|fb|ig)([._ -]|ads|$)' then 'FACEBOOK'
+    when coalesce(p_source, '') ~ '^tiktok'                                               then 'TIKTOK'
+    when coalesce(p_source, '') ~ '^zalo'                                                 then 'ZALO'
+    when coalesce(p_source, '') = ''                                                      then 'UNTRACKED'
+    else 'OTHER'
+  end;
+$$;
+
+-- ─── leads: attribution + enrolment date ────────────────────────────────────
+alter table public.leads
+  add column utm_source   text check (utm_source is null or char_length(utm_source) <= 100),
+  add column utm_medium   text check (utm_medium is null or char_length(utm_medium) <= 100),
+  add column utm_campaign text check (utm_campaign is null or char_length(utm_campaign) <= 150),
+  add column enrolled_at  timestamptz;
+
+alter table public.leads
+  add column channel text generated always as (public.lead_channel(utm_source, utm_medium)) stored;
+
+create index if not exists leads_created_at_idx on public.leads (created_at desc);
+create index if not exists leads_branch_created_idx on public.leads (branch_location, created_at desc);
+create index if not exists leads_enrolled_at_idx on public.leads (enrolled_at) where enrolled_at is not null;
+
+create or replace function public.leads_track_enrolment()
+returns trigger
+language plpgsql
+as $$
+begin
+  if new.status = 'ENROLLED' and old.status is distinct from 'ENROLLED' then
+    new.enrolled_at := now();
+  elsif new.status <> 'ENROLLED' then
+    new.enrolled_at := null;
+  end if;
+  return new;
+end;
+$$;
+
+create trigger leads_track_enrolment
+  before update of status on public.leads
+  for each row execute function public.leads_track_enrolment();
+
+-- Existing students: best available date is the last change to the row.
+update public.leads set enrolled_at = updated_at where status = 'ENROLLED' and enrolled_at is null;
+
+-- ─── submit_lead: store UTM ─────────────────────────────────────────────────
+alter function public.submit_lead(jsonb) rename to submit_lead_core;
+revoke all on function public.submit_lead_core(jsonb) from public, anon, authenticated;
+
+create function public.submit_lead(p jsonb)
+returns jsonb
+language plpgsql
+volatile
+security definer
+set search_path = public
+as $$
+declare
+  v_res jsonb;
+begin
+  v_res := public.submit_lead_core(p);
+  if not coalesce((v_res ->> 'duplicate')::boolean, false) then
+    update public.leads
+       set utm_source   = public.clean_utm(p ->> 'utm_source'),
+           utm_medium   = public.clean_utm(p ->> 'utm_medium'),
+           utm_campaign = nullif(left(btrim(coalesce(p ->> 'utm_campaign', '')), 150), '')
+     where id = (v_res ->> 'id')::uuid;
+  end if;
+  return v_res;
+end;
+$$;
+
+revoke all on function public.submit_lead(jsonb) from public;
+grant execute on function public.submit_lead(jsonb) to anon, authenticated, service_role;
+
+-- ─── Tuition (staff-managed) ────────────────────────────────────────────────
+create table public.course_fees (
+  course_code      text primary key references public.categories (code) on update cascade on delete cascade,
+  monthly_fee_vnd  integer not null check (monthly_fee_vnd between 100000 and 50000000),
+  updated_at       timestamptz not null default now(),
+  updated_by       uuid default auth.uid() references auth.users (id) on delete set null
+);
+
+create trigger course_fees_set_updated_at
+  before update on public.course_fees
+  for each row execute function public.set_updated_at();
+
+alter table public.course_fees enable row level security;
+create policy "staff read course fees"   on public.course_fees for select to authenticated using (public.is_staff());
+create policy "staff insert course fees" on public.course_fees for insert to authenticated with check (public.is_staff());
+create policy "staff update course fees" on public.course_fees for update to authenticated
+  using (public.is_staff()) with check (public.is_staff());
+create policy "staff delete course fees" on public.course_fees for delete to authenticated using (public.is_staff());
+revoke all on public.course_fees from anon;
+
+-- ─── Anonymous funnel events ────────────────────────────────────────────────
+-- No foreign key on video_id: deleting a video must not collide with the uniqueness rule below.
+create table public.funnel_events (
+  id          bigint generated always as identity primary key,
+  session_id  uuid not null,
+  kind        text not null check (kind in ('APP_OPEN', 'VIDEO_VIEW')),
+  video_id    uuid,
+  channel     text not null default 'UNTRACKED',
+  created_at  timestamptz not null default now()
+);
+
+create unique index funnel_events_once_idx
+  on public.funnel_events (session_id, kind, coalesce(video_id, '00000000-0000-0000-0000-000000000000'::uuid));
+create index funnel_events_created_idx on public.funnel_events (created_at);
+
+-- Written only through track_event(), read only through dashboard_summary().
+alter table public.funnel_events enable row level security;
+revoke all on public.funnel_events from anon, authenticated;
+
+create or replace function public.track_event(
+  p_session_id  uuid,
+  p_kind        text,
+  p_video_id    uuid default null,
+  p_utm_source  text default null,
+  p_utm_medium  text default null
+)
+returns void
+language plpgsql
+volatile
+security definer
+set search_path = public
+as $$
+begin
+  if p_session_id is null or p_kind is null or p_kind not in ('APP_OPEN', 'VIDEO_VIEW') then
+    raise exception 'Sự kiện không hợp lệ' using hint = 'VALIDATION:kind';
+  end if;
+  if p_kind = 'VIDEO_VIEW'
+     and (p_video_id is null or not exists (select 1 from public.videos where id = p_video_id and is_published)) then
+    return;
+  end if;
+  -- Flood guard: one browser session cannot add more than 200 rows.
+  if (select count(*) from public.funnel_events where session_id = p_session_id) >= 200 then
+    return;
+  end if;
+
+  insert into public.funnel_events (session_id, kind, video_id, channel)
+  values (
+    p_session_id,
+    p_kind,
+    case when p_kind = 'VIDEO_VIEW' then p_video_id end,
+    public.lead_channel(public.clean_utm(p_utm_source), public.clean_utm(p_utm_medium))
+  )
+  on conflict do nothing;
+end;
+$$;
+
+revoke all on function public.track_event(uuid, text, uuid, text, text) from public;
+grant execute on function public.track_event(uuid, text, uuid, text, text) to anon, authenticated;
+
+-- ─── Dashboard aggregate (staff only) ───────────────────────────────────────
+-- p_branch: branch code or null (all campuses). p_days: period length (1–365), compared with the
+-- period of the same length just before it. Dates are Vietnam time.
+create or replace function public.dashboard_summary(
+  p_branch  text default null,
+  p_days    int default 30,
+  p_now     timestamptz default now()
+)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+declare
+  v_days        int := least(greatest(coalesce(p_days, 30), 1), 365);
+  v_from        timestamptz := p_now - make_interval(days => v_days);
+  v_prev_from   timestamptz := p_now - make_interval(days => 2 * v_days);
+  v_today       date := (p_now at time zone 'Asia/Ho_Chi_Minh')::date;
+  v_month_start timestamptz := date_trunc('month', p_now at time zone 'Asia/Ho_Chi_Minh') at time zone 'Asia/Ho_Chi_Minh';
+  v_result      jsonb;
+begin
+  if not public.is_staff() then
+    raise exception 'Chỉ nhân viên TH EDU được xem số liệu' using hint = 'FORBIDDEN';
+  end if;
+  if p_branch is not null and not exists (select 1 from public.branches where code = p_branch) then
+    raise exception 'Cơ sở không tồn tại' using hint = 'VALIDATION:branch';
+  end if;
+
+  with l as (
+    select * from public.leads where p_branch is null or branch_location = p_branch
+  ),
+  cur as (
+    select * from l where created_at >= v_from and created_at < p_now
+  )
+  select jsonb_build_object(
+    'generated_at', p_now,
+    'period', jsonb_build_object('from', v_from, 'to', p_now, 'days', v_days),
+    'leads', jsonb_build_object(
+      'current',  (select count(*) from cur),
+      'previous', (select count(*) from l where created_at >= v_prev_from and created_at < v_from)
+    ),
+    'trials_today', jsonb_build_object(
+      'scheduled', (select count(*) from l
+                     where (appointment_time at time zone 'Asia/Ho_Chi_Minh')::date = v_today
+                       and status <> 'CANCELLED'),
+      'completed', (select count(*) from l
+                     where (appointment_time at time zone 'Asia/Ho_Chi_Minh')::date = v_today
+                       and status in ('COMPLETED_TRIAL', 'ENROLLED'))
+    ),
+    'trial_conversion', jsonb_build_object(
+      'completed', (select count(*) from l where trial_completed_at >= v_from and trial_completed_at < p_now),
+      'enrolled',  (select count(*) from l where trial_completed_at >= v_from and trial_completed_at < p_now
+                                              and status = 'ENROLLED')
+    ),
+    'revenue', (
+      select jsonb_build_object(
+        'month_start', v_month_start,
+        'enrolled',    count(*),
+        'priced',      count(f.course_code),
+        'total_vnd',   coalesce(sum(f.monthly_fee_vnd), 0),
+        'missing_fee_courses', coalesce(jsonb_agg(distinct e.course_code) filter (where f.course_code is null), '[]'::jsonb)
+      )
+      from l e
+      left join public.course_fees f on f.course_code = e.course_code
+      where e.status = 'ENROLLED' and e.enrolled_at >= v_month_start and e.enrolled_at <= p_now
+    ),
+    'channels', (
+      select coalesce(jsonb_object_agg(channel, n), '{}'::jsonb)
+      from (select channel, count(*) as n from cur group by channel) s
+    ),
+    'funnel', jsonb_build_object(
+      'app_sessions',   (select count(distinct session_id) from public.funnel_events
+                          where kind = 'APP_OPEN' and created_at >= v_from and created_at < p_now),
+      'video_sessions', (select count(distinct session_id) from public.funnel_events
+                          where kind = 'VIDEO_VIEW' and created_at >= v_from and created_at < p_now),
+      'leads',          (select count(*) from cur),
+      'trials_done',    (select count(*) from cur where trial_completed_at is not null or status = 'ENROLLED'),
+      'enrolled',       (select count(*) from cur where status = 'ENROLLED'),
+      'tracking_since', (select min(created_at) from public.funnel_events)
+    )
+  ) into v_result;
+
+  return v_result;
+end;
+$$;
+
+revoke all on function public.dashboard_summary(text, int, timestamptz) from public, anon;
+grant execute on function public.dashboard_summary(text, int, timestamptz) to authenticated;
+
+-- ───────────────── 20261117090000_admin_accounts.sql ─────────────────
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Admin role + staff account management.
+--
+--   app_metadata.role = 'admin'   centre owner / manager: everything staff can do, plus managing accounts
+--   app_metadata.role = 'staff'   teacher / employee
+--
+--   is_staff()            now true for staff AND admin (all existing policies keep working)
+--   is_admin()            admin only
+--   admin_list_staff()    accounts with a role (admin only)
+--   admin_set_role()      promote / demote / revoke (admin only; the last admin cannot be removed)
+--
+-- Creating accounts and resetting passwords need the Auth admin API (service role), so they live in
+-- the `api` Edge Function: POST /api/admin/users, POST /api/admin/users/:id/password.
+--
+-- First admin: create the user in Dashboard → Authentication, then run supabase/sql/make_admin.sql.
+-- ─────────────────────────────────────────────────────────────────────────────
+
+create or replace function public.is_staff()
+returns boolean
+language sql
+stable
+as $$
+  select coalesce((auth.jwt() -> 'app_metadata' ->> 'role') in ('staff', 'admin'), false);
+$$;
+
+create or replace function public.is_admin()
+returns boolean
+language sql
+stable
+as $$
+  select coalesce((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin', false);
+$$;
+
+grant execute on function public.is_admin() to anon, authenticated;
+
+create or replace function public.admin_list_staff()
+returns table (
+  id               uuid,
+  email            text,
+  role             text,
+  display_name     text,
+  created_at       timestamptz,
+  last_sign_in_at  timestamptz
+)
+language plpgsql
+stable
+security definer
+set search_path = public, auth
+as $$
+begin
+  if not public.is_admin() then
+    raise exception 'Chỉ quản trị viên được quản lý tài khoản' using hint = 'FORBIDDEN';
+  end if;
+  return query
+    select u.id, u.email::text, u.raw_app_meta_data ->> 'role',
+           nullif(u.raw_user_meta_data ->> 'display_name', ''),
+           u.created_at, u.last_sign_in_at
+    from auth.users u
+    where u.raw_app_meta_data ->> 'role' in ('staff', 'admin')
+    order by (u.raw_app_meta_data ->> 'role') = 'admin' desc, u.created_at;
+end;
+$$;
+
+-- p_role: 'admin' | 'staff' | 'none' (revoke access; the account remains but sees nothing).
+create or replace function public.admin_set_role(p_user_id uuid, p_role text)
+returns jsonb
+language plpgsql
+volatile
+security definer
+set search_path = public, auth
+as $$
+declare
+  v_current text;
+  v_admins  int;
+begin
+  if not public.is_admin() then
+    raise exception 'Chỉ quản trị viên được quản lý tài khoản' using hint = 'FORBIDDEN';
+  end if;
+  if p_role is null or p_role not in ('admin', 'staff', 'none') then
+    raise exception 'Quyền không hợp lệ' using hint = 'VALIDATION:role';
+  end if;
+  if p_user_id = auth.uid() then
+    raise exception 'Không thể tự đổi quyền của chính mình' using hint = 'CONFLICT';
+  end if;
+
+  -- Lock the admin rows so two admins demoting each other at once cannot leave zero admins.
+  perform 1 from auth.users where raw_app_meta_data ->> 'role' = 'admin' for update;
+
+  select raw_app_meta_data ->> 'role' into v_current from auth.users where id = p_user_id;
+  if not found then
+    raise exception 'Không tìm thấy tài khoản' using hint = 'NOT_FOUND';
+  end if;
+  if v_current = 'admin' and p_role <> 'admin' then
+    select count(*) into v_admins from auth.users where raw_app_meta_data ->> 'role' = 'admin';
+    if v_admins <= 1 then
+      raise exception 'Phải còn ít nhất một quản trị viên' using hint = 'CONFLICT';
+    end if;
+  end if;
+
+  update auth.users
+     set raw_app_meta_data = case
+           when p_role = 'none' then coalesce(raw_app_meta_data, '{}'::jsonb) - 'role'
+           else coalesce(raw_app_meta_data, '{}'::jsonb) || jsonb_build_object('role', p_role)
+         end,
+         updated_at = now()
+   where id = p_user_id;
+
+  return jsonb_build_object('id', p_user_id, 'role', case when p_role = 'none' then null else p_role end);
+end;
+$$;
+
+revoke all on function public.admin_list_staff() from public, anon;
+revoke all on function public.admin_set_role(uuid, text) from public, anon;
+grant execute on function public.admin_list_staff() to authenticated;
+grant execute on function public.admin_set_role(uuid, text) to authenticated;
+
+-- ───────────────── 20261118090000_admin_only_business.sql ─────────────────
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Business data is admin-only (separate admin area vs teacher / staff area).
+--
+--   dashboard_summary()   KPIs, revenue, channels, funnel → admins only
+--   course_fees           tuition → admins only
+--
+-- Teachers / staff keep what they need for their work: videos, the trial schedule (leads), CRM actions.
+-- dashboard_summary keeps its signature: the previous body becomes dashboard_summary_core (not callable
+-- by clients) and dashboard_summary checks is_admin() first.
+-- ─────────────────────────────────────────────────────────────────────────────
+
+alter function public.dashboard_summary(text, int, timestamptz) rename to dashboard_summary_core;
+revoke all on function public.dashboard_summary_core(text, int, timestamptz) from public, anon, authenticated;
+
+create function public.dashboard_summary(
+  p_branch  text default null,
+  p_days    int default 30,
+  p_now     timestamptz default now()
+)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+begin
+  if not public.is_admin() then
+    raise exception 'Chỉ quản trị viên được xem số liệu kinh doanh' using hint = 'FORBIDDEN';
+  end if;
+  return public.dashboard_summary_core(p_branch, p_days, p_now);
+end;
+$$;
+
+revoke all on function public.dashboard_summary(text, int, timestamptz) from public, anon;
+grant execute on function public.dashboard_summary(text, int, timestamptz) to authenticated;
+
+drop policy if exists "staff read course fees"   on public.course_fees;
+drop policy if exists "staff insert course fees" on public.course_fees;
+drop policy if exists "staff update course fees" on public.course_fees;
+drop policy if exists "staff delete course fees" on public.course_fees;
+
+create policy "admin read course fees"   on public.course_fees for select to authenticated using (public.is_admin());
+create policy "admin insert course fees" on public.course_fees for insert to authenticated with check (public.is_admin());
+create policy "admin update course fees" on public.course_fees for update to authenticated
+  using (public.is_admin()) with check (public.is_admin());
+create policy "admin delete course fees" on public.course_fees for delete to authenticated using (public.is_admin());
+
+-- ───────────────── 20261119090000_staff_signup_requests.sql ─────────────────
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Self-registration for teachers / staff, approved by an admin.
+--
+--   1. The login page's "Đăng ký giáo viên / nhân viên" form calls supabase.auth.signUp() with
+--      user_metadata { signup_kind: 'staff', display_name, phone, note }.
+--      (Requires Dashboard → Authentication → Sign In / Providers → "Allow new users to sign up" = ON.)
+--   2. A trigger on auth.users files a PENDING row in staff_requests. The new account has NO role,
+--      so RLS gives it nothing until approved. user_metadata is client-controlled and is never used
+--      for permissions — the role lives in app_metadata, set only by admin_decide_request().
+--   3. Admins see the pending count + list in the admin area and approve (role 'staff') or reject.
+--
+-- Admin accounts are never self-registered: only a signed-in admin creates them (POST /api/admin/users).
+-- ─────────────────────────────────────────────────────────────────────────────
+
+create table public.staff_requests (
+  user_id        uuid primary key references auth.users (id) on delete cascade,
+  email          text not null,
+  display_name   text not null check (char_length(display_name) between 2 and 60),
+  phone          text check (phone is null or phone ~ '^0[35789][0-9]{8}$'),
+  note           text check (note is null or char_length(note) <= 300),
+  status         text not null default 'PENDING' check (status in ('PENDING', 'APPROVED', 'REJECTED')),
+  created_at     timestamptz not null default now(),
+  decided_at     timestamptz,
+  decided_by     uuid references auth.users (id) on delete set null,
+  decision_note  text check (decision_note is null or char_length(decision_note) <= 300)
+);
+
+create index staff_requests_pending_idx on public.staff_requests (created_at) where status = 'PENDING';
+
+alter table public.staff_requests enable row level security;
+-- Applicants can see their own request (to show "đang chờ duyệt" / "bị từ chối" after signing in).
+create policy "own staff request" on public.staff_requests for select to authenticated using (user_id = auth.uid());
+create policy "admin read staff requests" on public.staff_requests for select to authenticated using (public.is_admin());
+revoke insert, update, delete on public.staff_requests from anon, authenticated;
+
+-- ─── Trigger: file a request for sign-ups from the staff form ───────────────
+create or replace function public.handle_staff_signup()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  -- Assigned in the body (not here) so any error is caught below and never blocks the sign-up.
+  m       jsonb;
+  v_name  text;
+  v_phone text;
+  v_note  text;
+begin
+  m := coalesce(new.raw_user_meta_data, '{}'::jsonb);
+  if m ->> 'signup_kind' is distinct from 'staff' then
+    return new;
+  end if;
+  v_name := left(btrim(coalesce(m ->> 'display_name', '')), 60);
+  v_phone := regexp_replace(coalesce(m ->> 'phone', ''), '[\s.()-]', '', 'g');
+  v_note := nullif(left(btrim(coalesce(m ->> 'note', '')), 300), '');
+  if v_phone like '+84%' then
+    v_phone := '0' || substr(v_phone, 4);
+  end if;
+  if v_phone !~ '^0[35789][0-9]{8}$' then
+    v_phone := null;
+  end if;
+  if char_length(v_name) < 2 then
+    v_name := split_part(coalesce(new.email, 'Nhân viên'), '@', 1);
+  end if;
+
+  insert into public.staff_requests (user_id, email, display_name, phone, note)
+  values (new.id, coalesce(new.email, ''), left(v_name, 60), v_phone, v_note)
+  on conflict (user_id) do nothing;
+  return new;
+exception when others then
+  -- Never block the sign-up itself; the admin can still grant the role manually.
+  raise warning 'handle_staff_signup: %', sqlerrm;
+  return new;
+end;
+$$;
+
+create trigger on_auth_user_staff_signup
+  after insert on auth.users
+  for each row execute function public.handle_staff_signup();
+
+-- ─── Admin: list + decide ───────────────────────────────────────────────────
+create or replace function public.admin_list_staff_requests(p_status text default 'PENDING')
+returns table (
+  user_id            uuid,
+  email              text,
+  display_name       text,
+  phone              text,
+  note               text,
+  status             text,
+  created_at         timestamptz,
+  decided_at         timestamptz,
+  email_confirmed_at timestamptz
+)
+language plpgsql
+stable
+security definer
+set search_path = public, auth
+as $$
+begin
+  if not public.is_admin() then
+    raise exception 'Chỉ quản trị viên được duyệt tài khoản' using hint = 'FORBIDDEN';
+  end if;
+  return query
+    select r.user_id, r.email, r.display_name, r.phone, r.note, r.status, r.created_at, r.decided_at, u.email_confirmed_at
+    from public.staff_requests r
+    join auth.users u on u.id = r.user_id
+    where p_status is null or r.status = p_status
+    order by r.created_at desc
+    limit 200;
+end;
+$$;
+
+create or replace function public.admin_decide_staff_request(p_user_id uuid, p_approve boolean, p_note text default null)
+returns jsonb
+language plpgsql
+volatile
+security definer
+set search_path = public, auth
+as $$
+declare
+  v_req public.staff_requests;
+begin
+  if not public.is_admin() then
+    raise exception 'Chỉ quản trị viên được duyệt tài khoản' using hint = 'FORBIDDEN';
+  end if;
+  if p_approve is null then
+    raise exception 'Thiếu quyết định duyệt / từ chối' using hint = 'VALIDATION:approve';
+  end if;
+
+  select * into v_req from public.staff_requests where user_id = p_user_id for update;
+  if not found then
+    raise exception 'Không tìm thấy yêu cầu' using hint = 'NOT_FOUND';
+  end if;
+  if v_req.status <> 'PENDING' then
+    raise exception 'Yêu cầu này đã được xử lý' using hint = 'CONFLICT';
+  end if;
+
+  if p_approve then
+    -- Grant 'staff' only; never downgrade an account that is already admin.
+    update auth.users
+       set raw_app_meta_data = coalesce(raw_app_meta_data, '{}'::jsonb) || '{"role":"staff"}'::jsonb,
+           updated_at = now()
+     where id = p_user_id
+       and coalesce(raw_app_meta_data ->> 'role', '') <> 'admin';
+  end if;
+
+  update public.staff_requests
+     set status = case when p_approve then 'APPROVED' else 'REJECTED' end,
+         decided_at = now(),
+         decided_by = auth.uid(),
+         decision_note = nullif(left(btrim(coalesce(p_note, '')), 300), '')
+   where user_id = p_user_id;
+
+  return jsonb_build_object('user_id', p_user_id, 'status', case when p_approve then 'APPROVED' else 'REJECTED' end);
+end;
+$$;
+
+revoke all on function public.handle_staff_signup() from public, anon, authenticated;
+revoke all on function public.admin_list_staff_requests(text) from public, anon;
+revoke all on function public.admin_decide_staff_request(uuid, boolean, text) from public, anon;
+grant execute on function public.admin_list_staff_requests(text) to authenticated;
+grant execute on function public.admin_decide_staff_request(uuid, boolean, text) to authenticated;
 
 -- ───────────────── Reference data (required) ─────────────────
 insert into public.categories (code, name, icon, color, sort_order) values

@@ -64,7 +64,18 @@ export const SOURCE_LABELS = {
   SHARE_LINK: 'Link chia sẻ video',
 } as const;
 
+/** Keep in sync with lead_channel() in supabase/migrations/20261116090000_dashboard_analytics.sql. */
+export const CHANNEL_LABELS = {
+  FACEBOOK: 'Facebook / Instagram',
+  TIKTOK: 'TikTok',
+  ZALO: 'Zalo OA',
+  REFERRAL: 'Giới thiệu',
+  OTHER: 'Nguồn khác',
+  UNTRACKED: 'Chưa gắn nguồn',
+} as const;
+
 export const STORAGE_KEYS = {
   user: 'thedu.user',
   booking: 'thedu.booking',
+  attribution: 'thedu.attribution',
 } as const;

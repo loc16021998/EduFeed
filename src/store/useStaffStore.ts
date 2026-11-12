@@ -2,10 +2,12 @@ import type { Session } from '@supabase/supabase-js';
 import { create } from 'zustand';
 
 import { supabase } from '@/lib/supabase';
+import { demoRequestStatus } from '@/services/staffRequests';
 
 /**
  * Staff (centre employees) authentication — email + password via Supabase Auth.
- * Parents never sign in. "Staff" = a user whose app_metadata.role is 'staff'
+ * Parents never sign in. "Staff" = a user whose app_metadata.role is 'staff' or 'admin'
+ * ('admin' = owner / manager: can also create and manage staff accounts)
  * (set by an admin, see supabase/README.md); RLS enforces the same rule server-side.
  *
  * Without Supabase, DEV builds offer a demo sign-in so the publishing flow can be tried locally.
@@ -14,6 +16,8 @@ interface StaffState {
   status: 'unknown' | 'signedOut' | 'signedIn';
   email: string | null;
   isStaff: boolean;
+  /** Can manage staff accounts. */
+  isAdmin: boolean;
   demo: boolean;
   init: () => void;
   signIn: (email: string, password: string) => Promise<string | null>;
@@ -25,7 +29,8 @@ const roleOf = (s: Session | null) => (s?.user.app_metadata as { role?: string }
 const fromSession = (s: Session | null) => ({
   status: s ? ('signedIn' as const) : ('signedOut' as const),
   email: s?.user.email ?? null,
-  isStaff: roleOf(s) === 'staff',
+  isStaff: roleOf(s) === 'staff' || roleOf(s) === 'admin',
+  isAdmin: roleOf(s) === 'admin',
   demo: false,
 });
 
@@ -42,6 +47,7 @@ export const useStaffStore = create<StaffState>()((set) => ({
   status: 'unknown',
   email: null,
   isStaff: false,
+  isAdmin: false,
   demo: false,
 
   init: () => {
@@ -62,7 +68,12 @@ export const useStaffStore = create<StaffState>()((set) => ({
 
     if (!supabase) {
       if (!__DEV__) return 'Ứng dụng chưa kết nối máy chủ.';
-      set({ status: 'signedIn', email: e, isStaff: true, demo: true });
+      const req = demoRequestStatus(e);
+      if (req === 'PENDING') return 'Tài khoản đang chờ quản trị viên duyệt. Bạn sẽ đăng nhập được sau khi được duyệt.';
+      if (req === 'REJECTED') return 'Yêu cầu đăng ký tài khoản này đã bị từ chối. Liên hệ quản trị viên.';
+      // Demo only: e-mails starting with "admin" (or the sample owner) try the admin area, others the teacher area.
+      const admin = /^(admin|chu\.trung\.tam)/.test(e);
+      set({ status: 'signedIn', email: e, isStaff: true, isAdmin: admin, demo: true });
       return null;
     }
 
@@ -74,6 +85,6 @@ export const useStaffStore = create<StaffState>()((set) => ({
 
   signOut: async () => {
     if (supabase) await supabase.auth.signOut().catch(() => {});
-    set({ status: 'signedOut', email: null, isStaff: false, demo: false });
+    set({ status: 'signedOut', email: null, isStaff: false, isAdmin: false, demo: false });
   },
 }));

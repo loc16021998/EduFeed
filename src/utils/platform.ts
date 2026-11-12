@@ -43,3 +43,6 @@ export async function shareText(message: string): Promise<void> {
   }
   await Share.share({ message }).catch(() => {});
 }
+
+/** Web: maximum width for screens that opt into the wide layout (admin dashboard). */
+export const MAX_WIDE_WIDTH = 1280;

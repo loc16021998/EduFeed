@@ -1,0 +1,163 @@
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Self-registration for teachers / staff, approved by an admin.
+--
+--   1. The login page's "Đăng ký giáo viên / nhân viên" form calls supabase.auth.signUp() with
+--      user_metadata { signup_kind: 'staff', display_name, phone, note }.
+--      (Requires Dashboard → Authentication → Sign In / Providers → "Allow new users to sign up" = ON.)
+--   2. A trigger on auth.users files a PENDING row in staff_requests. The new account has NO role,
+--      so RLS gives it nothing until approved. user_metadata is client-controlled and is never used
+--      for permissions — the role lives in app_metadata, set only by admin_decide_request().
+--   3. Admins see the pending count + list in the admin area and approve (role 'staff') or reject.
+--
+-- Admin accounts are never self-registered: only a signed-in admin creates them (POST /api/admin/users).
+-- ─────────────────────────────────────────────────────────────────────────────
+
+create table public.staff_requests (
+  user_id        uuid primary key references auth.users (id) on delete cascade,
+  email          text not null,
+  display_name   text not null check (char_length(display_name) between 2 and 60),
+  phone          text check (phone is null or phone ~ '^0[35789][0-9]{8}$'),
+  note           text check (note is null or char_length(note) <= 300),
+  status         text not null default 'PENDING' check (status in ('PENDING', 'APPROVED', 'REJECTED')),
+  created_at     timestamptz not null default now(),
+  decided_at     timestamptz,
+  decided_by     uuid references auth.users (id) on delete set null,
+  decision_note  text check (decision_note is null or char_length(decision_note) <= 300)
+);
+
+create index staff_requests_pending_idx on public.staff_requests (created_at) where status = 'PENDING';
+
+alter table public.staff_requests enable row level security;
+-- Applicants can see their own request (to show "đang chờ duyệt" / "bị từ chối" after signing in).
+create policy "own staff request" on public.staff_requests for select to authenticated using (user_id = auth.uid());
+create policy "admin read staff requests" on public.staff_requests for select to authenticated using (public.is_admin());
+revoke insert, update, delete on public.staff_requests from anon, authenticated;
+
+-- ─── Trigger: file a request for sign-ups from the staff form ───────────────
+create or replace function public.handle_staff_signup()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  -- Assigned in the body (not here) so any error is caught below and never blocks the sign-up.
+  m       jsonb;
+  v_name  text;
+  v_phone text;
+  v_note  text;
+begin
+  m := coalesce(new.raw_user_meta_data, '{}'::jsonb);
+  if m ->> 'signup_kind' is distinct from 'staff' then
+    return new;
+  end if;
+  v_name := left(btrim(coalesce(m ->> 'display_name', '')), 60);
+  v_phone := regexp_replace(coalesce(m ->> 'phone', ''), '[\s.()-]', '', 'g');
+  v_note := nullif(left(btrim(coalesce(m ->> 'note', '')), 300), '');
+  if v_phone like '+84%' then
+    v_phone := '0' || substr(v_phone, 4);
+  end if;
+  if v_phone !~ '^0[35789][0-9]{8}$' then
+    v_phone := null;
+  end if;
+  if char_length(v_name) < 2 then
+    v_name := split_part(coalesce(new.email, 'Nhân viên'), '@', 1);
+  end if;
+
+  insert into public.staff_requests (user_id, email, display_name, phone, note)
+  values (new.id, coalesce(new.email, ''), left(v_name, 60), v_phone, v_note)
+  on conflict (user_id) do nothing;
+  return new;
+exception when others then
+  -- Never block the sign-up itself; the admin can still grant the role manually.
+  raise warning 'handle_staff_signup: %', sqlerrm;
+  return new;
+end;
+$$;
+
+create trigger on_auth_user_staff_signup
+  after insert on auth.users
+  for each row execute function public.handle_staff_signup();
+
+-- ─── Admin: list + decide ───────────────────────────────────────────────────
+create or replace function public.admin_list_staff_requests(p_status text default 'PENDING')
+returns table (
+  user_id            uuid,
+  email              text,
+  display_name       text,
+  phone              text,
+  note               text,
+  status             text,
+  created_at         timestamptz,
+  decided_at         timestamptz,
+  email_confirmed_at timestamptz
+)
+language plpgsql
+stable
+security definer
+set search_path = public, auth
+as $$
+begin
+  if not public.is_admin() then
+    raise exception 'Chỉ quản trị viên được duyệt tài khoản' using hint = 'FORBIDDEN';
+  end if;
+  return query
+    select r.user_id, r.email, r.display_name, r.phone, r.note, r.status, r.created_at, r.decided_at, u.email_confirmed_at
+    from public.staff_requests r
+    join auth.users u on u.id = r.user_id
+    where p_status is null or r.status = p_status
+    order by r.created_at desc
+    limit 200;
+end;
+$$;
+
+create or replace function public.admin_decide_staff_request(p_user_id uuid, p_approve boolean, p_note text default null)
+returns jsonb
+language plpgsql
+volatile
+security definer
+set search_path = public, auth
+as $$
+declare
+  v_req public.staff_requests;
+begin
+  if not public.is_admin() then
+    raise exception 'Chỉ quản trị viên được duyệt tài khoản' using hint = 'FORBIDDEN';
+  end if;
+  if p_approve is null then
+    raise exception 'Thiếu quyết định duyệt / từ chối' using hint = 'VALIDATION:approve';
+  end if;
+
+  select * into v_req from public.staff_requests where user_id = p_user_id for update;
+  if not found then
+    raise exception 'Không tìm thấy yêu cầu' using hint = 'NOT_FOUND';
+  end if;
+  if v_req.status <> 'PENDING' then
+    raise exception 'Yêu cầu này đã được xử lý' using hint = 'CONFLICT';
+  end if;
+
+  if p_approve then
+    -- Grant 'staff' only; never downgrade an account that is already admin.
+    update auth.users
+       set raw_app_meta_data = coalesce(raw_app_meta_data, '{}'::jsonb) || '{"role":"staff"}'::jsonb,
+           updated_at = now()
+     where id = p_user_id
+       and coalesce(raw_app_meta_data ->> 'role', '') <> 'admin';
+  end if;
+
+  update public.staff_requests
+     set status = case when p_approve then 'APPROVED' else 'REJECTED' end,
+         decided_at = now(),
+         decided_by = auth.uid(),
+         decision_note = nullif(left(btrim(coalesce(p_note, '')), 300), '')
+   where user_id = p_user_id;
+
+  return jsonb_build_object('user_id', p_user_id, 'status', case when p_approve then 'APPROVED' else 'REJECTED' end);
+end;
+$$;
+
+revoke all on function public.handle_staff_signup() from public, anon, authenticated;
+revoke all on function public.admin_list_staff_requests(text) from public, anon;
+revoke all on function public.admin_decide_staff_request(uuid, boolean, text) from public, anon;
+grant execute on function public.admin_list_staff_requests(text) to authenticated;
+grant execute on function public.admin_decide_staff_request(uuid, boolean, text) to authenticated;

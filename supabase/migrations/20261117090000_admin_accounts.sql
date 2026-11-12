@@ -1,0 +1,115 @@
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Admin role + staff account management.
+--
+--   app_metadata.role = 'admin'   centre owner / manager: everything staff can do, plus managing accounts
+--   app_metadata.role = 'staff'   teacher / employee
+--
+--   is_staff()            now true for staff AND admin (all existing policies keep working)
+--   is_admin()            admin only
+--   admin_list_staff()    accounts with a role (admin only)
+--   admin_set_role()      promote / demote / revoke (admin only; the last admin cannot be removed)
+--
+-- Creating accounts and resetting passwords need the Auth admin API (service role), so they live in
+-- the `api` Edge Function: POST /api/admin/users, POST /api/admin/users/:id/password.
+--
+-- First admin: create the user in Dashboard → Authentication, then run supabase/sql/make_admin.sql.
+-- ─────────────────────────────────────────────────────────────────────────────
+
+create or replace function public.is_staff()
+returns boolean
+language sql
+stable
+as $$
+  select coalesce((auth.jwt() -> 'app_metadata' ->> 'role') in ('staff', 'admin'), false);
+$$;
+
+create or replace function public.is_admin()
+returns boolean
+language sql
+stable
+as $$
+  select coalesce((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin', false);
+$$;
+
+grant execute on function public.is_admin() to anon, authenticated;
+
+create or replace function public.admin_list_staff()
+returns table (
+  id               uuid,
+  email            text,
+  role             text,
+  display_name     text,
+  created_at       timestamptz,
+  last_sign_in_at  timestamptz
+)
+language plpgsql
+stable
+security definer
+set search_path = public, auth
+as $$
+begin
+  if not public.is_admin() then
+    raise exception 'Chỉ quản trị viên được quản lý tài khoản' using hint = 'FORBIDDEN';
+  end if;
+  return query
+    select u.id, u.email::text, u.raw_app_meta_data ->> 'role',
+           nullif(u.raw_user_meta_data ->> 'display_name', ''),
+           u.created_at, u.last_sign_in_at
+    from auth.users u
+    where u.raw_app_meta_data ->> 'role' in ('staff', 'admin')
+    order by (u.raw_app_meta_data ->> 'role') = 'admin' desc, u.created_at;
+end;
+$$;
+
+-- p_role: 'admin' | 'staff' | 'none' (revoke access; the account remains but sees nothing).
+create or replace function public.admin_set_role(p_user_id uuid, p_role text)
+returns jsonb
+language plpgsql
+volatile
+security definer
+set search_path = public, auth
+as $$
+declare
+  v_current text;
+  v_admins  int;
+begin
+  if not public.is_admin() then
+    raise exception 'Chỉ quản trị viên được quản lý tài khoản' using hint = 'FORBIDDEN';
+  end if;
+  if p_role is null or p_role not in ('admin', 'staff', 'none') then
+    raise exception 'Quyền không hợp lệ' using hint = 'VALIDATION:role';
+  end if;
+  if p_user_id = auth.uid() then
+    raise exception 'Không thể tự đổi quyền của chính mình' using hint = 'CONFLICT';
+  end if;
+
+  -- Lock the admin rows so two admins demoting each other at once cannot leave zero admins.
+  perform 1 from auth.users where raw_app_meta_data ->> 'role' = 'admin' for update;
+
+  select raw_app_meta_data ->> 'role' into v_current from auth.users where id = p_user_id;
+  if not found then
+    raise exception 'Không tìm thấy tài khoản' using hint = 'NOT_FOUND';
+  end if;
+  if v_current = 'admin' and p_role <> 'admin' then
+    select count(*) into v_admins from auth.users where raw_app_meta_data ->> 'role' = 'admin';
+    if v_admins <= 1 then
+      raise exception 'Phải còn ít nhất một quản trị viên' using hint = 'CONFLICT';
+    end if;
+  end if;
+
+  update auth.users
+     set raw_app_meta_data = case
+           when p_role = 'none' then coalesce(raw_app_meta_data, '{}'::jsonb) - 'role'
+           else coalesce(raw_app_meta_data, '{}'::jsonb) || jsonb_build_object('role', p_role)
+         end,
+         updated_at = now()
+   where id = p_user_id;
+
+  return jsonb_build_object('id', p_user_id, 'role', case when p_role = 'none' then null else p_role end);
+end;
+$$;
+
+revoke all on function public.admin_list_staff() from public, anon;
+revoke all on function public.admin_set_role(uuid, text) from public, anon;
+grant execute on function public.admin_list_staff() to authenticated;
+grant execute on function public.admin_set_role(uuid, text) to authenticated;

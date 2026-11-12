@@ -14,6 +14,7 @@ import {
 import { CategoryChips, TrustTicker } from '@/components';
 import type { TabScreenProps } from '@/navigation/types';
 import { useCtaHandler } from '@/navigation/useCtaHandler';
+import { trackEvent } from '@/services/analytics';
 import { buildShareUrl, shareMessage } from '@/services/media/shareLinks';
 import { useFeedStore, useStaffStore } from '@/store';
 import type { Category, FeedItem } from '@/types';
@@ -47,7 +48,8 @@ export default function HomeScreen(_: TabScreenProps<'Home'>) {
 
   /** Hidden staff entry: long-press the TH EDU logo. */
   const openStaffArea = useCallback(() => {
-    navigation.navigate(useStaffStore.getState().isStaff ? 'StaffVideos' : 'StaffLogin');
+    const { isStaff, isAdmin } = useStaffStore.getState();
+    navigation.navigate(!isStaff ? 'StaffLogin' : isAdmin ? 'AdminHome' : 'StaffVideos');
   }, [navigation]);
 
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -74,6 +76,15 @@ export default function HomeScreen(_: TabScreenProps<'Home'>) {
   const onViewableItemsChanged = useRef(({ viewableItems }: { viewableItems: ViewToken[] }) => {
     setActiveId(viewableItems[0]?.key ?? null);
   }).current;
+
+  // Dashboard funnel: a video counts as "viewed" after 3 s on screen (once per session; staff excluded).
+  useEffect(() => {
+    if (!isFocused || !activeId) return undefined;
+    const t = setTimeout(() => {
+      if (!useStaffStore.getState().isStaff) trackEvent('VIDEO_VIEW', activeId);
+    }, 3000);
+    return () => clearTimeout(t);
+  }, [isFocused, activeId]);
 
   const onChangeCategory = useCallback(
     (c: Category) => {

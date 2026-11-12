@@ -7,3 +7,5 @@ export { useChecklistStore } from './useChecklistStore';
 export { useStaffStore } from './useStaffStore';
 export { useVideoAdminStore } from './useVideoAdminStore';
 export { useCrmStore } from './useCrmStore';
+export { useDashboardStore } from './useDashboardStore';
+export { useUiStore } from './useUiStore';

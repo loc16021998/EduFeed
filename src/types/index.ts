@@ -213,6 +213,65 @@ export interface CrmLead {
 
 export type CrmFilter = 'TODAY' | 'UPCOMING' | 'PENDING' | 'COMPLETED';
 
+// ─── Admin dashboard ────────────────────────────────────────────────────────
+
+/** Ad channel derived from the UTM link (database function lead_channel()). */
+export type LeadChannel = 'FACEBOOK' | 'TIKTOK' | 'ZALO' | 'REFERRAL' | 'OTHER' | 'UNTRACKED';
+
+/** UTM parameters captured from the link a parent arrived through. */
+export interface Attribution {
+  source?: string;
+  medium?: string;
+  campaign?: string;
+}
+
+export type CampusFilter = CampusLocation | 'ALL';
+export type DashboardPeriod = 7 | 30 | 90;
+export type LeadStatusGroup = 'ALL' | 'TO_CONTACT' | 'SCHEDULED' | 'TRIAL_DONE' | 'ENROLLED' | 'CANCELLED';
+
+export interface DashboardSummary {
+  periodDays: number;
+  leads: { current: number; previous: number };
+  trialsToday: { scheduled: number; completed: number };
+  trialConversion: { completed: number; enrolled: number };
+  revenue: {
+    /** First day of the current month (Vietnam time). */
+    monthStart: string;
+    enrolled: number;
+    /** Enrolments whose course has a tuition fee entered. */
+    priced: number;
+    totalVnd: number;
+    missingFeeCourses: CourseCategory[];
+  };
+  channels: Partial<Record<LeadChannel, number>>;
+  funnel: {
+    appSessions: number;
+    videoSessions: number;
+    leads: number;
+    trialsDone: number;
+    enrolled: number;
+    /** First anonymous view event ever recorded — null until tracking has started. */
+    trackingSince: string | null;
+  };
+}
+
+export interface DashboardLead {
+  id: string;
+  code: string;
+  parentName: string;
+  phone: string;
+  studentName: string;
+  studentAge: number;
+  course: CourseCategory;
+  campus: CampusLocation;
+  status: LeadStatus;
+  channel: LeadChannel;
+  campaign: string | null;
+  createdAt: string;
+}
+
+export type CourseFees = Partial<Record<CourseCategory, number>>;
+
 // ─── Video publishing (staff) ───────────────────────────────────────────────
 
 /** A file chosen from the phone library or the browser file picker. */
