@@ -1,6 +1,6 @@
 import { Bell, Search, Trophy, X } from 'lucide-react-native';
 import { useEffect, useRef } from 'react';
-import { Image, Pressable, Text, TextInput, View, type ImageSourcePropType } from 'react-native';
+import { Image, Pressable, Text, TextInput, View, type GestureResponderEvent, type ImageSourcePropType } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import mark from '@/assets/branding/logo-th-mark.png';
@@ -37,6 +37,41 @@ export default function HomeHeader({
 }: HomeHeaderProps) {
   const insets = useSafeAreaInsets();
   const inputRef = useRef<TextInput>(null);
+  // Hold the brand ~0.9 s → admin sign-in. A finger is tracked with raw touch events: on the web the
+  // press responder reports "press out" right after "press in" for touch, which would cancel the hold.
+  const holdTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const touching = useRef(false);
+  const fired = useRef(false);
+  const cancelHold = () => {
+    if (holdTimer.current) clearTimeout(holdTimer.current);
+    holdTimer.current = null;
+  };
+  const startHold = () => {
+    cancelHold();
+    fired.current = false;
+    if (onBrandLongPress) {
+      holdTimer.current = setTimeout(() => {
+        holdTimer.current = null;
+        fired.current = true;
+        onBrandLongPress();
+      }, 900);
+    }
+  };
+  const onTouchStart = () => {
+    touching.current = true;
+    startHold();
+  };
+  const onTouchEnd = (e: GestureResponderEvent) => {
+    touching.current = false;
+    cancelHold();
+    // The hold already opened the sign-in page: stop the browser's follow-up "click" from landing on
+    // whatever is now under the finger (the new page's back button).
+    if (fired.current) {
+      fired.current = false;
+      e.preventDefault();
+    }
+  };
+  useEffect(() => cancelHold, []);
 
   useEffect(() => {
     if (searchOpen) inputRef.current?.focus();
@@ -45,10 +80,16 @@ export default function HomeHeader({
   return (
     <View style={{ paddingTop: insets.top }} className="bg-surface">
       <View className="h-14 flex-row items-center gap-2 px-4">
-        {/* Brand mark. Long-press (1s) opens the admin sign-in — parents never need it. */}
+        {/* Brand mark. Hold ~1s to open the admin sign-in — parents never need it. */}
         <Pressable
-          onLongPress={onBrandLongPress}
-          delayLongPress={1000}
+          onTouchStart={onTouchStart}
+          onTouchEnd={onTouchEnd}
+          onTouchCancel={() => {
+            touching.current = false;
+            cancelHold();
+          }}
+          onPressIn={() => !touching.current && startHold()}
+          onPressOut={() => !touching.current && cancelHold()}
           accessibilityRole="header"
           className="flex-1 flex-row items-center gap-2"
         >

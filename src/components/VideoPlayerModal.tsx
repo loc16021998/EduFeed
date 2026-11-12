@@ -196,11 +196,9 @@ export default function VideoPlayerModal({ item, onClose, onBook }: VideoPlayerM
           </Pressable>
           {buffering && !paused && <ActivityIndicator size="large" color="#fff" style={styles.center} />}
 
-          {/* Top bar */}
-          <Animated.View pointerEvents={controls ? 'box-none' : 'none'} style={[styles.top, { paddingTop: insets.top + 8 }, controlsStyle]}>
-            <Pressable onPress={onClose} accessibilityRole="button" accessibilityLabel="Đóng video" className="h-11 w-11 items-center justify-center rounded-full bg-black/50">
-              <X size={22} color="#fff" />
-            </Pressable>
+          {/* Top bar (title fades with the controls) */}
+          <Animated.View pointerEvents="none" style={[styles.top, { paddingTop: insets.top + 8 }, controlsStyle]}>
+            <View style={{ width: 44 }} />
             <View className="flex-1 px-3">
               <Text className="text-[15px] font-bold text-white" numberOfLines={2}>
                 {item.title}
@@ -210,6 +208,17 @@ export default function VideoPlayerModal({ item, onClose, onBook }: VideoPlayerM
               </Text>
             </View>
           </Animated.View>
+          {/* Close is ALWAYS visible: on a phone there is no hover to bring hidden controls back. */}
+          <Pressable
+            onPress={onClose}
+            accessibilityRole="button"
+            accessibilityLabel="Đóng video"
+            hitSlop={8}
+            style={{ position: 'absolute', left: 12, top: insets.top + 8 }}
+            className="h-11 w-11 items-center justify-center rounded-full bg-black/50"
+          >
+            <X size={22} color="#fff" />
+          </Pressable>
 
           {/* Centre play / pause */}
           <Animated.View pointerEvents={controls ? 'box-none' : 'none'} style={[styles.center, controlsStyle]}>

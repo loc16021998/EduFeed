@@ -10,8 +10,20 @@
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <style>
       html, body, #root { height: 100%; margin: 0; }
-      body { overflow: hidden; background: #E2E8F0; }
+      /* Mobile browsers: follow the visible viewport as the address bar shows / hides (tab bar never hidden). */
+      @supports (height: 100dvh) { html, body, #root { height: 100dvh; } }
+      body { overflow: hidden; background: #E2E8F0; overscroll-behavior: none; }
       #root { display: flex; }
+      /* No grey flash on tap. */
+      * { -webkit-tap-highlight-color: transparent; }
+      /* iPhone zooms the page when focusing a field with text under 16px — keep form fields at 16px. */
+      input, textarea, select { font-size: 16px !important; }
+      /* Long-press on buttons / logo / images must not start text selection or the "Save image" callout. */
+      [role="button"], [role="header"], [role="link"], [role="tab"], [role="radio"], [role="checkbox"], img {
+        -webkit-touch-callout: none;
+        -webkit-user-select: none;
+        user-select: none;
+      }
     </style>
     <script>
       // A few React Native libraries expect Node-style globals.
