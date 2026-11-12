@@ -1,3 +1,4 @@
+import { ENV } from '@/config/env';
 import type { CampusLocation, Category, CourseCategory } from '@/types';
 
 /** Mirrors tailwind.config.js — for props that need raw colours (icons, nav). */
@@ -48,9 +49,9 @@ export const CAMPUS_LABELS: Record<CampusLocation, string> = {
   NGO_THI_NHAM: 'Cơ sở Ngô Thì Nhậm',
 };
 
-// TODO: replace with the centre's real hotline / Zalo OA before release.
+/** Set PUBLIC_HOTLINE in .env.local — see hasHotline (src/config/env.ts). */
 export const CONTACT = {
-  hotline: '0900000000',
+  hotline: ENV.hotline,
 } as const;
 
 /** Welcome gift per course (lead-conversion incentive, ~200k VND). */

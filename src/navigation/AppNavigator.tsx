@@ -2,8 +2,13 @@ import { createNavigationContainerRef, DefaultTheme, NavigationContainer, type L
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { useEffect } from 'react';
 
+import ParentBadges, { ParentClubToast } from '@/components/ParentBadges';
 import { ENV } from '@/config/env';
 import AdminHomeScreen from '@/screens/Admin/AdminHomeScreen';
+import TeacherUploadScreen from '@/screens/Admin/TeacherUploadScreen';
+import ManageBookingsScreen from '@/screens/Booking/ManageBookingsScreen';
+import CertificateScreen from '@/screens/Share/CertificateScreen';
+import StaffEnrollmentsScreen from '@/screens/Staff/StaffEnrollmentsScreen';
 import DashboardScreen from '@/screens/Admin/DashboardScreen';
 import BookingSuccessScreen from '@/screens/Booking/BookingSuccessScreen';
 import QuizModal from '@/screens/Quiz/QuizModal';
@@ -18,7 +23,7 @@ import VideoEditorScreen from '@/screens/Staff/VideoEditorScreen';
 import ChecklistScreen from '@/screens/Trust/ChecklistScreen';
 import TestimonialsScreen from '@/screens/Trust/TestimonialsScreen';
 import { getAttribution, trackEvent } from '@/services/analytics';
-import { useStaffStore } from '@/store';
+import { useParentClubStore, useStaffStore } from '@/store';
 import { COLORS } from '@/utils/constants';
 
 import TabNavigator from './TabNavigator';
@@ -51,11 +56,15 @@ const linking: LinkingOptions<RootStackParamList> = {
       QuizModal: 'quiz/start',
       Testimonials: 'phu-huynh',
       Checklist: 'checklist/:id',
+      ManageBookings: 'lich-hen',
       VideoShare: 'v/:slug',
+      Certificate: 'chung-nhan/:code',
       StaffLogin: 'quan-ly/dang-nhap',
       StaffRegister: 'quan-ly/dang-ky',
       StaffVideos: 'quan-ly',
       StaffTrials: 'quan-ly/hoc-thu',
+      TeacherUpload: 'quan-ly/nhat-ky/moi',
+      StaffEnrollments: 'quan-ly/hoc-vien',
       // Admin area (owner / manager) — separate from the teacher / staff area under /quan-ly.
       AdminHome: 'quan-tri',
       AdminLogin: 'quan-tri/dang-nhap',
@@ -70,7 +79,7 @@ const linking: LinkingOptions<RootStackParamList> = {
 const navigationRef = createNavigationContainerRef<RootStackParamList>();
 
 /** Staff screens are not part of the parent funnel. */
-const STAFF_ROUTES = new Set(['StaffLogin', 'StaffVideos', 'StaffTrials', 'VideoEditor', 'AdminHome', 'AdminLogin', 'AdminDashboard', 'StaffAccounts', 'StaffRegister', 'StaffRequests']);
+const STAFF_ROUTES = new Set(['StaffLogin', 'StaffVideos', 'StaffTrials', 'VideoEditor', 'AdminHome', 'AdminLogin', 'AdminDashboard', 'StaffAccounts', 'StaffRegister', 'StaffRequests', 'TeacherUpload', 'StaffEnrollments']);
 
 /** Count one anonymous "app open" per session for the dashboard funnel (parents only). */
 function onNavigationReady() {
@@ -93,6 +102,9 @@ export default function AppNavigator() {
           headerShadowVisible: false,
           headerTintColor: COLORS.ink,
           headerStyle: { backgroundColor: COLORS.surface },
+          // Same native-driven push on Android and iOS (Android's default is a plain fade).
+          animation: 'slide_from_right',
+          gestureEnabled: true,
         }}
       >
         <Stack.Screen name="MainTabs" component={TabNavigator} options={{ headerShown: false }} />
@@ -108,6 +120,10 @@ export default function AppNavigator() {
         <Stack.Screen name="StaffAccounts" component={StaffAccountsScreen} options={{ headerShown: false }} />
         <Stack.Screen name="StaffRegister" component={StaffRegisterScreen} options={{ headerShown: false }} />
         <Stack.Screen name="StaffRequests" component={StaffRequestsScreen} options={{ headerShown: false }} />
+        <Stack.Screen name="ManageBookings" component={ManageBookingsScreen} options={{ headerShown: false }} />
+        <Stack.Screen name="TeacherUpload" component={TeacherUploadScreen} options={{ headerShown: false }} />
+        <Stack.Screen name="StaffEnrollments" component={StaffEnrollmentsScreen} options={{ headerShown: false }} />
+        <Stack.Screen name="Certificate" component={CertificateScreen} options={{ headerShown: false }} />
         <Stack.Screen name="VideoEditor" component={VideoEditorScreen} options={{ headerShown: false }} />
         <Stack.Screen
           name="QuizModal"
@@ -117,9 +133,30 @@ export default function AppNavigator() {
         <Stack.Screen
           name="BookingSuccess"
           component={BookingSuccessScreen}
-          options={{ presentation: 'modal', headerShown: false }}
+          options={{ presentation: 'modal', headerShown: false, animation: 'slide_from_bottom' }}
         />
       </Stack.Navigator>
+      <ParentClubLayer />
     </NavigationContainer>
+  );
+}
+
+/** CLB Phụ huynh: unlock toast + badge sheet, above every screen. */
+function ParentClubLayer() {
+  const open = useParentClubStore((st) => st.sheetOpen);
+  const openSheet = useParentClubStore((st) => st.openSheet);
+  const closeSheet = useParentClubStore((st) => st.closeSheet);
+  return (
+    <>
+      <ParentClubToast onOpen={openSheet} />
+      <ParentBadges
+        visible={open}
+        onClose={closeSheet}
+        onBook={() => {
+          closeSheet();
+          if (navigationRef.isReady()) navigationRef.navigate('MainTabs', { screen: 'Booking', params: { source: 'DIRECT' } });
+        }}
+      />
+    </>
   );
 }

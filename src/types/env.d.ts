@@ -7,5 +7,6 @@ declare const process: {
     PUBLIC_SUPABASE_ANON_KEY?: string;
     PUBLIC_ZALO_OA_ID?: string;
     PUBLIC_WEB_URL?: string;
+    PUBLIC_HOTLINE?: string;
   };
 };

@@ -6,9 +6,10 @@ import type { RootStackScreenProps } from '@/navigation/types';
 import FeedVideoCard from '@/screens/Home/components/FeedVideoCard';
 import { trackEvent } from '@/services/analytics';
 import { fetchVideoBySlug } from '@/services/videoAdmin';
-import { useStaffStore } from '@/store';
+import { useParentClubStore, useStaffStore } from '@/store';
 import type { FeedItem } from '@/types';
 import { CATEGORY_LABELS, COLORS } from '@/utils/constants';
+import { VIDEO_WATCH_MS } from '@/utils/parentClub';
 import { useAppWidth } from '@/utils/platform';
 
 /**
@@ -43,7 +44,11 @@ export default function VideoShareScreen({ navigation, route }: RootStackScreenP
     const t = setTimeout(() => {
       if (!useStaffStore.getState().isStaff) trackEvent('VIDEO_VIEW', video.id);
     }, 3000);
-    return () => clearTimeout(t);
+    const w = setTimeout(() => useParentClubStore.getState().markVideoWatched(video.id), VIDEO_WATCH_MS);
+    return () => {
+      clearTimeout(t);
+      clearTimeout(w);
+    };
   }, [state, video]);
 
   const goHome = () => navigation.navigate('MainTabs', { screen: 'Home' });

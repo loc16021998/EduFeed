@@ -1,10 +1,10 @@
 // Web video — plain HTML <video>. Native uses VideoPlayer.tsx (react-native-video).
-import { useEffect, useRef } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react';
 import { View } from 'react-native';
 
-import type { VideoPlayerProps } from './types';
+import type { VideoPlayerHandle, VideoPlayerProps } from './types';
 
-export default function VideoPlayer({
+const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(function VideoPlayer({
   uri,
   poster,
   paused = false,
@@ -15,8 +15,22 @@ export default function VideoPlayer({
   style,
   onBuffering,
   onEnd,
-}: VideoPlayerProps) {
+  volume = 1,
+  onProgress,
+}, handle) {
   const ref = useRef<HTMLVideoElement>(null);
+  useImperativeHandle(handle, () => ({
+    seek: (s) => {
+      if (ref.current) ref.current.currentTime = s;
+    },
+    enterFullscreen: () => {
+      ref.current?.requestFullscreen?.().catch(() => {});
+    },
+  }));
+
+  useEffect(() => {
+    if (ref.current) ref.current.volume = Math.min(1, Math.max(0, volume));
+  }, [volume]);
 
   // `muted` must be set as a property for autoplay policies; React only sets the attribute once.
   useEffect(() => {
@@ -47,7 +61,10 @@ export default function VideoPlayer({
         onPlaying={() => onBuffering?.(false)}
         onCanPlay={() => onBuffering?.(false)}
         onEnded={onEnd}
+        onTimeUpdate={onProgress ? (e) => onProgress(e.currentTarget.currentTime, e.currentTarget.duration || 0) : undefined}
       />
     </View>
   );
-}
+});
+
+export default VideoPlayer;

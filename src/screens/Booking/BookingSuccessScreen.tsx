@@ -9,6 +9,7 @@ import { ENV } from '@/config/env';
 import type { RootStackScreenProps } from '@/navigation/types';
 import { buildZaloOAUrl } from '@/services/zalo';
 import { useBookingStore } from '@/store';
+import { hasHotline } from '@/config/env';
 import { COLORS, CONTACT } from '@/utils/constants';
 import { formatPhone } from '@/utils/helpers';
 import { nativeOnly } from '@/utils/platform';
@@ -133,14 +134,17 @@ export default function BookingSuccessScreen({ route, navigation }: RootStackScr
             onPress={() => open(mapsUrl)}
             disabled={!mapsUrl}
           />
-          <Button
-            className="flex-1"
-            title="Gọi hotline"
-            variant="outline"
-            icon={<Phone size={18} color="#1E54E0" />}
-            onPress={() => open(`tel:${CONTACT.hotline}`)}
-          />
+          {hasHotline && (
+            <Button
+              className="flex-1"
+              title="Gọi hotline"
+              variant="outline"
+              icon={<Phone size={18} color="#1E54E0" />}
+              onPress={() => open(`tel:${CONTACT.hotline}`)}
+            />
+          )}
         </View>
+        <Button title="Xem / đổi lịch hẹn của tôi" variant="outline" onPress={() => navigation.navigate('ManageBookings')} />
         <Button title="Về trang chủ" variant="ghost" onPress={close} />
       </Animated.View>
     </ScrollView>

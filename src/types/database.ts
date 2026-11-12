@@ -123,6 +123,7 @@ export type Database = {
           quiz_answers: Json | null;
           promo_code: string | null;
           source_ref: string | null;
+          parent_reschedules: number;
           utm_source: string | null;
           utm_medium: string | null;
           utm_campaign: string | null;
@@ -171,6 +172,55 @@ export type Database = {
         Insert: never;
         Update: never;
         Relationships: [];
+      };
+      enrollments: {
+        Row: {
+          id: string;
+          lead_id: string | null;
+          student_name: string;
+          course_code: string;
+          level: number;
+          campus_location: string;
+          start_date: string;
+          end_date: string | null;
+          status: 'ACTIVE' | 'COMPLETED' | 'DROPPED';
+          teacher_note: string | null;
+          certificate_code: string | null;
+          completed_at: string | null;
+          completed_by: string | null;
+          advisor_priority: boolean;
+          advisor_flagged_at: string | null;
+          advisor_contacted_at: string | null;
+          advisor_note: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: never;
+        Update: never;
+        Relationships: [
+          { foreignKeyName: 'enrollments_lead_id_fkey'; columns: ['lead_id']; isOneToOne: false; referencedRelation: 'leads'; referencedColumns: ['id'] },
+        ];
+      };
+      lifecycle_automations: {
+        Row: {
+          id: string;
+          enrollment_id: string;
+          stage: 'COMPLETION_CERT' | 'TEACHER_REVIEW' | 'ALUMNI_DISCOUNT' | 'FINAL_CALL';
+          scheduled_at: string;
+          status: 'PENDING' | 'SENDING' | 'SENT' | 'FAILED' | 'SKIPPED' | 'CANCELLED';
+          attempt: number;
+          channel: 'ZNS' | 'OA' | null;
+          provider_message_id: string | null;
+          error: string | null;
+          sent_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: never;
+        Update: never;
+        Relationships: [
+          { foreignKeyName: 'lifecycle_automations_enrollment_id_fkey'; columns: ['enrollment_id']; isOneToOne: false; referencedRelation: 'enrollments'; referencedColumns: ['id'] },
+        ];
       };
       course_fees: {
         Row: { course_code: string; monthly_fee_vnd: number; updated_at: string; updated_by: string | null };
@@ -271,6 +321,13 @@ export type Database = {
         }[];
       };
       admin_decide_staff_request: { Args: { p_user_id: string; p_approve: boolean; p_note?: string | null }; Returns: Json };
+      parent_booking_status: { Args: { p_id: string; p_phone: string }; Returns: Json };
+      parent_reschedule_booking: { Args: { p_id: string; p_phone: string; p_date: string; p_slot: string }; Returns: Json };
+      parent_cancel_booking: { Args: { p_id: string; p_phone: string; p_reason?: string | null }; Returns: Json };
+      enrollment_complete: { Args: { p_enrollment_id: string; p_teacher_note: string; p_end_date?: string | null; p_level?: number | null }; Returns: Json };
+      enrollment_drop: { Args: { p_enrollment_id: string; p_note?: string | null }; Returns: Json };
+      enrollment_mark_contacted: { Args: { p_enrollment_id: string; p_note?: string | null }; Returns: Json };
+      get_certificate: { Args: { p_code: string }; Returns: Json };
       crm_complete_trial: { Args: { p_lead_id: string; p_teacher_note: string }; Returns: Json };
       crm_set_status: { Args: { p_lead_id: string; p_status: string; p_note?: string | null }; Returns: Json };
       staff_video_stats: {

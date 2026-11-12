@@ -1,4 +1,4 @@
-import { BadgeCheck, Heart, Share2, Volume2, VolumeX } from 'lucide-react-native';
+import { BadgeCheck, Heart, Maximize2, Share2, Volume2, VolumeX } from 'lucide-react-native';
 import { memo } from 'react';
 import { Pressable, Text, View } from 'react-native';
 
@@ -23,6 +23,8 @@ interface FeedVideoCardProps {
   onCta: (link: string, videoId?: string) => void;
   /** Omit to hide the share button (e.g. editor preview). */
   onShare?: (item: FeedItem) => void;
+  /** Open the full-screen player. */
+  onExpand?: (item: FeedItem) => void;
 }
 
 function FeedVideoCard({
@@ -37,6 +39,7 @@ function FeedVideoCard({
   onFollow,
   onCta,
   onShare,
+  onExpand,
 }: FeedVideoCardProps) {
   return (
     <View style={{ height }} className="mx-4 mb-4 overflow-hidden rounded-3xl bg-slate-900">
@@ -111,6 +114,11 @@ function FeedVideoCard({
           {onShare && item.shareSlug && (
             <Pressable onPress={() => onShare(item)} hitSlop={10} accessibilityRole="button" accessibilityLabel="Chia sẻ video">
               <Share2 size={26} color="#fff" />
+            </Pressable>
+          )}
+          {onExpand && (
+            <Pressable onPress={() => onExpand(item)} hitSlop={10} accessibilityRole="button" accessibilityLabel="Xem toàn màn hình" testID="feed-expand">
+              <Maximize2 size={25} color="#fff" />
             </Pressable>
           )}
         </View>

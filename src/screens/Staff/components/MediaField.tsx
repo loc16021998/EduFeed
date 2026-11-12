@@ -8,6 +8,8 @@ import { COLORS } from '@/utils/constants';
 
 interface MediaFieldProps {
   kind: 'video' | 'image';
+  /** Text of the empty picker (default: "Chọn video" / "Chọn ảnh bìa"). */
+  pickLabel?: string;
   label: string;
   hint: string;
   /** Newly picked file (takes precedence over `existingUri`). */
@@ -23,7 +25,7 @@ interface MediaFieldProps {
 const mb = (bytes: number) => (bytes ? `${(bytes / 1048576).toFixed(1)} MB` : '');
 const duration = (s?: number) => (s ? `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, '0')}` : '');
 
-export default function MediaField({ kind, label, hint, media, existingUri, onPick, error, extra }: MediaFieldProps) {
+export default function MediaField({ kind, pickLabel, label, hint, media, existingUri, onPick, error, extra }: MediaFieldProps) {
   const uri = media?.uri ?? existingUri;
   const Icon = kind === 'video' ? Film : ImagePlus;
 
@@ -48,7 +50,7 @@ export default function MediaField({ kind, label, hint, media, existingUri, onPi
           }`}
         >
           <Icon size={30} color={COLORS.brand} />
-          <Text className="text-[14px] font-bold text-brand-600">{kind === 'video' ? 'Chọn video' : 'Chọn ảnh bìa'}</Text>
+          <Text className="text-[14px] font-bold text-brand-600">{pickLabel ?? (kind === 'video' ? 'Chọn video' : 'Chọn ảnh bìa')}</Text>
           <Text className="px-6 text-center text-xs text-ink-subtle">{hint}</Text>
         </Pressable>
       )}

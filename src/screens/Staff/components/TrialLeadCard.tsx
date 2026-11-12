@@ -1,8 +1,10 @@
-import { CheckCircle2, CircleAlert, CircleDashed, Clock, MapPin, MinusCircle, Phone } from 'lucide-react-native';
+import { CheckCircle2, CircleAlert, CircleDashed, Clock, Gift, MapPin, MinusCircle, Phone } from 'lucide-react-native';
 import { memo } from 'react';
 import { Linking, Pressable, Text, View } from 'react-native';
 
 import { Badge, Button } from '@/components';
+
+import { PROMO_CODES } from '../../../../supabase/functions/_shared/contracts';
 import type { CrmLead, CrmMessageKind, LeadStatus } from '@/types';
 import { CAMPUS_LABELS, CATEGORY_COLORS, CATEGORY_LABELS, COLORS, SOURCE_LABELS } from '@/utils/constants';
 import { formatPhone } from '@/utils/helpers';
@@ -90,6 +92,14 @@ function TrialLeadCard({ lead, busy, onConfirm, onCancel, onComplete, onEnroll }
           </Pressable>
         </View>
         <Text className="text-[11px] text-ink-subtle">Nguồn: {SOURCE_LABELS[lead.source as keyof typeof SOURCE_LABELS] ?? lead.source}</Text>
+        {!!lead.promoCode && (
+          <View className="mt-1 flex-row items-center gap-1.5 self-start rounded-full bg-amber-100 px-2.5 py-1" testID="lead-promo">
+            <Gift size={12} color="#B45309" />
+            <Text className="text-[11px] font-bold text-amber-800">
+              {PROMO_CODES[lead.promoCode as keyof typeof PROMO_CODES] ?? lead.promoCode}
+            </Text>
+          </View>
+        )}
       </View>
 
       {kinds.length > 0 && (

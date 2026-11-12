@@ -32,6 +32,8 @@ export const TIME_SLOTS: TimeSlotDef[] = [
 /** Incentives a parent can claim in-app. The centre must actually deliver these. */
 export const PROMO_CODES = {
   EBOOK_VAO_LOP_1: 'Bộ tài liệu "5 Bí quyết giúp con vững bước vào lớp 1"',
+  /** CLB Phụ huynh reward (all badges collected) — staff apply it at enrolment. */
+  CLB_PHU_HUYNH_100K: 'Giảm 100.000đ học phí (CLB Phụ huynh TH EDU)',
 } as const;
 export type PromoCode = keyof typeof PROMO_CODES;
 
@@ -291,4 +293,42 @@ export function validateCreateStaff(body: unknown):
   if (!includes(STAFF_ROLES, b.role)) return { ok: false, field: 'role', message: 'Quyền không hợp lệ' };
   const displayName = typeof b.displayName === 'string' ? b.displayName.trim().slice(0, 60) : '';
   return { ok: true, value: { email, password: b.password as string, role: b.role, ...(displayName ? { displayName } : {}) } };
+}
+
+// ─── POST /api/enrollments/:id/complete (staff) ─────────────────────────────
+
+export interface CompleteEnrollmentRequest {
+  /** Final teacher review, 20–1000 chars — sent to the parent at T+3. */
+  teacherNote: string;
+  /** YYYY-MM-DD, default today (Vietnam). Follow-ups are scheduled from this date. */
+  endDate?: string;
+  /** Level just completed (1–5). */
+  level?: number;
+}
+
+export interface CompleteEnrollmentResponse {
+  id: string;
+  status: 'COMPLETED';
+  certificateCode: string;
+  endDate: string;
+  level: number;
+}
+
+export function validateCompleteEnrollment(body: unknown):
+  | { ok: true; value: CompleteEnrollmentRequest }
+  | { ok: false; field: string; message: string } {
+  if (!body || typeof body !== 'object') return { ok: false, field: 'body', message: 'Dữ liệu không hợp lệ' };
+  const b = body as Record<string, unknown>;
+  const note = typeof b.teacherNote === 'string' ? b.teacherNote.trim() : '';
+  if (note.length < 20 || note.length > 1000) return { ok: false, field: 'teacherNote', message: 'Nhận xét cuối khóa cần 20–1000 ký tự' };
+  if (b.endDate !== undefined && !(typeof b.endDate === 'string' && ISO_DATE_RE.test(b.endDate))) {
+    return { ok: false, field: 'endDate', message: 'Ngày kết thúc không hợp lệ' };
+  }
+  if (b.level !== undefined && !(typeof b.level === 'number' && Number.isInteger(b.level) && b.level >= 1 && b.level <= 5)) {
+    return { ok: false, field: 'level', message: 'Cấp độ không hợp lệ' };
+  }
+  return {
+    ok: true,
+    value: { teacherNote: note, ...(b.endDate ? { endDate: b.endDate as string } : {}), ...(b.level ? { level: b.level as number } : {}) },
+  };
 }

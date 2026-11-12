@@ -15,6 +15,9 @@
 | `migrations/20261117090000_admin_accounts.sql` | `admin` role (`is_staff()` includes it), `is_admin()`, `admin_list_staff()`, `admin_set_role()` |
 | `migrations/20261118090000_admin_only_business.sql` | `dashboard_summary()` and `course_fees` restricted to admins |
 | `migrations/20261119090000_staff_signup_requests.sql` | Teacher / staff self-registration: `staff_requests`, sign-up trigger, `admin_list_staff_requests()`, `admin_decide_staff_request()` |
+| `migrations/20261120090000_parent_club_promo.sql` | Promo code `CLB_PHU_HUYNH_100K` (CLB Phụ huynh reward) accepted by `submit_lead()` / `leads.promo_code` |
+| `migrations/20261121090000_parent_booking_actions.sql` | Parents view / reschedule / cancel their own booking (id + phone): `parent_booking_status()`, `parent_reschedule_booking()`, `parent_cancel_booking()` |
+| `migrations/20261122090000_lifecycle_upsell.sql` | `enrollments`, `lifecycle_automations`, course completion + certificate, follow-up queue, advisor call list |
 | `seed.sql` | Dev data generated from `src/utils/mockData.ts` (deliberately **no** trust stats/testimonials — those must be real) |
 | `sql/` | Paste-ready SQL: `01_setup.sql` (fresh), `upgrades/<migration>.sql` (existing projects), `schedule_reminders_cron.sql` |
 | `functions/api/index.ts` | Edge Function: feed, lead submit, staff CRM actions, cron entry point |
@@ -198,6 +201,21 @@ Message history per lead: `select * from crm_logs where lead_id = '…' order by
 **In the app:** staff open *Quản lý video → Lịch học thử & khách hàng* (web: `/quan-ly/hoc-thu`) to confirm, cancel,
 complete a trial with feedback, and mark enrolment. It calls `crm_set_status()` / `crm_complete_trial()` with the staff
 session, so it works even before the Edge Function is deployed.
+
+## Student lifecycle after a course (certificate → review → alumni offer → advisor call)
+
+- A lead marked `ENROLLED` automatically gets an `ACTIVE` row in `enrollments` (lead = family + child; no separate students table).
+- A teacher completes the course in the app (*Khu giáo viên → Học viên & lộ trình*) or with
+  `POST /api/enrollments/:id/complete {"teacherNote", "endDate"?, "level"?}` → `enrollment_complete()` issues a certificate
+  code and queues 4 follow-ups at 09:00 VN: **T+0** certificate (`/chung-nhan/<code>`), **T+3** teacher review,
+  **T+7** alumni offer (**only** when `ALUMNI_VOUCHER` holds a real offer), **T+14** flag for an advisor call + message
+  announcing the call (no "few seats left" — there is no seat data).
+- Next-course rules: `_shared/recommendations.ts` (shared with the app). "Nâng cao" / "cấp 2" are **levels** of the existing courses.
+- Follow-ups stop when the family enrols in another course, the course is marked dropped, or an advisor records the call.
+- Job: `_shared/lifecycleCron.ts`, `POST /api/cron/lifecycle` (cron secret), scheduled daily by `sql/schedule_lifecycle_cron.sql`.
+  Claim → send → finish, at most 3 attempts; quiet hours 21:00–07:00. Templates: `ZNS_TEMPLATE_COMPLETION_CERT`,
+  `…_TEACHER_REVIEW`, `…_ALUMNI_DISCOUNT`, `…_FINAL_CALL` (params in `_shared/lifecycleMessages.ts`).
+- Channels: ZNS (approved template) or Zalo OA. App push notifications are not sent (parents have no accounts / no FCM yet).
 
 ## Zalo access token (automatic refresh)
 

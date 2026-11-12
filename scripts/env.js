@@ -2,7 +2,7 @@
 // Only these keys are inlined into the app bundle — never put secrets here.
 const path = require('path');
 
-const PUBLIC_ENV_KEYS = ['PUBLIC_SUPABASE_URL', 'PUBLIC_SUPABASE_ANON_KEY', 'PUBLIC_ZALO_OA_ID', 'PUBLIC_WEB_URL'];
+const PUBLIC_ENV_KEYS = ['PUBLIC_SUPABASE_URL', 'PUBLIC_SUPABASE_ANON_KEY', 'PUBLIC_ZALO_OA_ID', 'PUBLIC_WEB_URL', 'PUBLIC_HOTLINE'];
 
 let loaded = false;
 function loadEnv() {

@@ -1,14 +1,16 @@
 import { useIsFocused } from '@react-navigation/native';
-import { AlertCircle, Gift, Sparkles } from 'lucide-react-native';
+import { AlertCircle, CalendarClock, Gift, Sparkles } from 'lucide-react-native';
 import { useEffect, useRef, useState } from 'react';
-import { KeyboardAvoidingView, Platform, ScrollView, Text, TextInput, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button, Select, TrustBadges, TrustModal, type SelectOption } from '@/components';
 import type { TabScreenProps } from '@/navigation/types';
-import { useBookingStore, useQuizStore, useTrustStore, useUserStore } from '@/store';
+import { useBookingStore, useParentClubStore, useQuizStore, useTrustStore, useUserStore } from '@/store';
+import { rewardUnlocked } from '@/store/useParentClubStore';
 import type { CourseCategory, LeadSource } from '@/types';
 import { CATEGORY_COLORS, CATEGORY_LABELS, COLORS, COURSE_CATEGORIES, SOURCE_LABELS } from '@/utils/constants';
+import { PARENT_CLUB_REWARD } from '@/utils/parentClub';
 import { PROMO_CODES } from '../../../supabase/functions/_shared/contracts';
 import { COURSES } from '@/utils/mockData';
 import { FIELD_ORDER, validateField, type BookingField, type BookingForm } from '@/utils/validation';
@@ -50,7 +52,7 @@ export default function BookingScreen({ route, navigation }: TabScreenProps<'Boo
   const params = route.params;
   const source: LeadSource = params?.source ?? (params?.fromQuiz ? 'QUIZ' : 'DIRECT');
 
-  const { form, errors, status, submitError, prefill, setField, touch, submit, resetForm } = useBookingStore();
+  const { form, errors, status, submitError, prefill, setField, touch, submit, resetForm, history } = useBookingStore();
   const profile = useUserStore();
   const quizResult = useQuizStore((s) => s.result);
   const quizAnswers = useQuizStore((s) => s.answers);
@@ -61,6 +63,9 @@ export default function BookingScreen({ route, navigation }: TabScreenProps<'Boo
 
   // ── Exit-intent (one-time incentive) ──
   const exitOffer = useTrustStore((s) => s.exitOffer);
+  // CLB Phụ huynh reward (all badges) takes precedence: a booking carries one promo code.
+  const clubReward = useParentClubStore((s) => (rewardUnlocked(s) ? PARENT_CLUB_REWARD : null));
+  const promoCode = clubReward ? clubReward.promoCode : exitOffer.claimed ? ('EBOOK_VAO_LOP_1' as const) : undefined;
   const { claimExitOffer, dismissExitOffer, consumeExitOffer } = useTrustStore();
   const [interacted, setInteracted] = useState(false);
   const edit = <K extends BookingField>(field: K, value: BookingForm[K]) => {
@@ -116,7 +121,7 @@ export default function BookingScreen({ route, navigation }: TabScreenProps<'Boo
       source,
       sourceRef: params?.sourceRef,
       zaloUserId,
-      ...(exitOffer.claimed ? { promoCode: 'EBOOK_VAO_LOP_1' as const } : {}),
+      ...(promoCode ? { promoCode } : {}),
       ...(quizSummary ? { quizSummary, quizAnswers } : {}),
     });
 
@@ -158,6 +163,19 @@ export default function BookingScreen({ route, navigation }: TabScreenProps<'Boo
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
       >
+        {history.length > 0 && (
+          <Pressable
+            onPress={() => navigation.navigate('ManageBookings')}
+            accessibilityRole="button"
+            testID="my-bookings-link"
+            className="flex-row items-center gap-3 rounded-2xl border border-brand-100 bg-brand-50 p-3.5 active:opacity-90"
+          >
+            <CalendarClock size={20} color={COLORS.brand} />
+            <Text className="flex-1 text-[14px] font-bold text-ink">Lịch hẹn của tôi ({history.length})</Text>
+            <Text className="text-xs font-semibold text-brand-600">Đổi / hủy lịch ›</Text>
+          </Pressable>
+        )}
+
         <GiftBanner course={form.course} />
 
         <TrustBadges onSeeAll={() => navigation.navigate('Testimonials', { course: form.course })} />
@@ -291,10 +309,12 @@ export default function BookingScreen({ route, navigation }: TabScreenProps<'Boo
             <Text className="flex-1 text-xs text-red-600">{submitError}</Text>
           </View>
         )}
-        {exitOffer.claimed && (
-          <View className="flex-row items-center gap-2 rounded-xl bg-emerald-50 p-2.5">
+        {!!promoCode && (
+          <View className="flex-row items-center gap-2 rounded-xl bg-emerald-50 p-2.5" testID="booking-promo">
             <Gift size={16} color="#059669" />
-            <Text className="flex-1 text-xs font-semibold text-emerald-700">Đã thêm quà: {PROMO_CODES.EBOOK_VAO_LOP_1}</Text>
+            <Text className="flex-1 text-xs font-semibold text-emerald-700">
+              {clubReward ? `Ưu đãi CLB Phụ huynh: ${clubReward.title}` : `Đã thêm quà: ${PROMO_CODES[promoCode]}`}
+            </Text>
           </View>
         )}
         <Button

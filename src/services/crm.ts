@@ -13,7 +13,7 @@ import { sleep, uuidv4 } from '@/utils/helpers';
 import { ApiError } from './apiClient';
 
 const LEAD_COLUMNS =
-  'id, code, parent_name, phone_number, student_name, student_age, course_code, branch_location, appointment_time, status, teacher_note, staff_note, source, created_at';
+  'id, code, parent_name, phone_number, student_name, student_age, course_code, branch_location, appointment_time, status, teacher_note, staff_note, source, promo_code, created_at';
 
 const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
 const addDays = (d: Date, n: number) => new Date(d.getFullYear(), d.getMonth(), d.getDate() + n);
@@ -85,6 +85,7 @@ export async function fetchCrmLeads(filter: CrmFilter, now = new Date()): Promis
     teacherNote: r.teacher_note,
     staffNote: r.staff_note,
     source: r.source,
+    promoCode: r.promo_code,
     createdAt: r.created_at,
     messages: messages.get(r.id) ?? {},
   }));
@@ -120,11 +121,11 @@ function demoLeads(now: Date): CrmLead[] {
   const base = (o: Partial<CrmLead>): CrmLead => ({
     id: uuidv4(), code: `TH-${Math.random().toString(16).slice(2, 8).toUpperCase()}`, parentName: '', phone: '', studentName: '', studentAge: 6,
     course: 'LUYEN_CHU_DEP', campus: 'XA_LA', appointmentTime: null, status: 'NEW', teacherNote: null, staffNote: null,
-    source: 'FEED', createdAt: new Date(now.getTime() - 2 * 86400_000).toISOString(), messages: {}, ...o,
+    source: 'FEED', promoCode: null, createdAt: new Date(now.getTime() - 2 * 86400_000).toISOString(), messages: {}, ...o,
   });
   return [
     base({ parentName: 'Mẹ Thu Trang (mẫu)', phone: '0912345678', studentName: 'Bé Gia Bảo', course: 'LUYEN_CHU_DEP', appointmentTime: at(0, 17, 30), status: 'REMINDED_2H', messages: { CONFIRMATION: sent(2880), REMINDER_24H: sent(1440), REMINDER_2H: sent(30) } }),
-    base({ parentName: 'Bố Minh Đức (mẫu)', phone: '0987654321', studentName: 'Bé Khánh Linh', studentAge: 7, course: 'TOAN_TU_DUY', appointmentTime: at(0, 19, 0), status: 'CONFIRMED', messages: { CONFIRMATION: sent(600) } }),
+    base({ parentName: 'Bố Minh Đức (mẫu)', phone: '0987654321', studentName: 'Bé Khánh Linh', studentAge: 7, course: 'TOAN_TU_DUY', appointmentTime: at(0, 19, 0), status: 'CONFIRMED', promoCode: 'CLB_PHU_HUYNH_100K', messages: { CONFIRMATION: sent(600) } }),
     base({ parentName: 'Mẹ Lan Anh (mẫu)', phone: '0903111222', studentName: 'Bé Minh Anh', studentAge: 5, course: 'TIEN_TIEU_HOC', campus: 'NGO_THI_NHAM', appointmentTime: at(1, 17, 30), status: 'NEW', source: 'QUIZ', messages: { CONFIRMATION: { status: 'SKIPPED', error: 'Chưa cấu hình mẫu ZNS', at: new Date(now.getTime() - 3600_000).toISOString() } } }),
     base({ parentName: 'Mẹ Hồng Nhung (mẫu)', phone: '0934555666', studentName: 'Bé Đức Huy', studentAge: 8, course: 'BOI_DUONG_TOAN_TV', appointmentTime: at(3, 9, 45), status: 'CONTACTED', source: 'SHARE_LINK' }),
     base({ parentName: 'Bố Quang Huy (mẫu)', phone: '0977888999', studentName: 'Bé Bảo Nam', course: 'TOAN_TU_DUY', appointmentTime: at(-1, 17, 30), status: 'COMPLETED_TRIAL', teacherNote: 'Bảo Nam tính nhẩm nhanh, cần luyện đọc hiểu đề toán có lời văn.', messages: { CONFIRMATION: sent(4000), POST_TRIAL: sent(1200) } }),

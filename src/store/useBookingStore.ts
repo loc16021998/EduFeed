@@ -16,6 +16,8 @@ import {
   type BookingForm,
 } from '@/utils/validation';
 
+import { useNotificationStore } from './useNotificationStore';
+
 export interface SubmitMeta {
   source: LeadSource;
   sourceRef?: string;
@@ -142,6 +144,13 @@ export const useBookingStore = create<BookingState>()(
             ...meta,
           }, leadId);
           set((s) => ({ status: 'success', pendingLeadId: null, history: [record, ...s.history].slice(0, 20) }));
+          useNotificationStore.getState().add({
+            key: `booked:${record.id}`,
+            kind: 'BOOKING',
+            title: 'Đã gửi đăng ký học thử',
+            body: `Bé ${record.studentName.replace(/^Bé\s+/i, '')} · ${record.display.slot} · ${record.display.date}. Mã: ${record.code}`,
+            link: 'MANAGE_BOOKINGS',
+          });
           return record;
         } catch (e) {
           set({ status: 'error', submitError: e instanceof Error ? e.message : 'Đã có lỗi xảy ra' });

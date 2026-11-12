@@ -1,4 +1,4 @@
-import { Bell, Search, X } from 'lucide-react-native';
+import { Bell, Search, Trophy, X } from 'lucide-react-native';
 import { useEffect, useRef } from 'react';
 import { Pressable, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -14,6 +14,9 @@ interface HomeHeaderProps {
   onQueryChange: (q: string) => void;
   /** Hidden staff entry point. */
   onBrandLongPress?: () => void;
+  /** CLB Phụ huynh: badges collected / total. */
+  club?: { done: number; total: number };
+  onClubPress?: () => void;
 }
 
 export default function HomeHeader({
@@ -24,6 +27,8 @@ export default function HomeHeader({
   query,
   onQueryChange,
   onBrandLongPress,
+  club,
+  onClubPress,
 }: HomeHeaderProps) {
   const insets = useSafeAreaInsets();
   const inputRef = useRef<TextInput>(null);
@@ -52,6 +57,21 @@ export default function HomeHeader({
             <Text className="text-[10px] font-medium uppercase tracking-widest text-ink-subtle">EduFeed</Text>
           </View>
         </Pressable>
+
+        {club && onClubPress && (
+          <Pressable
+            onPress={onClubPress}
+            accessibilityRole="button"
+            accessibilityLabel={`CLB Phụ huynh: ${club.done} trên ${club.total} huy hiệu`}
+            testID="club-button"
+            className="h-9 flex-row items-center gap-1 rounded-full bg-amber-100 px-2.5 active:bg-amber-200"
+          >
+            <Trophy size={16} color="#B45309" />
+            <Text className="text-xs font-extrabold text-amber-800">
+              {club.done}/{club.total}
+            </Text>
+          </Pressable>
+        )}
 
         <IconButton label={searchOpen ? 'Đóng tìm kiếm' : 'Tìm kiếm'} onPress={onToggleSearch}>
           {searchOpen ? <X size={22} color={COLORS.ink} /> : <Search size={22} color={COLORS.ink} />}

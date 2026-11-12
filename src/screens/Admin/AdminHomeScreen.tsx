@@ -1,5 +1,5 @@
 import { useFocusEffect } from '@react-navigation/native';
-import { BarChart3, Bell, CalendarClock, ChevronRight, Clapperboard, LogOut, ShieldCheck, UserCheck, Users } from 'lucide-react-native';
+import { BarChart3, Bell, CalendarClock, ChevronRight, Clapperboard, GraduationCap, ImagePlus, LogOut, ShieldCheck, UserCheck, Users } from 'lucide-react-native';
 import type { ReactNode } from 'react';
 import { useCallback, useEffect, useState } from 'react';
 import { Image, Pressable, ScrollView, Text, View, type ImageSourcePropType } from 'react-native';
@@ -15,7 +15,7 @@ import { confirmAsync } from '@/utils/platform';
 
 const LOGO: ImageSourcePropType = typeof logo === 'string' ? { uri: logo } : logo;
 
-type Target = 'AdminDashboard' | 'StaffAccounts' | 'StaffRequests' | 'StaffVideos' | 'StaffTrials';
+type Target = 'AdminDashboard' | 'StaffAccounts' | 'StaffRequests' | 'StaffVideos' | 'StaffTrials' | 'TeacherUpload' | 'StaffEnrollments';
 
 /** Admin area home (owner / manager). Teachers and staff have their own area at /quan-ly. */
 export default function AdminHomeScreen({ navigation }: RootStackScreenProps<'AdminHome'>) {
@@ -129,6 +129,18 @@ export default function AdminHomeScreen({ navigation }: RootStackScreenProps<'Ad
           title="Lịch học thử & khách hàng"
           subtitle="Xác nhận lịch, hoàn thành học thử, ghi nhận nhập học"
           onPress={() => go('StaffTrials')}
+        />
+        <Tile
+          icon={<GraduationCap size={22} color={COLORS.ink} />}
+          title="Học viên & lộ trình"
+          subtitle="Hoàn thành khóa, chứng nhận, danh sách gọi tư vấn"
+          onPress={() => go('StaffEnrollments')}
+        />
+        <Tile
+          icon={<ImagePlus size={22} color={COLORS.ink} />}
+          title="Đăng nhật ký tiến bộ"
+          subtitle="Ảnh trước / sau và nhận xét của giáo viên"
+          onPress={() => go('TeacherUpload')}
         />
       </ScrollView>
     </View>

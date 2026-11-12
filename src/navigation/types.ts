@@ -34,6 +34,14 @@ export type RootStackParamList = {
   AdminDashboard: undefined;
   StaffAccounts: undefined;
   StaffRequests: undefined;
+  /** Parents: trial bookings made on this device. */
+  ManageBookings: undefined;
+  /** Teachers: publish a before / after progress post. */
+  TeacherUpload: undefined;
+  /** Staff: students per course, completion, follow-ups, advisor call list. */
+  StaffEnrollments: undefined;
+  /** Public digital certificate. */
+  Certificate: { code: string };
   /** No id → create a new video. */
   VideoEditor: { id?: string } | undefined;
 };

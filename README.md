@@ -48,6 +48,40 @@ npm run ios          # iOS (chỉ trên macOS)
   Edge Function `api` — xem [supabase/README.md](supabase/README.md#staff-accounts-who-can-publish-videos).
 - **Chưa kết nối Supabase:** bản dev có *chế độ thử* (email bất kỳ, mật khẩu ≥ 6 ký tự); video thử chỉ lưu tạm, mất khi tải lại.
 
+## Phụ huynh: xem video, lịch hẹn, thông báo
+
+- **Xem video toàn màn hình** (nút ⤢ trên thẻ video): phát / dừng, tua, âm lượng, toàn màn hình; nút *Đăng ký học thử khóa này*,
+  *Lưu video* (danh sách "Video đã lưu" trên EduFeed) và *Chia sẻ* (Zalo / ứng dụng khác, Facebook — cần `PUBLIC_WEB_URL`).
+- **Lịch hẹn của tôi** (`/lich-hen`, từ trang Đặt lịch hoặc sau khi đăng ký): xem trạng thái, **đổi lịch** (tối đa 3 lần),
+  **hủy lịch**, chỉ đường, gọi hotline. Chỉ máy đã đặt lịch mới thấy / đổi được (mã đăng ký nội bộ + số điện thoại).
+  Mỗi lần đổi / hủy được ghi vào ghi chú của lịch học thử để nhân viên thấy; nhắc lịch Zalo tự chạy lại theo giờ mới.
+- **Thông báo** (🔔): xác nhận / đổi / hủy lịch, nhắc lịch trong 24 giờ tới, huy hiệu và ưu đãi CLB — chỉ sự kiện thật,
+  lưu trên máy. (Chưa có thông báo đẩy khi app đóng — cần Firebase / APNs.)
+- **Hotline**: đặt `PUBLIC_HOTLINE` trong `.env.local`. Để trống thì app ẩn các nút gọi.
+
+## Học viên & lộ trình (sau khi nhập học)
+
+*Khu giáo viên → Học viên & lộ trình* (`/quan-ly/hoc-vien`). Bé được thêm tự động khi đánh dấu **Đã nhập học**.
+Bấm **Hoàn thành khóa** (ngày kết thúc, cấp độ, nhận xét) → tạo **chứng nhận điện tử** (`/chung-nhan/<mã>`) và tự gửi phụ huynh
+qua Zalo: chứng nhận (ngay), nhận xét giáo viên (+3 ngày), ưu đãi học viên cũ (+7 ngày, **chỉ khi đặt `ALUMNI_VOUCHER`** — ưu đãi
+thật), và đưa gia đình vào danh sách **Cần gọi tư vấn** (+14 ngày). Gợi ý khóa tiếp theo theo quy tắc trong
+`supabase/functions/_shared/recommendations.ts`. Lịch chạy: `supabase/sql/schedule_lifecycle_cron.sql` (9:00 sáng mỗi ngày).
+
+## Giáo viên: đăng nhật ký tiến bộ
+
+*Khu giáo viên → Đăng nhật ký tiến bộ* (`/quan-ly/nhat-ky/moi`): ảnh trước / sau, tên hiển thị, khóa, cơ sở, nhận xét.
+Chỉ hiển thị cho phụ huynh khi đánh dấu **phụ huynh đã đồng ý bằng văn bản**; nếu chưa → lưu bản nháp.
+
+## CLB Phụ huynh, mẹo mỗi ngày (dành cho phụ huynh)
+
+- **Huy hiệu** (nút 🏆 trên EduFeed): *Ba Mẹ Thông Thái* (làm Quiz), *Đồng Hành Cùng Con* (xem 3 video, mỗi video ≥ 8 giây),
+  *Nhìn Thấy Tiến Bộ* (kéo hết thanh Trước / Sau). Đủ 3 huy hiệu → mở khóa **Giảm 100.000đ học phí**: mã
+  `CLB_PHU_HUYNH_100K` tự gửi kèm đăng ký học thử và hiện trên thẻ *Lịch học thử* để nhân viên áp dụng khi nhập học.
+  Tiến độ lưu trên máy phụ huynh (không cần tài khoản), nên trung tâm tự quyết điều kiện áp dụng (vd. 1 lần / gia đình).
+  Đổi hoặc tắt phần thưởng: `PARENT_CLUB_REWARD` trong `src/utils/parentClub.ts` (`null` = tắt).
+- **Mẹo mỗi ngày** trên EduFeed: chọn theo tuổi và khóa học của con, đổi mỗi ngày. Nội dung viết tay trong
+  `src/content/parentingSparks.ts` — giáo viên nên duyệt và bổ sung.
+
 ## Tổng quan kinh doanh (chủ trung tâm / quản lý)
 
 Web: `/quan-tri/tong-quan` (rộng toàn màn hình trên máy tính) · App: *Trang quản trị → Tổng quan kinh doanh* (chỉ tài khoản Quản trị).

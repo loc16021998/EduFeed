@@ -10,6 +10,8 @@
  *   POST /api/admin/users/:id/password    { password }        → { id }
  *
  * Staff (Authorization: Bearer <staff or admin user JWT>, app_metadata.role = 'staff' | 'admin'):
+ *   POST /api/enrollments/:id/complete   (CompleteEnrollmentRequest) → CompleteEnrollmentResponse
+ *   POST /api/cron/lifecycle             (x-cron-secret) daily 09:00 VN follow-ups after a course
  *   POST /api/leads/:id/complete-trial  (CompleteTrialRequest)  → CompleteTrialResponse
  *   POST /api/leads/:id/status          (SetLeadStatusRequest)  → { id, status }
  *
@@ -28,6 +30,7 @@ import {
   normalizePhone,
   STAFF_SETTABLE_STATUSES,
   staffPasswordProblem,
+  validateCompleteEnrollment,
   validateCreateStaff,
   validateLeadRequest,
   type ApiErrorBody,
@@ -35,11 +38,14 @@ import {
   type CompleteTrialResponse,
   type FeedPageResponse,
   type LeadSubmitResponse,
+  type CompleteEnrollmentResponse,
   type StaffAccountDTO,
   type VideoDTO,
 } from '../_shared/contracts.ts';
 import { corsHeaders } from '../_shared/cors.ts';
 import { notifyNewLead, parseAdminContacts, type NotifyConfig } from '../_shared/notify.ts';
+import { runLifecycleTick, type LifecycleDeps } from '../_shared/lifecycleCron.ts';
+import { LIFECYCLE_STAGES, LIFECYCLE_TEMPLATE_ENV, type LifecycleConfig, type LifecycleStage } from '../_shared/lifecycleMessages.ts';
 import { runReminderTick, sendCrmMessage, type CrmDeps } from '../_shared/reminderCron.ts';
 import { bearerToken, verifyCronSecret } from '../_shared/security.ts';
 import { getAccessToken } from '../_shared/zaloToken.ts';
@@ -464,10 +470,77 @@ async function handleResetPassword(req: Request, userId: string): Promise<Respon
   return json({ id: userId });
 }
 
+// ─── Lifecycle: course completion + daily follow-ups ────────────────────────
+
+const lifecycleTemplates = Object.fromEntries(
+  LIFECYCLE_STAGES.map((s) => [s, env(LIFECYCLE_TEMPLATE_ENV[s])]),
+) as Record<LifecycleStage, string>;
+
+async function lifecycleLive(): Promise<{ cfg: LifecycleConfig; deps: LifecycleDeps }> {
+  const live = await liveConfig();
+  return {
+    cfg: {
+      accessToken: live.messaging.accessToken,
+      mode: ZNS_MODE,
+      templates: lifecycleTemplates,
+      hotline: env('CENTRE_HOTLINE'),
+      webUrl: env('WEB_URL').replace(/\/+$/, ''),
+      alumniVoucher: env('ALUMNI_VOUCHER'),
+      alumniVoucherDays: Number(env('ALUMNI_VOUCHER_DAYS')) || 14,
+    },
+    deps: { rpc, send: (plan) => sendZaloMessage(plan, live.messaging.accessToken), now: () => new Date() },
+  };
+}
+
+async function handleCronLifecycle(req: Request): Promise<Response> {
+  if (!CRON_SECRET) return fail('SERVICE_UNAVAILABLE', 'CRON_SECRET chưa được cấu hình', 503);
+  if (!(await verifyCronSecret(req, CRON_SECRET))) return fail('UNAUTHORIZED', 'Sai cron secret', 401);
+  const { cfg, deps } = await lifecycleLive();
+  const summary = await runLifecycleTick(deps, cfg);
+  console.log('[cron] lifecycle', JSON.stringify(summary));
+  return json(summary);
+}
+
+/** Teacher / staff: mark a course completed → certificate + the 4 follow-ups; the certificate message goes out now. */
+async function handleCompleteEnrollment(req: Request, enrollmentId: string): Promise<Response> {
+  const staff = await requireStaff(req);
+  if (staff instanceof Response) return staff;
+  const parsed = validateCompleteEnrollment(await readJson(req));
+  if (!parsed.ok) return fail('VALIDATION', parsed.message, 422, parsed.field);
+  const r = parsed.value;
+
+  // Runs as the staff member: the database checks is_staff() and does everything in one transaction.
+  const { data, error } = await staff.db.rpc('enrollment_complete', {
+    p_enrollment_id: enrollmentId,
+    p_teacher_note: r.teacherNote,
+    p_end_date: r.endDate ?? null,
+    p_level: r.level ?? null,
+  });
+  if (error) {
+    const mapped = failFromDb(error);
+    if (mapped) return mapped;
+    throw error;
+  }
+  const row = data as { id: string; status: string; certificate_code: string; end_date: string; level: number };
+
+  // Send what is due now (the certificate, if the course ended today or earlier) without making the teacher wait.
+  inBackground(lifecycleLive().then(({ cfg, deps }) => runLifecycleTick(deps, cfg, { enrollmentId, limit: 4 })));
+
+  const res: CompleteEnrollmentResponse = {
+    id: row.id,
+    status: 'COMPLETED',
+    certificateCode: row.certificate_code,
+    endDate: row.end_date,
+    level: row.level,
+  };
+  return json(res);
+}
+
 // ─── Router ─────────────────────────────────────────────────────────────────
 
 const UUID = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
 const LEAD_ACTION = new RegExp(`^/leads/(${UUID})/(complete-trial|status)$`, 'i');
+const ENROLLMENT_COMPLETE = new RegExp(`^/enrollments/(${UUID})/complete$`, 'i');
 const USER_PASSWORD = new RegExp(`^/admin/users/(${UUID})/password$`, 'i');
 
 Deno.serve(async (req) => {
@@ -484,6 +557,9 @@ Deno.serve(async (req) => {
     }
     if (path === '/leads/submit') return req.method === 'POST' ? await handleLeadSubmit(req) : postOnly();
     if (path === '/cron/reminders') return req.method === 'POST' ? await handleCronReminders(req) : postOnly();
+    if (path === '/cron/lifecycle') return req.method === 'POST' ? await handleCronLifecycle(req) : postOnly();
+    const enr = ENROLLMENT_COMPLETE.exec(path);
+    if (enr) return req.method === 'POST' ? await handleCompleteEnrollment(req, enr[1]) : postOnly();
 
     if (path === '/admin/users') return req.method === 'POST' ? await handleCreateStaff(req) : postOnly();
     const pw = USER_PASSWORD.exec(path);

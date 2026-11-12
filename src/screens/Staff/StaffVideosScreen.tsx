@@ -1,4 +1,4 @@
-import { CalendarClock, ChevronLeft, ChevronRight, LogOut, Plus, ShieldCheck } from 'lucide-react-native';
+import { CalendarClock, ChevronLeft, ChevronRight, GraduationCap, ImagePlus, LogOut, Plus, ShieldCheck } from 'lucide-react-native';
 import { useCallback, useEffect } from 'react';
 import { ActivityIndicator, FlatList, Pressable, RefreshControl, Text, View } from 'react-native';
 
@@ -97,6 +97,30 @@ export default function StaffVideosScreen({ navigation }: RootStackScreenProps<'
               <View className="flex-1">
                 <Text className="text-[15px] font-bold text-ink">Lịch học thử & khách hàng</Text>
                 <Text className="text-xs text-ink-muted">Xác nhận lịch, hoàn thành học thử, ghi nhận nhập học</Text>
+              </View>
+              <ChevronRight size={18} color={COLORS.muted} />
+            </Pressable>
+            <Pressable
+              onPress={() => navigation.navigate('StaffEnrollments')}
+              accessibilityRole="button"
+              className="flex-row items-center gap-3 rounded-2xl border border-slate-200 bg-white p-3.5 active:opacity-90"
+            >
+              <GraduationCap size={22} color={COLORS.brand} />
+              <View className="flex-1">
+                <Text className="text-[15px] font-bold text-ink">Học viên & lộ trình</Text>
+                <Text className="text-xs text-ink-muted">Hoàn thành khóa, chứng nhận, gọi tư vấn khóa tiếp theo</Text>
+              </View>
+              <ChevronRight size={18} color={COLORS.muted} />
+            </Pressable>
+            <Pressable
+              onPress={() => navigation.navigate('TeacherUpload')}
+              accessibilityRole="button"
+              className="flex-row items-center gap-3 rounded-2xl border border-slate-200 bg-white p-3.5 active:opacity-90"
+            >
+              <ImagePlus size={22} color={COLORS.brand} />
+              <View className="flex-1">
+                <Text className="text-[15px] font-bold text-ink">Đăng nhật ký tiến bộ</Text>
+                <Text className="text-xs text-ink-muted">Ảnh trước / sau và nhận xét của giáo viên</Text>
               </View>
               <ChevronRight size={18} color={COLORS.muted} />
             </Pressable>

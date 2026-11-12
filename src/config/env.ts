@@ -13,6 +13,11 @@ export const ENV = {
   zaloOAId: process.env.PUBLIC_ZALO_OA_ID ?? '',
   /** Public address of the web app, e.g. https://app.thedu.vn — used for video share links. */
   webUrl: (process.env.PUBLIC_WEB_URL ?? '').replace(/\/+$/, ''),
+  /** Centre hotline for parents (digits only), e.g. 0987654321. Empty = call buttons hidden. */
+  hotline: (process.env.PUBLIC_HOTLINE ?? '').replace(/[^\d+]/g, ''),
 } as const;
 
 export const hasSupabase = !!(ENV.supabaseUrl && ENV.supabaseAnonKey);
+
+/** A real hotline is configured (never call a placeholder number). */
+export const hasHotline = /^(0|\+84)\d{8,10}$/.test(ENV.hotline);

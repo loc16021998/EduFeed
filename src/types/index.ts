@@ -207,6 +207,8 @@ export interface CrmLead {
   teacherNote: string | null;
   staffNote: string | null;
   source: string;
+  /** In-app offer the parent claimed (PROMO_CODES) — staff apply it at enrolment. */
+  promoCode: string | null;
   createdAt: string;
   messages: Partial<Record<CrmMessageKind, CrmMessageState>>;
 }

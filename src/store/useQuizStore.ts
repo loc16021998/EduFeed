@@ -4,6 +4,8 @@ import type { QuizAnswers, QuizResult } from '@/types';
 import { QUIZ_QUESTIONS } from '@/utils/mockData';
 import { applyAnswer, computeQuizResult, isAnswered } from '@/utils/quiz';
 
+import { useParentClubStore } from './useParentClubStore';
+
 interface QuizState {
   /** 0-based index into QUIZ_QUESTIONS. */
   step: number;
@@ -36,6 +38,7 @@ export const useQuizStore = create<QuizState>()((set, get) => ({
     if (!q || !isAnswered(q, answers)) return;
     if (step >= QUIZ_QUESTIONS.length - 1) {
       set({ result: computeQuizResult(QUIZ_QUESTIONS, answers), direction: 1 });
+      useParentClubStore.getState().markQuizDone();
     } else {
       set({ step: step + 1, direction: 1 });
     }

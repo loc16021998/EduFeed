@@ -1,10 +1,11 @@
 import { ChevronsLeftRight } from 'lucide-react-native';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Image, StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   Extrapolation,
   interpolate,
+  runOnJS,
   useAnimatedStyle,
   useSharedValue,
   withDelay,
@@ -13,7 +14,12 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 
-export interface BeforeAfterSliderProps {
+import { haptics } from '@/utils/haptics';
+
+import Confetti from './Confetti';
+import Skeleton from './Skeleton';
+
+export interface InteractiveSliderProps {
   beforeUri: string;
   afterUri: string;
   /** Top-left overlay, e.g. "Nét chữ cũ". */
@@ -30,10 +36,18 @@ export interface BeforeAfterSliderProps {
   initialPosition?: number;
   /** Nudge the handle once on mount / image change to teach the gesture. */
   showHint?: boolean;
+  /** Called once per image pair when the parent drags all the way to the "after" image. */
+  onFullReveal?: () => void;
+  /** Confetti + success haptic on full reveal (default true). */
+  celebrate?: boolean;
 }
 
 const HANDLE = 44;
 const SPRING = { damping: 20, stiffness: 220 };
+/** Handle position at or below which the "after" image counts as fully revealed. */
+const REVEALED = 0.04;
+/** How far a fling carries the handle (seconds of velocity). */
+const FLING = 0.18;
 
 const clamp01 = (v: number) => {
   'worklet';
@@ -42,10 +56,14 @@ const clamp01 = (v: number) => {
 
 /**
  * Drag (or tap) to reveal the "after" image beneath the "before" image.
- * Runs entirely on the UI thread via Gesture Handler + Reanimated, so dragging stays at 60fps.
+ *  - Runs on the UI thread via Gesture Handler + Reanimated, so dragging stays at 60fps.
+ *  - Physics: a fling keeps travelling with its velocity and settles with a spring.
+ *  - Haptics: a light tick at 25 / 50 / 75 %, a success buzz on full reveal (native only).
+ *  - Full reveal of the "after" image → confetti + onFullReveal(), once per image pair.
+ *  - A skeleton covers the frame until both images have loaded (no blank flash / layout shift).
  * Horizontal-only activation lets the parent ScrollView keep vertical scrolling.
  */
-export default function BeforeAfterSlider({
+export default function InteractiveSlider({
   beforeUri,
   afterUri,
   beforeLabel = 'TRƯỚC',
@@ -55,12 +73,27 @@ export default function BeforeAfterSlider({
   aspectRatio = 4 / 3,
   initialPosition = 0.5,
   showHint = true,
-}: BeforeAfterSliderProps) {
+  onFullReveal,
+  celebrate = true,
+}: InteractiveSliderProps) {
   const [width, setWidth] = useState(0);
   const w = useSharedValue(0);
   const pos = useSharedValue(initialPosition);
   const dragStart = useSharedValue(0);
+  const bucket = useSharedValue(Math.floor(initialPosition * 4));
+  const revealed = useSharedValue(false);
+  const [loaded, setLoaded] = useState(0);
+  const [shot, setShot] = useState(0);
   const ready = width > 0;
+
+  const onRevealJS = useCallback(() => {
+    if (celebrate) {
+      haptics.success();
+      setShot((n) => n + 1);
+    }
+    onFullReveal?.();
+  }, [celebrate, onFullReveal]);
+  const tickJS = useCallback(() => haptics.light(), []);
 
   const onLayout = (e: LayoutChangeEvent) => {
     const next = e.nativeEvent.layout.width;
@@ -68,10 +101,17 @@ export default function BeforeAfterSlider({
     setWidth(next);
   };
 
+  // New pair of images → wait for them to load again, allow a new celebration.
+  useEffect(() => {
+    setLoaded(0);
+    revealed.value = false;
+  }, [beforeUri, afterUri, revealed]);
+
   // Reset (and optionally demo the gesture) whenever a new pair of images is shown.
   useEffect(() => {
     if (!ready) return;
     pos.value = initialPosition;
+    bucket.value = Math.floor(initialPosition * 4);
     if (showHint) {
       pos.value = withDelay(
         350,
@@ -82,7 +122,7 @@ export default function BeforeAfterSlider({
         ),
       );
     }
-  }, [beforeUri, afterUri, ready, initialPosition, showHint, pos]);
+  }, [beforeUri, afterUri, ready, initialPosition, showHint, pos, bucket]);
 
   const pan = Gesture.Pan()
     .activeOffsetX([-6, 6])
@@ -91,11 +131,41 @@ export default function BeforeAfterSlider({
       dragStart.value = pos.value;
     })
     .onUpdate((e) => {
-      if (w.value > 0) pos.value = clamp01(dragStart.value + e.translationX / w.value);
+      if (w.value <= 0) return;
+      const next = clamp01(dragStart.value + e.translationX / w.value);
+      pos.value = next;
+      // Light tick each time the handle crosses a quarter mark.
+      const b = Math.min(3, Math.floor(next * 4));
+      if (b !== bucket.value) {
+        bucket.value = b;
+        runOnJS(tickJS)();
+      }
+      if (next <= REVEALED && !revealed.value) {
+        revealed.value = true;
+        runOnJS(onRevealJS)();
+      }
+    })
+    .onEnd((e) => {
+      if (w.value <= 0) return;
+      // Fling: carry on with the release velocity, then settle with a spring.
+      const v = e.velocityX / w.value;
+      let target = clamp01(pos.value + v * FLING);
+      if (target <= REVEALED) target = 0;
+      pos.value = withSpring(target, { ...SPRING, velocity: v });
+      if (target <= REVEALED && !revealed.value) {
+        revealed.value = true;
+        runOnJS(onRevealJS)();
+      }
     });
 
   const tap = Gesture.Tap().onEnd((e) => {
-    if (w.value > 0) pos.value = withSpring(clamp01(e.x / w.value), SPRING);
+    if (w.value <= 0) return;
+    const target = clamp01(e.x / w.value);
+    pos.value = withSpring(target, SPRING);
+    if (target <= REVEALED && !revealed.value) {
+      revealed.value = true;
+      runOnJS(onRevealJS)();
+    }
   });
 
   const gesture = Gesture.Race(pan, tap);
@@ -118,8 +188,14 @@ export default function BeforeAfterSlider({
   const height = width * aspectRatio;
 
   const nudge = (delta: number) => {
-    pos.value = withSpring(clamp01(pos.value + delta), SPRING);
+    const target = clamp01(pos.value + delta);
+    pos.value = withSpring(target, SPRING);
+    if (target <= REVEALED && !revealed.value) {
+      revealed.value = true;
+      onRevealJS();
+    }
   };
+  const onImage = () => setLoaded((n) => n + 1);
 
   return (
     <View
@@ -137,11 +213,11 @@ export default function BeforeAfterSlider({
         <GestureDetector gesture={gesture}>
           <Animated.View style={StyleSheet.absoluteFill}>
             {/* After = full background */}
-            <Image source={{ uri: afterUri }} style={{ width, height }} resizeMode="cover" />
+            <Image source={{ uri: afterUri }} style={{ width, height }} resizeMode="cover" onLoad={onImage} onError={onImage} />
 
             {/* Before = clipped from the left up to the handle */}
             <Animated.View style={[styles.clip, { height }, clipStyle]}>
-              <Image source={{ uri: beforeUri }} style={{ width, height }} resizeMode="cover" />
+              <Image source={{ uri: beforeUri }} style={{ width, height }} resizeMode="cover" onLoad={onImage} onError={onImage} />
             </Animated.View>
 
             {/* Top labels */}
@@ -177,9 +253,17 @@ export default function BeforeAfterSlider({
             <Animated.View pointerEvents="none" style={[styles.handle, { top: height / 2 - HANDLE / 2 }, handleStyle]}>
               <ChevronsLeftRight size={22} color="#1A44B3" strokeWidth={2.5} />
             </Animated.View>
+
+            {/* Until both images are in: same-size skeleton (no blank frame, no layout shift). */}
+            {loaded < 2 && (
+              <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+                <Skeleton width={width} height={height} radius={0} />
+              </View>
+            )}
           </Animated.View>
         </GestureDetector>
       )}
+      {ready && <Confetti shot={shot} width={width} height={height} />}
     </View>
   );
 }

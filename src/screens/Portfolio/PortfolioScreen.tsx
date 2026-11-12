@@ -1,14 +1,17 @@
 import { useIsFocused } from '@react-navigation/native';
 import { ChevronRight, Share2 } from 'lucide-react-native';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 
-import { BeforeAfterSlider, HeaderIconButton, ScreenHeader, StickyCta, TrustBadges } from '@/components';
+import { HeaderIconButton, InteractiveSlider, PortfolioSkeleton, ScreenHeader, StickyCta, TrustBadges } from '@/components';
+import { hasSupabase } from '@/config/env';
 import type { TabScreenProps } from '@/navigation/types';
-import type { CourseCategory } from '@/types';
+import { fetchPortfolios } from '@/services/portfolio';
+import { useParentClubStore } from '@/store';
+import type { AsyncStatus, CourseCategory, PortfolioItem } from '@/types';
 import { CATEGORY_COLORS, CATEGORY_LABELS, COLORS } from '@/utils/constants';
-import { CAMPUSES, PORTFOLIO_ITEMS } from '@/utils/mockData';
-import { shareText } from '@/utils/platform';
+import { CAMPUSES } from '@/utils/mockData';
+import { shareText, useAppWidth } from '@/utils/platform';
 
 import StudentInfoCard from './components/StudentInfoCard';
 import StudentPicker from './components/StudentPicker';
@@ -23,23 +26,44 @@ export default function PortfolioScreen({ navigation, route }: TabScreenProps<'P
   const isFocused = useIsFocused();
   const deepLinkId = route.params?.itemId;
 
+  const width = useAppWidth();
   const [subject, setSubject] = useState<CourseCategory>('LUYEN_CHU_DEP');
-  const students = useMemo(() => PORTFOLIO_ITEMS.filter((p) => p.course === subject), [subject]);
-  const [studentId, setStudentId] = useState(students[0]?.id ?? '');
+  // Published + parent-consented portfolios from the server; sample data only without Supabase (labelled).
+  const [items, setItems] = useState<PortfolioItem[]>([]);
+  const [status, setStatus] = useState<AsyncStatus>('idle');
+  const load = useCallback(() => {
+    setStatus('loading');
+    fetchPortfolios().then(
+      (list) => {
+        setItems(list);
+        setStatus('success');
+      },
+      () => setStatus('error'),
+    );
+  }, []);
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const students = useMemo(() => items.filter((p) => p.course === subject), [items, subject]);
+  const [studentId, setStudentId] = useState('');
 
   // Deep link (thedu://portfolio/p-003) → jump to that student's subject + profile.
   useEffect(() => {
-    const target = PORTFOLIO_ITEMS.find((p) => p.id === deepLinkId);
+    const target = items.find((p) => p.id === deepLinkId);
     if (target) {
       setSubject(target.course);
       setStudentId(target.id);
     }
-  }, [deepLinkId]);
+  }, [deepLinkId, items]);
 
   const onChangeSubject = (c: CourseCategory) => {
     setSubject(c);
-    setStudentId(PORTFOLIO_ITEMS.find((p) => p.course === c)?.id ?? '');
+    setStudentId(items.find((p) => p.course === c)?.id ?? '');
   };
+
+  // CLB Phụ huynh: dragging all the way to the "after" image earns "Nhìn Thấy Tiến Bộ".
+  const markRevealed = useParentClubStore((s) => s.markProgressRevealed);
 
   const student = students.find((s) => s.id === studentId) ?? students[0];
   const campus = CAMPUSES.find((c) => c.id === student?.campusLocation);
@@ -72,7 +96,22 @@ export default function PortfolioScreen({ navigation, route }: TabScreenProps<'P
       <ScrollView className="flex-1" contentContainerClassName="gap-4 px-4 pb-6 pt-1">
         <SubjectFilter options={SUBJECTS} value={subject} onChange={onChangeSubject} />
 
-        {student ? (
+        {!hasSupabase && status === 'success' && items.length > 0 && (
+          <Text className="rounded-xl bg-amber-50 p-2.5 text-xs leading-[18px] text-amber-800">
+            Dữ liệu mẫu (chưa kết nối Supabase): học sinh minh họa, không phải học sinh thật.
+          </Text>
+        )}
+
+        {status === 'loading' || status === 'idle' ? (
+          <PortfolioSkeleton imageHeight={Math.round((width - 32) * (4 / 3))} />
+        ) : status === 'error' ? (
+          <View className="mt-8 items-center gap-3">
+            <Text className="text-center text-ink-muted">Không tải được nhật ký tiến bộ. Kiểm tra mạng rồi thử lại.</Text>
+            <Pressable onPress={load} accessibilityRole="button" className="rounded-full border border-slate-200 bg-white px-5 py-2">
+              <Text className="font-semibold text-ink">Thử lại</Text>
+            </Pressable>
+          </View>
+        ) : student ? (
           <>
             {students.length > 1 && (
               <StudentPicker students={students} selectedId={student.id} onSelect={setStudentId} accent={accent} />
@@ -81,7 +120,7 @@ export default function PortfolioScreen({ navigation, route }: TabScreenProps<'P
             <StudentInfoCard student={student} campus={campus} />
 
             <View className="gap-2">
-              <BeforeAfterSlider
+              <InteractiveSlider
                 beforeUri={student.beforeImageUrl}
                 afterUri={student.afterImageUrl}
                 beforeLabel={student.beforeLabel}
@@ -89,9 +128,10 @@ export default function PortfolioScreen({ navigation, route }: TabScreenProps<'P
                 beforeCaption="TRƯỚC KHI HỌC · Ngày 1"
                 afterCaption={`SAU ${student.duration.toUpperCase()} · Hiện tại`}
                 showHint={isFocused}
+                onFullReveal={() => markRevealed(student.id)}
               />
               <Text className="text-center text-xs text-ink-subtle">
-                ◀ Kéo thanh trượt để so sánh trước & sau ▶
+                ◀ Kéo hết sang trái để xem trọn tiến bộ của con ▶
               </Text>
             </View>
 
@@ -113,7 +153,11 @@ export default function PortfolioScreen({ navigation, route }: TabScreenProps<'P
             </Pressable>
           </>
         ) : (
-          <Text className="mt-10 text-center text-ink-muted">Chưa có nhật ký cho môn học này.</Text>
+          <Text className="mt-10 px-6 text-center text-ink-muted">
+            {items.length
+              ? 'Chưa có nhật ký cho môn học này.'
+              : 'Trung tâm đang cập nhật nhật ký tiến bộ (chỉ đăng khi phụ huynh đồng ý).'}
+          </Text>
         )}
       </ScrollView>
 

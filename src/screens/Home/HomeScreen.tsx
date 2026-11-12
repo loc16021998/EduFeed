@@ -1,5 +1,5 @@
 import { useIsFocused, useNavigation } from '@react-navigation/native';
-import { Plus } from 'lucide-react-native';
+import { BookmarkCheck, Plus } from 'lucide-react-native';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -11,15 +11,20 @@ import {
   type ViewToken,
 } from 'react-native';
 
-import { CategoryChips, TrustTicker } from '@/components';
+import { CategoryChips, FeedCardSkeleton, TrustTicker } from '@/components';
+import NotificationCenter from '@/components/NotificationCenter';
+import VideoPlayerModal, { SavedVideosSheet } from '@/components/VideoPlayerModal';
+import DailySparkCard, { useSparkHiddenToday } from '@/components/DailySparkCard';
 import type { TabScreenProps } from '@/navigation/types';
 import { useCtaHandler } from '@/navigation/useCtaHandler';
 import { trackEvent } from '@/services/analytics';
 import { buildShareUrl, shareMessage } from '@/services/media/shareLinks';
-import { useFeedStore, useStaffStore } from '@/store';
+import { useBookmarkStore, useFeedStore, useMyBookingsStore, useNotificationStore, useParentClubStore, useStaffStore } from '@/store';
+import { selectUnreadCount, type NotificationLink } from '@/store/useNotificationStore';
 import type { Category, FeedItem } from '@/types';
 import { COLORS, FEED_FILTERS } from '@/utils/constants';
 import { normalizeVN } from '@/utils/helpers';
+import { BADGES, VIDEO_WATCH_MS } from '@/utils/parentClub';
 import { shareText, useAppWidth } from '@/utils/platform';
 
 import FeedVideoCard from './components/FeedVideoCard';
@@ -56,7 +61,12 @@ export default function HomeScreen(_: TabScreenProps<'Home'>) {
   const [muted, setMuted] = useState(true); // autoplay muted, parent opts in to sound
   const [searchOpen, setSearchOpen] = useState(false);
   const [query, setQuery] = useState('');
-  const [unread, setUnread] = useState(3); // TODO: wire to notifications store
+  const unread = useNotificationStore(selectUnreadCount);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [playing, setPlaying] = useState<FeedItem | null>(null);
+  const [savedOpen, setSavedOpen] = useState(false);
+  const savedCount = useBookmarkStore((s) => s.saved.length);
+  const refreshBookings = useMyBookingsStore((s) => s.refresh);
   const listRef = useRef<FlatList<FeedItem>>(null);
 
   useEffect(() => {
@@ -83,8 +93,38 @@ export default function HomeScreen(_: TabScreenProps<'Home'>) {
     const t = setTimeout(() => {
       if (!useStaffStore.getState().isStaff) trackEvent('VIDEO_VIEW', activeId);
     }, 3000);
-    return () => clearTimeout(t);
+    // CLB Phụ huynh: a video counts toward "Đồng Hành Cùng Con" after VIDEO_WATCH_MS on screen.
+    const w = setTimeout(() => useParentClubStore.getState().markVideoWatched(activeId), VIDEO_WATCH_MS);
+    return () => {
+      clearTimeout(t);
+      clearTimeout(w);
+    };
   }, [isFocused, activeId]);
+
+  // Daily tip above the feed (hidden while searching, or when the parent hid it today).
+  const sparkHidden = useSparkHiddenToday();
+  const showSpark = !sparkHidden && !query;
+  const [sparkHeight, setSparkHeight] = useState(0);
+  const headerHeight = showSpark || savedCount > 0 ? sparkHeight : 0;
+  const step = cardHeight + CARD_GAP;
+  const snapOffsets = useMemo(
+    () => (headerHeight ? [0, ...visible.map((_, i) => headerHeight + i * step)] : undefined),
+    [headerHeight, visible, step],
+  );
+  const openNotificationLink = useCallback(
+    (link: NotificationLink) => {
+      if (link === 'MANAGE_BOOKINGS') navigation.navigate('ManageBookings');
+      else if (link === 'BOOKING') navigation.navigate('MainTabs', { screen: 'Booking' });
+      else useParentClubStore.getState().openSheet();
+    },
+    [navigation],
+  );
+  // Status changes from the centre (confirmed / cancelled) + appointment reminders → notifications.
+  useEffect(() => {
+    if (isFocused) refreshBookings();
+  }, [isFocused, refreshBookings]);
+  const clubDone = useParentClubStore((s) => BADGES.filter((b) => !!s.unlockedAt[b.id]).length);
+  const openClub = useParentClubStore((s) => s.openSheet);
 
   const onChangeCategory = useCallback(
     (c: Category) => {
@@ -116,6 +156,7 @@ export default function HomeScreen(_: TabScreenProps<'Home'>) {
         onFollow={toggleFollow}
         onCta={onCta}
         onShare={onShare}
+        onExpand={setPlaying}
       />
     ),
     [cardHeight, isFocused, activeId, muted, likedIds, followedTeachers, toggleMute, toggleLike, toggleFollow, onCta, onShare],
@@ -125,12 +166,14 @@ export default function HomeScreen(_: TabScreenProps<'Home'>) {
     <View className="flex-1 bg-surface">
       <HomeHeader
         unreadCount={unread}
-        onNotificationsPress={() => setUnread(0)}
+        onNotificationsPress={() => setNotificationsOpen(true)}
         searchOpen={searchOpen}
         onToggleSearch={toggleSearch}
         query={query}
         onQueryChange={setQuery}
         onBrandLongPress={openStaffArea}
+        club={{ done: clubDone, total: BADGES.length }}
+        onClubPress={openClub}
       />
       <View>
         <CategoryChips options={FEED_FILTERS} value={selectedCategory} onChange={onChangeCategory} />
@@ -139,7 +182,11 @@ export default function HomeScreen(_: TabScreenProps<'Home'>) {
       </View>
 
       {status === 'loading' && items.length === 0 ? (
-        <ActivityIndicator className="mt-10" color={COLORS.brand} />
+        // Same size as the real cards → no layout shift when the feed arrives.
+        <View className="pt-1" testID="feed-skeleton">
+          <FeedCardSkeleton height={cardHeight} />
+          <FeedCardSkeleton height={cardHeight} />
+        </View>
       ) : (
         <FlatList
           ref={listRef}
@@ -147,12 +194,31 @@ export default function HomeScreen(_: TabScreenProps<'Home'>) {
           keyExtractor={(i) => i.id}
           renderItem={renderItem}
           extraData={activeId}
+          ListHeaderComponent={
+            showSpark || savedCount > 0 ? (
+              <View onLayout={(e) => setSparkHeight(Math.round(e.nativeEvent.layout.height))}>
+                {showSpark && <DailySparkCard />}
+                {savedCount > 0 && (
+                  <Pressable
+                    onPress={() => setSavedOpen(true)}
+                    accessibilityRole="button"
+                    testID="saved-videos-link"
+                    className="mx-4 mb-4 flex-row items-center gap-2 rounded-2xl bg-white px-4 py-3 active:bg-slate-50"
+                  >
+                    <BookmarkCheck size={18} color={COLORS.brand} />
+                    <Text className="flex-1 text-[14px] font-bold text-ink">Video đã lưu ({savedCount})</Text>
+                    <Text className="text-xs font-semibold text-brand-600">Xem ›</Text>
+                  </Pressable>
+                )}
+              </View>
+            ) : null
+          }
           getItemLayout={(_d, index) => ({
-            length: cardHeight + CARD_GAP,
-            offset: (cardHeight + CARD_GAP) * index,
+            length: step,
+            offset: headerHeight + step * index,
             index,
           })}
-          snapToInterval={cardHeight + CARD_GAP}
+          {...(snapOffsets ? { snapToOffsets: snapOffsets } : { snapToInterval: step })}
           decelerationRate="fast"
           viewabilityConfig={VIEWABILITY}
           onViewableItemsChanged={onViewableItemsChanged}
@@ -177,6 +243,24 @@ export default function HomeScreen(_: TabScreenProps<'Home'>) {
           }
         />
       )}
+
+      <VideoPlayerModal
+        item={playing}
+        onClose={() => setPlaying(null)}
+        onBook={(item) => {
+          setPlaying(null);
+          navigation.navigate('MainTabs', { screen: 'Booking', params: { course: item.category, source: 'FEED', sourceRef: item.id } });
+        }}
+      />
+      <SavedVideosSheet
+        visible={savedOpen}
+        onClose={() => setSavedOpen(false)}
+        onPlay={(v) => {
+          setSavedOpen(false);
+          setPlaying(v);
+        }}
+      />
+      <NotificationCenter visible={notificationsOpen} onClose={() => setNotificationsOpen(false)} onNavigate={openNotificationLink} />
 
       {/* Staff only: quick access to publish a new video. */}
       {isStaff && (
