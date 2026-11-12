@@ -17,6 +17,8 @@ interface DashboardState {
   campus: CampusFilter;
   period: DashboardPeriod;
   group: LeadStatusGroup;
+  /** Lead search text (applied after a short pause in typing). */
+  search: string;
 
   summary: DashboardSummary | null;
   summaryStatus: AsyncStatus;
@@ -34,6 +36,7 @@ interface DashboardState {
   setCampus: (c: CampusFilter) => void;
   setPeriod: (p: DashboardPeriod) => void;
   setGroup: (g: LeadStatusGroup) => void;
+  setSearch: (q: string) => void;
   /** Reload KPIs + the first page of leads. */
   refresh: () => Promise<void>;
   loadMore: () => Promise<void>;
@@ -47,6 +50,7 @@ const msg = (e: unknown) => (e instanceof Error ? e.message : 'Đã có lỗi x�
 // Request counters: a slow response for an old filter must not overwrite a newer one.
 let summarySeq = 0;
 let leadsSeq = 0;
+let searchTimer: ReturnType<typeof setTimeout> | null = null;
 
 export const useDashboardStore = create<DashboardState>()((set, get) => {
   const loadSummary = async () => {
@@ -63,10 +67,10 @@ export const useDashboardStore = create<DashboardState>()((set, get) => {
 
   const loadFirstPage = async () => {
     const req = ++leadsSeq;
-    const { campus, period, group } = get();
+    const { campus, period, group, search } = get();
     set({ leadsStatus: 'loading', leadsError: null, loadingMore: false });
     try {
-      const res = await fetchDashboardLeads({ campus, days: period, group, page: 0 });
+      const res = await fetchDashboardLeads({ campus, days: period, group, search, page: 0 });
       if (req === leadsSeq) set({ leads: res.items, hasMore: res.hasMore, page: 0, leadsStatus: 'success' });
     } catch (e) {
       if (req === leadsSeq) set({ leadsStatus: 'error', leadsError: msg(e) });
@@ -77,6 +81,7 @@ export const useDashboardStore = create<DashboardState>()((set, get) => {
     campus: 'ALL',
     period: 30,
     group: 'ALL',
+    search: '',
     summary: null,
     summaryStatus: 'idle',
     summaryError: null,
@@ -103,18 +108,23 @@ export const useDashboardStore = create<DashboardState>()((set, get) => {
       set({ group, leads: [] });
       loadFirstPage();
     },
+    setSearch: (search) => {
+      set({ search });
+      if (searchTimer) clearTimeout(searchTimer);
+      searchTimer = setTimeout(() => loadFirstPage(), 350);
+    },
 
     refresh: async () => {
       await Promise.all([loadSummary(), loadFirstPage()]);
     },
 
     loadMore: async () => {
-      const { hasMore, loadingMore, leadsStatus, page, campus, period, group } = get();
+      const { hasMore, loadingMore, leadsStatus, page, campus, period, group, search } = get();
       if (!hasMore || loadingMore || leadsStatus !== 'success') return;
       const req = leadsSeq;
       set({ loadingMore: true });
       try {
-        const res = await fetchDashboardLeads({ campus, days: period, group, page: page + 1 });
+        const res = await fetchDashboardLeads({ campus, days: period, group, search, page: page + 1 });
         if (req !== leadsSeq) return;
         const seen = new Set(get().leads.map((l) => l.id));
         set({

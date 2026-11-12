@@ -68,7 +68,7 @@ export default function SchedulePicker({ date, slotId, onDate, onSlot, dateError
             })}
           </View>
         ) : (
-          <Text className="text-[13px] italic text-ink-subtle">Chọn ngày để xem khung giờ còn trống</Text>
+          <Text className="text-[13px] italic text-ink-subtle">Chọn ngày để xem các khung giờ học thử</Text>
         )}
         {!!slotError && <Text className="text-xs text-red-500">{slotError}</Text>}
       </View>

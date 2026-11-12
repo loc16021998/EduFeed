@@ -88,6 +88,8 @@ export interface LeadPageQuery {
   campus: CampusFilter;
   days: number;
   group: LeadStatusGroup;
+  /** Free text: parent / child name, phone or booking code. */
+  search?: string;
   /** 0-based page index. */
   page: number;
 }
@@ -99,6 +101,27 @@ export interface LeadPage {
 
 const LEAD_COLUMNS =
   'id, code, parent_name, phone_number, student_name, student_age, course_code, branch_location, status, channel, utm_campaign, created_at';
+
+/** Characters with a meaning in PostgREST filters (or-list, grouping, wildcards, quoting, escapes). */
+const FILTER_SYNTAX = /[,()*%:.\\"'`]/g;
+
+/** Safe search terms (no PostgREST filter syntax), max 40 chars. */
+export function cleanSearch(raw?: string): { text: string; digits: string } {
+  const text = (raw ?? '').replace(FILTER_SYNTAX, ' ').replace(/\s+/g, ' ').trim().slice(0, 40);
+  return { text, digits: text.replace(/\D/g, '') };
+}
+
+function matchesSearch(l: DashboardLead, raw?: string): boolean {
+  const { text, digits } = cleanSearch(raw);
+  if (!text) return true;
+  const t = text.toLowerCase();
+  return (
+    l.parentName.toLowerCase().includes(t) ||
+    l.studentName.toLowerCase().includes(t) ||
+    l.code.toLowerCase().includes(t) ||
+    (digits.length >= 3 && l.phone.includes(digits))
+  );
+}
 
 export async function fetchDashboardLeads(q: LeadPageQuery): Promise<LeadPage> {
   if (!supabase) return mockLeads(q);
@@ -113,6 +136,13 @@ export async function fetchDashboardLeads(q: LeadPageQuery): Promise<LeadPage> {
     .range(from, from + PAGE_SIZE);
   if (q.campus !== 'ALL') query = query.eq('branch_location', q.campus);
   if (q.group !== 'ALL') query = query.in('status', STATUS_GROUPS[q.group]);
+  const s = cleanSearch(q.search);
+  if (s.text) {
+    // PostgREST or(): commas / parentheses / wildcards are stripped from the input by cleanSearch.
+    const parts = [`parent_name.ilike.*${s.text}*`, `student_name.ilike.*${s.text}*`, `code.ilike.*${s.text}*`];
+    if (s.digits.length >= 3) parts.push(`phone_number.like.*${s.digits}*`);
+    query = query.or(parts.join(','));
+  }
 
   const { data, error } = await query;
   if (error) throw mapDbError(error);
@@ -301,7 +331,7 @@ async function mockLeads(q: LeadPageQuery): Promise<LeadPage> {
   await sleep(250);
   const from = Date.now() - q.days * 86400_000;
   const list = demoSet(q.campus).filter(
-    (l) => new Date(l.createdAt).getTime() >= from && (q.group === 'ALL' || STATUS_GROUPS[q.group].includes(l.status)),
+    (l) => new Date(l.createdAt).getTime() >= from && (q.group === 'ALL' || STATUS_GROUPS[q.group].includes(l.status)) && matchesSearch(l, q.search),
   );
   const start = q.page * PAGE_SIZE;
   return { items: list.slice(start, start + PAGE_SIZE), hasMore: list.length > start + PAGE_SIZE };

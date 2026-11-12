@@ -125,13 +125,15 @@ export default function StaffAccountsScreen({ navigation }: RootStackScreenProps
                     <ActivityIndicator color={COLORS.brand} />
                   ) : (
                     <>
-                      <Action icon={<KeyRound size={14} color={COLORS.ink} />} label="Đặt lại mật khẩu" onPress={() => setResetting(item)} />
+                      <Action icon={<KeyRound size={14} color={COLORS.ink} />} label="Mật khẩu" a11y="Đặt lại mật khẩu" onPress={() => setResetting(item)} />
                       <Action
                         icon={admin ? <UserRound size={14} color={COLORS.ink} /> : <ShieldCheck size={14} color={COLORS.ink} />}
-                        label={admin ? 'Chuyển thành nhân viên' : 'Cấp quyền quản trị'}
+                        label={admin ? 'Về nhân viên' : 'Lên quản trị'}
+                        a11y={admin ? 'Chuyển thành nhân viên' : 'Cấp quyền quản trị'}
                         onPress={() => changeRole(item, admin ? 'staff' : 'admin')}
                       />
-                      <Action icon={<UserMinus size={14} color="#B91C1C" />} label="Thu hồi quyền" danger onPress={() => changeRole(item, 'none')} />
+                      <View className="flex-1" />
+                      <Action icon={<UserMinus size={14} color="#B91C1C" />} label="Thu hồi" a11y="Thu hồi quyền" danger onPress={() => changeRole(item, 'none')} />
                     </>
                   )}
                 </View>
@@ -150,12 +152,13 @@ export default function StaffAccountsScreen({ navigation }: RootStackScreenProps
   );
 }
 
-function Action({ icon, label, onPress, danger }: { icon: ReactNode; label: string; onPress: () => void; danger?: boolean }) {
+function Action({ icon, label, a11y, onPress, danger }: { icon: ReactNode; label: string; a11y?: string; onPress: () => void; danger?: boolean }) {
   return (
     <Pressable
       onPress={onPress}
       accessibilityRole="button"
-      className={`flex-row items-center gap-1.5 rounded-xl border px-3 py-2 active:bg-slate-50 ${danger ? 'border-red-200' : 'border-slate-200'}`}
+      accessibilityLabel={a11y ?? label}
+      className={`h-9 flex-row items-center gap-1.5 rounded-xl px-3 active:bg-slate-50 ${danger ? '' : 'border border-slate-200'}`}
     >
       {icon}
       <Text className={`text-[13px] font-semibold ${danger ? 'text-red-700' : 'text-ink'}`}>{label}</Text>

@@ -37,7 +37,7 @@ export default function QuizResultView({ result, onBook, onRetake }: QuizResultV
               <Sparkles size={18} color="#FDE68A" />
               <Text className="text-xs font-bold uppercase tracking-widest text-brand-100">Gợi ý dành cho bé</Text>
               <View className="ml-auto rounded-full bg-white/20 px-2.5 py-1">
-                <Text className="text-xs font-extrabold text-white">Phù hợp {result.matchPercent}%</Text>
+                <Text className="text-xs font-extrabold text-white">Phù hợp nhất</Text>
               </View>
             </View>
 
@@ -96,7 +96,7 @@ export default function QuizResultView({ result, onBook, onRetake }: QuizResultV
 
       <Animated.View entering={nativeOnly(FadeInDown.delay(380))} className="gap-1.5 pt-2">
         <Button
-          title="Nhận Tư Vấn & Đặt Lịch Trải Nghiệm Lớp Này"
+          title="Đặt lịch học thử lớp này"
           variant="accent"
           size="lg"
           icon={<CalendarCheck size={20} color="#fff" />}

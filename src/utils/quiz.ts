@@ -93,17 +93,12 @@ export function computeQuizResult(questions: QuizQuestion[], answers: QuizAnswer
     reasons.push(COURSES.find((c) => c.id === primary)?.shortDescription ?? '');
   }
 
-  const total = Object.values(scores).reduce((a, b) => a + b, 0) || 1;
-  const topShare = (scores[primary] + (secondary ? scores[secondary] : 0)) / total;
-  const matchPercent = Math.round(Math.min(98, Math.max(75, 70 + topShare * 30)));
-
   return {
     primary,
     secondary,
     format,
     title,
     reasons,
-    matchPercent,
     scores,
     summary: buildSummary(questions, answers, title),
   };

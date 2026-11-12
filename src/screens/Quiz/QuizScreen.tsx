@@ -1,7 +1,8 @@
 import { ArrowRight, Clock, Gift, Sparkles } from 'lucide-react-native';
-import { ScrollView, Text, View } from 'react-native';
+import type { ReactNode } from 'react';
+import { Pressable, ScrollView, Text, View } from 'react-native';
 
-import { Button, Card } from '@/components';
+import { Card } from '@/components';
 import ChecklistEntryCard from '@/screens/Trust/components/ChecklistEntryCard';
 import type { TabScreenProps } from '@/navigation/types';
 import { useQuizStore } from '@/store';
@@ -31,6 +32,15 @@ export default function QuizScreen({ navigation }: TabScreenProps<'Quiz'>) {
           <Meta icon={<Sparkles size={14} color="#DCE7FF" />} text="3 bước" />
           <Meta icon={<Gift size={14} color="#DCE7FF" />} text="Miễn phí" />
         </View>
+        <Pressable
+          onPress={start}
+          accessibilityRole="button"
+          testID="quiz-start"
+          className="mt-1 h-[52px] flex-row items-center justify-center gap-2 self-stretch rounded-2xl bg-white active:opacity-90"
+        >
+          <Text className="text-[16px] font-extrabold text-brand-600">{result ? 'Làm lại bài kiểm tra' : 'Bắt đầu ngay'}</Text>
+          <ArrowRight size={18} color={COLORS.brand} />
+        </Pressable>
       </View>
 
       <View className="gap-2.5">
@@ -68,12 +78,11 @@ export default function QuizScreen({ navigation }: TabScreenProps<'Quiz'>) {
         </Card>
       </View>
 
-      <Button title={result ? 'Làm lại bài kiểm tra' : 'Bắt đầu ngay'} variant="accent" size="lg" onPress={start} />
     </ScrollView>
   );
 }
 
-function Meta({ icon, text }: { icon: React.ReactNode; text: string }) {
+function Meta({ icon, text }: { icon: ReactNode; text: string }) {
   return (
     <View className="flex-row items-center gap-1">
       {icon}

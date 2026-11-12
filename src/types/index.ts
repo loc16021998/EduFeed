@@ -170,8 +170,6 @@ export interface QuizResult {
   /** "Khóa Luyện Chữ Đẹp & Tiền Tiểu Học 1:1" */
   title: string;
   reasons: string[];
-  /** Display-only fit score, 75–98. */
-  matchPercent: number;
   scores: Record<CourseCategory, number>;
   summary: QuizSummary;
 }

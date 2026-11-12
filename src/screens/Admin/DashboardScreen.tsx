@@ -1,5 +1,5 @@
 import { useFocusEffect } from '@react-navigation/native';
-import { CalendarCheck, ChevronLeft, Percent, RefreshCw, Users, Wallet } from 'lucide-react-native';
+import { CalendarCheck, ChevronLeft, Percent, RefreshCw, Search, Users, Wallet, X } from 'lucide-react-native';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
@@ -8,6 +8,7 @@ import {
   Pressable,
   RefreshControl,
   Text,
+  TextInput,
   useWindowDimensions,
   View,
   type ImageSourcePropType,
@@ -37,8 +38,8 @@ const PERIODS: DashboardPeriod[] = [7, 30, 90];
 export default function DashboardScreen({ navigation }: RootStackScreenProps<'AdminDashboard'>) {
   const { status: authStatus, isStaff, isAdmin, demo } = useStaffStore();
   const {
-    campus, period, group, summary, summaryStatus, summaryError, leads, leadsStatus, leadsError, hasMore, loadingMore, fees,
-    setCampus, setPeriod, setGroup, refresh, loadMore, loadFees, saveFees,
+    campus, period, group, search, summary, summaryStatus, summaryError, leads, leadsStatus, leadsError, hasMore, loadingMore, fees,
+    setCampus, setPeriod, setGroup, setSearch, refresh, loadMore, loadFees, saveFees,
   } = useDashboardStore();
   const setWideLayout = useUiStore((s) => s.setWideLayout);
   const insets = useSafeAreaInsets();
@@ -90,7 +91,6 @@ export default function DashboardScreen({ navigation }: RootStackScreenProps<'Ad
             TH EDU{updatedAt ? ` · cập nhật ${String(updatedAt.getHours()).padStart(2, '0')}:${String(updatedAt.getMinutes()).padStart(2, '0')}` : ''}
           </Text>
         </View>
-        {desktop && <CampusDropdown value={campus} onChange={setCampus} full />}
         <Pressable
           onPress={refresh}
           accessibilityRole="button"
@@ -105,7 +105,7 @@ export default function DashboardScreen({ navigation }: RootStackScreenProps<'Ad
 
   const filters = (
     <View className="flex-row flex-wrap items-center gap-2">
-      {!desktop && <CampusDropdown value={campus} onChange={setCampus} />}
+      <CampusDropdown value={campus} onChange={setCampus} full={desktop} />
       <View className="flex-row rounded-full bg-slate-200/70 p-1" accessibilityRole="radiogroup" accessibilityLabel="Khoảng thời gian">
         {PERIODS.map((p) => {
           const active = p === period;
@@ -160,6 +160,24 @@ export default function DashboardScreen({ navigation }: RootStackScreenProps<'Ad
           </Text>
           <Text className="text-xs text-ink-muted">{period} ngày qua</Text>
         </View>
+        <View className="h-11 flex-row items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3">
+          <Search size={17} color={COLORS.subtle} />
+          <TextInput
+            value={search}
+            onChangeText={setSearch}
+            placeholder="Tìm tên phụ huynh, tên bé, số điện thoại, mã TH-…"
+            placeholderTextColor={COLORS.subtle}
+            accessibilityLabel="Tìm đăng ký"
+            autoCorrect={false}
+            returnKeyType="search"
+            className="h-full flex-1 text-[14px] text-ink"
+          />
+          {!!search && (
+            <Pressable onPress={() => setSearch('')} accessibilityRole="button" accessibilityLabel="Xóa tìm kiếm" hitSlop={8}>
+              <X size={16} color={COLORS.subtle} />
+            </Pressable>
+          )}
+        </View>
         <StatusFilterBar value={group} onChange={setGroup} />
         {!!leadsError && <Text className="rounded-xl bg-red-50 p-2.5 text-xs text-red-700">{leadsError}</Text>}
       </View>
@@ -208,7 +226,7 @@ export default function DashboardScreen({ navigation }: RootStackScreenProps<'Ad
           leadsStatus === 'loading' ? (
             <ActivityIndicator className="mt-8" color={COLORS.brand} />
           ) : leadsStatus === 'success' ? (
-            <Text className="mt-6 text-center text-ink-muted">Không có đăng ký nào phù hợp bộ lọc.</Text>
+            <Text className="mt-6 text-center text-ink-muted">{search ? `Không tìm thấy đăng ký nào cho "${search}".` : 'Không có đăng ký nào phù hợp bộ lọc.'}</Text>
           ) : null
         }
         onEndReached={loadMore}

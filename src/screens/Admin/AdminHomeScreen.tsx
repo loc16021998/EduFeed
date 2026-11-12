@@ -118,32 +118,37 @@ export default function AdminHomeScreen({ navigation }: RootStackScreenProps<'Ad
         />
 
         <Section title="Công cụ giáo viên" note="Quản trị viên cũng dùng được các công cụ này." />
-        <Tile
-          icon={<Clapperboard size={22} color={COLORS.ink} />}
-          title="Video EduFeed"
-          subtitle="Đăng, sửa, ẩn video quảng bá"
-          onPress={() => go('StaffVideos')}
-        />
-        <Tile
-          icon={<CalendarClock size={22} color={COLORS.ink} />}
-          title="Lịch học thử & khách hàng"
-          subtitle="Xác nhận lịch, hoàn thành học thử, ghi nhận nhập học"
-          onPress={() => go('StaffTrials')}
-        />
-        <Tile
-          icon={<GraduationCap size={22} color={COLORS.ink} />}
-          title="Học viên & lộ trình"
-          subtitle="Hoàn thành khóa, chứng nhận, danh sách gọi tư vấn"
-          onPress={() => go('StaffEnrollments')}
-        />
-        <Tile
-          icon={<ImagePlus size={22} color={COLORS.ink} />}
-          title="Đăng nhật ký tiến bộ"
-          subtitle="Ảnh trước / sau và nhận xét của giáo viên"
-          onPress={() => go('TeacherUpload')}
-        />
+        <View className="flex-row flex-wrap gap-3">
+          <GridTile icon={<Clapperboard size={22} color={COLORS.brand} />} title="Video EduFeed" subtitle="Đăng, sửa, ẩn video" onPress={() => go('StaffVideos')} />
+          <GridTile icon={<CalendarClock size={22} color={COLORS.brand} />} title="Lịch học thử" subtitle="Xác nhận, hoàn thành" onPress={() => go('StaffTrials')} />
+          <GridTile icon={<GraduationCap size={22} color={COLORS.brand} />} title="Học viên & lộ trình" subtitle="Chứng nhận, gọi tư vấn" onPress={() => go('StaffEnrollments')} />
+          <GridTile icon={<ImagePlus size={22} color={COLORS.brand} />} title="Nhật ký tiến bộ" subtitle="Ảnh trước / sau" onPress={() => go('TeacherUpload')} />
+        </View>
       </ScrollView>
     </View>
+  );
+}
+
+/** Compact 2-column tile for the frequently used teacher tools. */
+function GridTile({ icon, title, subtitle, onPress }: { icon: ReactNode; title: string; subtitle: string; onPress: () => void }) {
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={`${title}: ${subtitle}`}
+      style={{ flexBasis: '46%', flexGrow: 1 }}
+      className="min-h-[112px] gap-2 rounded-2xl border border-slate-200 bg-white p-3.5 active:opacity-90"
+    >
+      <View className="h-10 w-10 items-center justify-center rounded-xl bg-brand-50">{icon}</View>
+      <View className="gap-0.5">
+        <Text className="text-[14px] font-bold text-ink" numberOfLines={1}>
+          {title}
+        </Text>
+        <Text className="text-xs text-ink-muted" numberOfLines={1}>
+          {subtitle}
+        </Text>
+      </View>
+    </Pressable>
   );
 }
 

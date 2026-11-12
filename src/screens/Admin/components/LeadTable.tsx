@@ -94,7 +94,7 @@ function Actions({ lead, compact }: { lead: DashboardLead; compact?: boolean }) 
         onPress={() => call(lead.phone)}
         accessibilityRole="button"
         accessibilityLabel={`Gọi ${lead.parentName}, số ${formatPhone(lead.phone)}`}
-        className={`flex-row items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 active:bg-slate-50 ${compact ? 'flex-1' : ''}`}
+        className={`flex-row items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 ${compact ? 'h-9 flex-1' : 'h-9'} active:bg-slate-50`}
       >
         <Phone size={14} color={COLORS.ink} />
         <Text className="text-[13px] font-semibold text-ink">Gọi</Text>
@@ -103,10 +103,10 @@ function Actions({ lead, compact }: { lead: DashboardLead; compact?: boolean }) 
         onPress={() => zalo(lead.phone)}
         accessibilityRole="link"
         accessibilityLabel={`Mở Zalo chat với ${lead.parentName}`}
-        className={`flex-row items-center justify-center gap-1.5 rounded-xl bg-brand-500 px-3 py-2 active:bg-brand-600 ${compact ? 'flex-1' : ''}`}
+        className={`flex-row items-center justify-center gap-1.5 rounded-xl border border-brand-100 bg-brand-50 px-3 ${compact ? 'h-9 flex-1' : 'h-9'} active:bg-brand-100`}
       >
-        <MessageCircle size={14} color="#fff" />
-        <Text className="text-[13px] font-semibold text-white">Chat Zalo</Text>
+        <MessageCircle size={14} color={COLORS.brand} />
+        <Text className="text-[13px] font-semibold text-brand-700">Chat Zalo</Text>
       </Pressable>
     </View>
   );
@@ -151,7 +151,7 @@ function LeadRowBase({ lead, wide, last }: RowProps) {
   }
 
   return (
-    <View className="gap-2.5 rounded-3xl bg-white p-4" testID="lead-row">
+    <View className="gap-2 rounded-3xl bg-white p-3.5" testID="lead-row">
       <View className="flex-row items-start justify-between gap-2">
         <View className="flex-1">
           <Text className="text-[15px] font-bold text-ink" numberOfLines={1}>{lead.parentName}</Text>

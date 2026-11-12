@@ -20,7 +20,7 @@ import TeacherFeedbackCard from './components/TeacherFeedbackCard';
 
 const SUBJECTS: CourseCategory[] = ['LUYEN_CHU_DEP', 'TOAN_TU_DUY', 'TIEN_TIEU_HOC'];
 
-const CTA_TITLE = '📅 ĐẶT LỊCH ĐÁNH GIÁ NÉT CHỮ / NĂNG LỰC CHO CON (MIỄN PHÍ)';
+const CTA_TITLE = 'Đặt lịch đánh giá miễn phí cho con';
 
 export default function PortfolioScreen({ navigation, route }: TabScreenProps<'Portfolio'>) {
   const isFocused = useIsFocused();
@@ -79,13 +79,10 @@ export default function PortfolioScreen({ navigation, route }: TabScreenProps<'P
     );
   };
 
-  const goBack = () => (navigation.canGoBack() ? navigation.goBack() : navigation.navigate('Home'));
-
   return (
     <View className="flex-1 bg-surface">
       <ScreenHeader
-        title="Nhật ký Tiến bộ Học sinh"
-        onBack={goBack}
+        title="Thành quả học sinh"
         right={
           <HeaderIconButton label="Chia sẻ" onPress={onShare}>
             <Share2 size={22} color={COLORS.ink} />

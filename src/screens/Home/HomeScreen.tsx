@@ -36,7 +36,11 @@ const CARD_GAP = 16; // matches mb-4 on FeedVideoCard
 export default function HomeScreen(_: TabScreenProps<'Home'>) {
   const isFocused = useIsFocused();
   const width = useAppWidth();
-  const cardHeight = Math.round((width - 32) * 1.25); // 4:5 portrait card
+  // 4:5 portrait card, but never taller than the visible feed area: one swipe = one whole card,
+  // CTA included (on short phones the bottom of a 4:5 card would sit under the tab bar).
+  const [feedHeight, setFeedHeight] = useState(0);
+  const ideal = Math.round((width - 32) * 1.25);
+  const cardHeight = feedHeight > 0 ? Math.max(360, Math.min(ideal, feedHeight - CARD_GAP - 8)) : ideal;
 
   const {
     items, status, selectedCategory, likedIds, followedTeachers, loadingMore,
@@ -190,6 +194,7 @@ export default function HomeScreen(_: TabScreenProps<'Home'>) {
       ) : (
         <FlatList
           ref={listRef}
+          onLayout={(e) => setFeedHeight(Math.round(e.nativeEvent.layout.height))}
           data={visible}
           keyExtractor={(i) => i.id}
           renderItem={renderItem}

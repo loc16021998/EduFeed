@@ -27,8 +27,7 @@ export default function BookingSuccessScreen({ route, navigation }: RootStackScr
   const mapsUrl = record?.display.mapsUrl ?? '';
 
   const open = (url: string) => url && Linking.openURL(url).catch(() => {});
-  // Zalo OA sends the confirmed schedule + Maps link; fall back to Maps if no OA is configured.
-  const openZalo = () => open(zaloUrl || mapsUrl);
+  const openZalo = () => open(zaloUrl);
   const close = () => navigation.navigate('MainTabs', { screen: 'Home' });
 
   return (
@@ -99,7 +98,7 @@ export default function BookingSuccessScreen({ route, navigation }: RootStackScr
           <View className="flex-1 gap-1.5">
             <Text className="text-[15px] font-bold text-ink">Quan tâm Zalo OA TH EDU</Text>
             <Text className="text-[12px] leading-[18px] text-ink-muted">
-              Quét mã hoặc bấm nút bên dưới để nhận xác nhận lịch, nhắc lịch học và chỉ đường đến trung tâm.
+              Quét mã hoặc bấm nút bên dưới để nhận nhắc lịch học và chỉ đường qua Zalo.
             </Text>
             {ENV.zaloOAId === '' && __DEV__ && (
               <Text className="text-[10px] font-semibold text-amber-600">DEV: chưa đặt PUBLIC_ZALO_OA_ID</Text>
@@ -108,27 +107,28 @@ export default function BookingSuccessScreen({ route, navigation }: RootStackScr
         </Animated.View>
       )}
 
+      {/* Actions, most useful first. The Zalo button exists only when a real OA is configured. */}
       <Animated.View entering={nativeOnly(FadeInDown.delay(620))} className="w-full gap-2.5">
-        <Pressable
-          onPress={openZalo}
-          accessibilityRole="link"
-          className="min-h-[56px] flex-row items-center justify-center gap-2.5 rounded-2xl px-4 py-3 active:opacity-90"
-          style={{ backgroundColor: ZALO_BLUE }}
-        >
-          <View className="rounded-lg bg-white px-1.5 py-0.5">
-            <Text className="text-[11px] font-black" style={{ color: ZALO_BLUE }}>
-              Zalo
-            </Text>
-          </View>
-          <Text className="flex-shrink text-center text-[14px] font-bold leading-5 text-white">
-            Mở Zalo nhận lịch hẹn & chỉ đường Google Maps đến trung tâm
-          </Text>
-        </Pressable>
+        {!!zaloUrl && (
+          <Pressable
+            onPress={openZalo}
+            accessibilityRole="link"
+            className="h-[52px] flex-row items-center justify-center gap-2.5 rounded-2xl px-4 active:opacity-90"
+            style={{ backgroundColor: ZALO_BLUE }}
+          >
+            <View className="rounded-lg bg-white px-1.5 py-0.5">
+              <Text className="text-[11px] font-black" style={{ color: ZALO_BLUE }}>
+                Zalo
+              </Text>
+            </View>
+            <Text className="text-[15px] font-bold text-white">Quan tâm Zalo OA TH EDU</Text>
+          </Pressable>
+        )}
 
         <View className="flex-row gap-2.5">
           <Button
             className="flex-1"
-            title="Google Maps"
+            title="Chỉ đường"
             variant="outline"
             icon={<MapPinned size={18} color="#1E54E0" />}
             onPress={() => open(mapsUrl)}
@@ -144,7 +144,7 @@ export default function BookingSuccessScreen({ route, navigation }: RootStackScr
             />
           )}
         </View>
-        <Button title="Xem / đổi lịch hẹn của tôi" variant="outline" onPress={() => navigation.navigate('ManageBookings')} />
+        <Button title="Xem / đổi lịch hẹn của tôi" variant={zaloUrl ? 'outline' : 'primary'} onPress={() => navigation.navigate('ManageBookings')} />
         <Button title="Về trang chủ" variant="ghost" onPress={close} />
       </Animated.View>
     </ScrollView>

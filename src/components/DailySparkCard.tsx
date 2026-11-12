@@ -70,19 +70,19 @@ function DailySparkCard() {
   const forWho = [age ? `Bé ${age} tuổi` : null, course ? CATEGORY_LABELS[course] : null].filter(Boolean).join(' · ');
 
   return (
-    <View className="mx-4 mb-4 gap-2.5 rounded-3xl border border-amber-100 bg-amber-50 p-4" testID="daily-spark">
+    <View className="mx-4 mb-3 gap-2 rounded-2xl border border-amber-100 bg-amber-50 px-3.5 py-3" testID="daily-spark">
       <View className="flex-row items-center gap-2">
-        <View className="h-7 w-7 items-center justify-center rounded-full bg-amber-400">
-          <Lightbulb size={15} color="#fff" />
+        <View className="h-6 w-6 items-center justify-center rounded-full bg-amber-400">
+          <Lightbulb size={13} color="#fff" />
         </View>
-        <Text className="flex-1 text-[13px] font-extrabold uppercase tracking-wide text-amber-900">Mẹo mỗi ngày</Text>
+        <Text className="flex-1 text-xs font-extrabold uppercase tracking-wide text-amber-900">Mẹo mỗi ngày</Text>
         {!!forWho && <Text className="text-[11px] font-semibold text-amber-800/80">{forWho}</Text>}
         <Pressable onPress={hideToday} accessibilityRole="button" accessibilityLabel="Ẩn mẹo hôm nay" hitSlop={8} className="ml-1 h-7 w-7 items-center justify-center rounded-full active:bg-amber-100">
           <X size={15} color="#92400E" />
         </Pressable>
       </View>
 
-      <Text className="text-[15px] leading-[22px] text-ink">{spark.text}</Text>
+      <Text className="text-[14px] leading-5 text-ink">{spark.text}</Text>
 
       <View className="flex-row items-center gap-2">
         <Pressable
@@ -90,7 +90,7 @@ function DailySparkCard() {
           accessibilityRole="button"
           accessibilityState={{ selected: liked }}
           accessibilityLabel={liked ? 'Bỏ thích mẹo này' : 'Thích mẹo này'}
-          className={`flex-row items-center gap-1.5 rounded-full px-3.5 py-2 ${liked ? 'bg-rose-100' : 'bg-white'}`}
+          className={`flex-row items-center gap-1.5 rounded-full px-3 py-1.5 ${liked ? 'bg-rose-100' : 'bg-white'}`}
         >
           <View>
             <Animated.View style={heartStyle}>
@@ -100,7 +100,7 @@ function DailySparkCard() {
           </View>
           <Text className={`text-[13px] font-semibold ${liked ? 'text-rose-600' : 'text-ink-muted'}`}>{liked ? 'Đã thích' : 'Hữu ích'}</Text>
         </Pressable>
-        <Pressable onPress={onShare} accessibilityRole="button" className="flex-row items-center gap-1.5 rounded-full bg-white px-3.5 py-2 active:bg-slate-50">
+        <Pressable onPress={onShare} accessibilityRole="button" className="flex-row items-center gap-1.5 rounded-full bg-white px-3 py-1.5 active:bg-slate-50">
           <Share2 size={15} color={COLORS.muted} />
           <Text className="text-[13px] font-semibold text-ink-muted">Chia sẻ</Text>
         </Pressable>
