@@ -15,7 +15,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import logo from '@/assets/branding/play-store-512.png';
+import logo from '@/assets/branding/logo-th-mark.png';
 import { hasSupabase } from '@/config/env';
 import type { RootStackScreenProps } from '@/navigation/types';
 import { useDashboardStore, useStaffStore, useUiStore } from '@/store';
@@ -82,7 +82,7 @@ export default function DashboardScreen({ navigation }: RootStackScreenProps<'Ad
         <Pressable onPress={goBack} accessibilityRole="button" accessibilityLabel="Quay lại" hitSlop={8} className="h-10 w-10 items-center justify-center rounded-full active:bg-slate-100">
           <ChevronLeft size={24} color={COLORS.ink} />
         </Pressable>
-        <Image source={LOGO} style={{ width: 36, height: 36, borderRadius: 10 }} accessibilityIgnoresInvertColors accessible={false} />
+        <Image source={LOGO} style={{ width: 52, height: 52 * (256 / 430) }} resizeMode="contain" accessibilityIgnoresInvertColors accessible={false} testID="admin-logo" />
         <View className="flex-1">
           <Text className="text-[17px] font-extrabold text-ink" accessibilityRole="header" numberOfLines={1}>
             Tổng quan kinh doanh

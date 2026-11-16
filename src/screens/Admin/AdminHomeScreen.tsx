@@ -1,11 +1,11 @@
 import { useFocusEffect } from '@react-navigation/native';
-import { BarChart3, Bell, CalendarClock, ChevronRight, Clapperboard, GraduationCap, ImagePlus, LogOut, ShieldCheck, UserCheck, Users } from 'lucide-react-native';
+import { BarChart3, Bell, CalendarClock, ChevronRight, Clapperboard, GraduationCap, House, ImagePlus, LogOut, ShieldCheck, UserCheck, Users } from 'lucide-react-native';
 import type { ReactNode } from 'react';
 import { useCallback, useEffect, useState } from 'react';
 import { Image, Pressable, ScrollView, Text, View, type ImageSourcePropType } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import logo from '@/assets/branding/play-store-512.png';
+import logo from '@/assets/branding/logo-th-mark.png';
 import { hasSupabase } from '@/config/env';
 import type { RootStackScreenProps } from '@/navigation/types';
 import { listStaffRequests } from '@/services/staffRequests';
@@ -38,6 +38,8 @@ export default function AdminHomeScreen({ navigation }: RootStackScreenProps<'Ad
     }, [isAdmin]),
   );
 
+  const goToFeed = () => navigation.navigate('MainTabs', { screen: 'Home' });
+
   const onSignOut = async () => {
     if (await confirmAsync('Đăng xuất?', 'Bạn sẽ cần đăng nhập lại để vào trang quản trị.', 'Đăng xuất')) {
       await signOut();
@@ -49,7 +51,7 @@ export default function AdminHomeScreen({ navigation }: RootStackScreenProps<'Ad
     <View className="flex-1 bg-surface">
       <View style={{ paddingTop: insets.top }} className="bg-ink">
         <View className="flex-row items-center gap-3 px-4 pb-5 pt-4">
-          <Image source={LOGO} style={{ width: 44, height: 44, borderRadius: 12 }} accessible={false} />
+          <Image source={LOGO} style={{ width: 64, height: 64 * (256 / 430) }} resizeMode="contain" accessibilityIgnoresInvertColors accessible={false} testID="admin-logo" />
           <View className="flex-1">
             <View className="flex-row items-center gap-1.5">
               <ShieldCheck size={14} color="#93B4FF" />
@@ -62,6 +64,18 @@ export default function AdminHomeScreen({ navigation }: RootStackScreenProps<'Ad
               {email}
             </Text>
           </View>
+          {/* Back to the parents' EduFeed; the admin stays signed in (hold the logo there to come back). */}
+          <Pressable
+            onPress={goToFeed}
+            accessibilityRole="button"
+            accessibilityLabel="Về EduFeed"
+            testID="admin-to-feed"
+            hitSlop={4}
+            className="h-10 flex-row items-center gap-1.5 rounded-full bg-white/10 px-3 active:bg-white/20"
+          >
+            <House size={18} color="#fff" />
+            <Text className="text-[13px] font-bold text-white">EduFeed</Text>
+          </Pressable>
           <Pressable
             onPress={onSignOut}
             accessibilityRole="button"
