@@ -44,6 +44,12 @@ export type RootStackParamList = {
   Certificate: { code: string };
   /** Tuition invoice: pay by VietQR / VNPay, then the digital receipt (link sent to the parent). */
   Payment: { id: string };
+  /** Parents: phone + Zalo OTP sign-in (new numbers add a quick family profile). */
+  ParentAuth: undefined;
+  /** Parents: electronic contact book (children, sessions, reports, leave requests, fees, referral). */
+  ParentPortal: undefined;
+  /** Admin: parent accounts, students, sessions, leave / make-up requests. */
+  AccountManagement: undefined;
   /** No id → create a new video. */
   VideoEditor: { id?: string } | undefined;
 };

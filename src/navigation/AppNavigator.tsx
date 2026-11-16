@@ -9,6 +9,9 @@ import TeacherUploadScreen from '@/screens/Admin/TeacherUploadScreen';
 import ManageBookingsScreen from '@/screens/Booking/ManageBookingsScreen';
 import CertificateScreen from '@/screens/Share/CertificateScreen';
 import PaymentScreen from '@/screens/Payment/PaymentScreen';
+import ParentAuthScreen from '@/screens/Auth/ParentAuthScreen';
+import ParentPortalScreen from '@/screens/Parent/ParentPortalScreen';
+import AccountManagementScreen from '@/screens/Admin/AccountManagementScreen';
 import StaffEnrollmentsScreen from '@/screens/Staff/StaffEnrollmentsScreen';
 import DashboardScreen from '@/screens/Admin/DashboardScreen';
 import BookingSuccessScreen from '@/screens/Booking/BookingSuccessScreen';
@@ -24,7 +27,7 @@ import VideoEditorScreen from '@/screens/Staff/VideoEditorScreen';
 import ChecklistScreen from '@/screens/Trust/ChecklistScreen';
 import TestimonialsScreen from '@/screens/Trust/TestimonialsScreen';
 import { getAttribution, trackEvent } from '@/services/analytics';
-import { useParentClubStore, useStaffStore } from '@/store';
+import { useParentClubStore, useParentStore, useStaffStore } from '@/store';
 import { COLORS } from '@/utils/constants';
 
 import TabNavigator from './TabNavigator';
@@ -61,6 +64,9 @@ const linking: LinkingOptions<RootStackParamList> = {
       VideoShare: 'v/:slug',
       Certificate: 'chung-nhan/:code',
       Payment: 'thanh-toan/:id',
+      ParentPortal: 'con-toi',
+      ParentAuth: 'con-toi/dang-nhap',
+      AccountManagement: 'quan-tri/phu-huynh',
       StaffLogin: 'quan-ly/dang-nhap',
       StaffRegister: 'quan-ly/dang-ky',
       StaffVideos: 'quan-ly',
@@ -81,7 +87,7 @@ const linking: LinkingOptions<RootStackParamList> = {
 const navigationRef = createNavigationContainerRef<RootStackParamList>();
 
 /** Staff screens are not part of the parent funnel. */
-const STAFF_ROUTES = new Set(['StaffLogin', 'StaffVideos', 'StaffTrials', 'VideoEditor', 'AdminHome', 'AdminLogin', 'AdminDashboard', 'StaffAccounts', 'StaffRegister', 'StaffRequests', 'TeacherUpload', 'StaffEnrollments']);
+const STAFF_ROUTES = new Set(['StaffLogin', 'StaffVideos', 'StaffTrials', 'VideoEditor', 'AdminHome', 'AdminLogin', 'AdminDashboard', 'StaffAccounts', 'StaffRegister', 'StaffRequests', 'TeacherUpload', 'StaffEnrollments', 'AccountManagement']);
 
 /** Count one anonymous "app open" per session for the dashboard funnel (parents only). */
 function onNavigationReady() {
@@ -92,6 +98,8 @@ function onNavigationReady() {
 export default function AppNavigator() {
   // Restore a signed-in staff session (parents never sign in, so this is a no-op for them).
   useEffect(() => useStaffStore.getState().init(), []);
+  // Restore a signed-in parent (phone + Zalo OTP) for the parent portal.
+  useEffect(() => useParentStore.getState().init(), []);
   // Capture the ad link (UTM) this visit came from before the router rewrites the address.
   useEffect(() => {
     getAttribution();
@@ -127,6 +135,9 @@ export default function AppNavigator() {
         <Stack.Screen name="StaffEnrollments" component={StaffEnrollmentsScreen} options={{ headerShown: false }} />
         <Stack.Screen name="Certificate" component={CertificateScreen} options={{ headerShown: false }} />
         <Stack.Screen name="Payment" component={PaymentScreen} options={{ headerShown: false }} />
+        <Stack.Screen name="ParentAuth" component={ParentAuthScreen} options={{ headerShown: false }} />
+        <Stack.Screen name="ParentPortal" component={ParentPortalScreen} options={{ headerShown: false }} />
+        <Stack.Screen name="AccountManagement" component={AccountManagementScreen} options={{ headerShown: false }} />
         <Stack.Screen name="VideoEditor" component={VideoEditorScreen} options={{ headerShown: false }} />
         <Stack.Screen
           name="QuizModal"

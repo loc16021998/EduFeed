@@ -1,5 +1,5 @@
 import { useFocusEffect } from '@react-navigation/native';
-import { BarChart3, Bell, CalendarClock, ChevronRight, Clapperboard, GraduationCap, House, ImagePlus, LogOut, ShieldCheck, UserCheck, Users } from 'lucide-react-native';
+import { BarChart3, Bell, CalendarClock, ChevronRight, Clapperboard, GraduationCap, House, HeartHandshake, ImagePlus, LogOut, ShieldCheck, UserCheck, Users } from 'lucide-react-native';
 import type { ReactNode } from 'react';
 import { useCallback, useEffect, useState } from 'react';
 import { Image, Pressable, ScrollView, Text, View, type ImageSourcePropType } from 'react-native';
@@ -15,7 +15,7 @@ import { confirmAsync } from '@/utils/platform';
 
 const LOGO: ImageSourcePropType = typeof logo === 'string' ? { uri: logo } : logo;
 
-type Target = 'AdminDashboard' | 'StaffAccounts' | 'StaffRequests' | 'StaffVideos' | 'StaffTrials' | 'TeacherUpload' | 'StaffEnrollments';
+type Target = 'AccountManagement' | 'AdminDashboard' | 'StaffAccounts' | 'StaffRequests' | 'StaffVideos' | 'StaffTrials' | 'TeacherUpload' | 'StaffEnrollments';
 
 /** Admin area home (owner / manager). Teachers and staff have their own area at /quan-ly. */
 export default function AdminHomeScreen({ navigation }: RootStackScreenProps<'AdminHome'>) {
@@ -129,6 +129,12 @@ export default function AdminHomeScreen({ navigation }: RootStackScreenProps<'Ad
           title="Tài khoản nhân viên"
           subtitle="Tạo tài khoản, phân quyền, đặt lại mật khẩu"
           onPress={() => go('StaffAccounts')}
+        />
+        <Tile
+          icon={<HeartHandshake size={22} color={COLORS.brand} />}
+          title="Phụ huynh & học viên"
+          subtitle="Tài khoản phụ huynh, số buổi học, duyệt nghỉ / học bù"
+          onPress={() => go('AccountManagement')}
         />
 
         <Section title="Công cụ giáo viên" note="Quản trị viên cũng dùng được các công cụ này." />

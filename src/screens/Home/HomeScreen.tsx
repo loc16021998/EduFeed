@@ -178,6 +178,7 @@ export default function HomeScreen(_: TabScreenProps<'Home'>) {
         onBrandLongPress={openStaffArea}
         club={{ done: clubDone, total: BADGES.length }}
         onClubPress={openClub}
+        onParentPress={() => navigation.navigate('ParentPortal')}
       />
       <View>
         <CategoryChips options={FEED_FILTERS} value={selectedCategory} onChange={onChangeCategory} />

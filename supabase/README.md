@@ -251,6 +251,61 @@ Migration `20261123090000_tuition_payments.sql` (upgrade file in `sql/upgrades/`
 - **Roles:** creating, cancelling and manually confirming invoices is admin-only (`is_admin()`). Teachers / staff can see
   the payment status and share the link. `payment_events` is readable by admins only.
 
+## Parent portal (`/con-toi`), OTP sign-in, parent accounts
+
+Migration `20261124090000_parent_portal.sql` (upgrade file in `sql/upgrades/`).
+
+**Tables**
+
+| Table | Contents |
+|---|---|
+| `users` | Parents, one row per phone. `auth_user_id` → Supabase Auth user with `app_metadata.role = 'parent'`. |
+| `students` | Children. |
+| `parent_student_links` | Which parent can see which child. |
+| `daily_reports` | Contact book entry per student, course and session. |
+| `attendance_requests` | Leave / make-up requests. |
+| `parent_otps` | Sign-in codes; service role only. |
+
+`enrollments` gains `student_id`, `sessions_total`, `sessions_remaining` and `schedule`
+(`[{d: 2…8, start, end}]`, where 8 = Sunday).
+
+**Sign-in** (`_shared/parentAuth.ts`, `POST /api/parent/otp/request | otp/verify | signup`)
+- **Code:** a 4-digit code generated server-side and sent with the approved ZNS template `ZNS_TEMPLATE_OTP`
+  (parameter name in `ZNS_OTP_PARAM`, default `otp`). Only `HMAC(OTP_PEPPER, phone:code)` is stored.
+- **Limits:** the code expires after 5 min and allows 5 attempts; at most 1 send per 60 s and 5 per hour per phone, 20 per hour per IP.
+- **Phone already exists** (created by an admin, or an earlier sign-up): the parent is signed in at once.
+- **New phone:** a one-time token (15 min) allows a single quick profile step (parent + first child + campus).
+- **Session:** the Edge Function creates or refreshes the parent's Auth user with a fresh random password and an
+  internal e-mail `parent-<id>@PARENT_EMAIL_DOMAIN`. That address is confirmed and never mailed. It then returns the session.
+- **Without `ZNS_TEMPLATE_OTP`:** sign-in answers "chưa kích hoạt". Sample-data mode uses code 1234.
+
+**Privacy**
+- Every parent rule goes through `current_parent_id()`, i.e. the signed-in and **active** parent.
+  Locking an account in admin removes access immediately.
+- Parents read only children linked to them (RLS on `students`, `daily_reports`, `attendance_requests`, links, `users`).
+  `enrollments` is not exposed; `parent_portal()` returns curated fields only.
+- Children's work photos go to the **private** bucket `class-reports/<student_id>/…`. Parents of that child and staff
+  read them through 1-hour signed URLs.
+
+**Contact book:** in *Học viên & lộ trình*, teachers tap **Ghi sổ liên lạc** (date, attendance, feedback, up to 6 photos).
+- "Có mặt" (present) uses one session from `sessions_remaining`; "Vắng" (absent) and "Nghỉ có phép" (excused leave) do not.
+- Attendance rate = present ÷ (present + absent); excused leave is not counted.
+- The teacher name comes from the staff account's `full_name`.
+
+**Admin** (*Quản trị → Phụ huynh & học viên*, `/quan-tri/phu-huynh`)
+- Search by name, phone or child, and filter by campus and status:
+  - Đang học: has an active course.
+  - Sắp hết buổi: fewer than 3 sessions left.
+  - Khách: no active course.
+  - Đã khóa: account locked.
+- Create an account by phone (or add children to an existing phone), creating the student, course, sessions and weekly schedule.
+- Allow or lock sign-in, and adjust sessions ±1.
+- Approve or reject leave / make-up requests.
+
+**Referral:** each parent has a code (`TH` + 6 characters). The share link is
+`/booking?utm_source=referral&utm_medium=parent&utm_campaign=<code>`, so sign-ups show up in the dashboard's UTM sources.
+A reward is shown **only** when `PUBLIC_REFERRAL_REWARD` holds a real offer.
+
 ## Zalo access token (automatic refresh)
 
 Zalo rotates tokens: each refresh returns a new access token **and** a new refresh token, and the old refresh token

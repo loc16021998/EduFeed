@@ -24,7 +24,8 @@ function friendlyError(raw: string): string {
   return ERROR_VI.find(([re]) => re.test(raw))?.[1] ?? 'Tải file lên thất bại. Kiểm tra mạng rồi thử lại.';
 }
 
-export async function uploadMedia(path: string, media: PickedMedia, onProgress?: (fraction: number) => void): Promise<string> {
+/** Upload to MEDIA_BUCKET (public) by default, or another bucket (e.g. the private class-reports). Returns the public URL. */
+export async function uploadMedia(path: string, media: PickedMedia, onProgress?: (fraction: number) => void, bucket: string = MEDIA_BUCKET): Promise<string> {
   if (!supabase) throw new Error('Chưa kết nối máy chủ');
   const { data } = await supabase.auth.getSession();
   const token = data.session?.access_token;
@@ -39,7 +40,7 @@ export async function uploadMedia(path: string, media: PickedMedia, onProgress?:
     form.append('', { uri: media.uri, name: media.name, type: media.type } as unknown as Blob);
   }
 
-  const url = `${ENV.supabaseUrl}/storage/v1/object/${MEDIA_BUCKET}/${path.split('/').map(encodeURIComponent).join('/')}`;
+  const url = `${ENV.supabaseUrl}/storage/v1/object/${bucket}/${path.split('/').map(encodeURIComponent).join('/')}`;
 
   await new Promise<void>((resolve, reject) => {
     const xhr = new XMLHttpRequest();

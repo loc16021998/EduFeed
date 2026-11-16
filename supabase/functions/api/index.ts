@@ -6,6 +6,7 @@
  *   POST /api/leads/submit   (LeadSubmitRequest)             → LeadSubmitResponse (201 | 200 duplicate)
  *   GET  /api/payment/invoices/:id                           → PaymentInvoiceResponse (invoice + VietQR / VNPay options)
  *   POST /api/payment/invoices/:id/vnpay                     → { url }  signed VNPay checkout URL
+ *   POST /api/parent/otp/request | /parent/otp/verify | /parent/signup   parent sign-in (Zalo ZNS OTP) — _shared/parentAuth.ts
  *
  * Payment gateways (verified here — VNPay HMAC-SHA512 signature / bank webhook API key):
  *   GET|POST /api/payment/ipn   VNPay IPN or SePay bank-transfer webhook → invoice PAID + receipt + Zalo message
@@ -63,6 +64,7 @@ import {
   type ReceiptContext,
 } from '../_shared/payments.ts';
 import { handlePaymentIpn, type PaymentIpnConfig } from '../_shared/paymentWebhook.ts';
+import { randomToken, requestOtp, signupParent, verifyOtp, type ParentAuthConfig, type ParentAuthDeps, type ParentSession } from '../_shared/parentAuth.ts';
 import { runReminderTick, sendCrmMessage, type CrmDeps } from '../_shared/reminderCron.ts';
 import { toZaloPhone } from '../_shared/zaloPayloads.ts';
 import { bearerToken, verifyCronSecret } from '../_shared/security.ts';
@@ -690,6 +692,67 @@ async function handlePaymentIpnRoute(req: Request, url: URL): Promise<Response> 
   return json(res.body, res.status);
 }
 
+// ─── Parent sign-in (phone + Zalo ZNS OTP) ──────────────────────────────────
+
+const parentAuthConfig: ParentAuthConfig = {
+  pepper: env('OTP_PEPPER') || SERVICE_ROLE_KEY,
+  otpTemplateId: env('ZNS_TEMPLATE_OTP'),
+  otpParam: env('ZNS_OTP_PARAM') || 'otp',
+  znsMode: ZNS_MODE,
+};
+/** Parents sign in with OTP only; this address is never mailed (confirmed on creation, no email flows). */
+const parentEmail = (userId: string) => `parent-${userId}@${env('PARENT_EMAIL_DOMAIN') || 'parents.thedu.vn'}`;
+
+/** Create or refresh the parent's Auth user (fresh random password each time) and sign in server-side. */
+async function issueParentSession(userId: string): Promise<ParentSession> {
+  const ctx = await rpc<{ id: string; full_name: string; auth_user_id: string | null; is_active: boolean } | null>('parent_auth_context', { p_user_id: userId });
+  if (!ctx || !ctx.is_active) throw new Error('parent not found / inactive');
+  const email = parentEmail(ctx.id);
+  const password = randomToken(32);
+  const attrs = { email, password, email_confirm: true, app_metadata: { role: 'parent' }, user_metadata: { full_name: ctx.full_name } };
+  let authId = ctx.auth_user_id;
+  if (authId) {
+    const { error } = await adminDb.auth.admin.updateUserById(authId, attrs);
+    if (error) authId = null; // Auth user removed: create a new one
+  }
+  if (!authId) {
+    const { data, error } = await adminDb.auth.admin.createUser(attrs);
+    if (error || !data.user) throw new Error(`createUser: ${error?.message}`);
+    authId = data.user.id;
+  }
+  await rpc('parent_attach_auth', { p_user_id: ctx.id, p_auth_user_id: authId });
+  const client = createClient(SUPABASE_URL, ANON_KEY, { auth: { persistSession: false, autoRefreshToken: false } });
+  const { data, error } = await client.auth.signInWithPassword({ email, password });
+  if (error || !data.session) throw new Error(`signIn: ${error?.message}`);
+  return { access_token: data.session.access_token, refresh_token: data.session.refresh_token, expires_at: data.session.expires_at ?? null };
+}
+
+const parentAuthDeps: ParentAuthDeps = {
+  rpc: async (fn, args) => {
+    const { data, error } = await adminDb.rpc(fn as never, args as never);
+    return { data: data as never, error };
+  },
+  sendZns: async (payload) => {
+    const { messaging } = await liveConfig();
+    if (!messaging.accessToken) return { ok: false, error: 'Chưa cấu hình ZALO_OA_ACCESS_TOKEN' };
+    return sendZaloMessage({ channel: 'ZNS', payload }, messaging.accessToken);
+  },
+  issueSession: issueParentSession,
+  now: () => new Date(),
+};
+
+async function handleParentAuth(req: Request, op: 'request' | 'verify' | 'signup'): Promise<Response> {
+  const body = await readJson(req);
+  const ip = (req.headers.get('x-forwarded-for') ?? '').split(',')[0].trim() || null;
+  const r =
+    op === 'request'
+      ? await requestOtp(body, ip, parentAuthConfig, parentAuthDeps)
+      : op === 'verify'
+        ? await verifyOtp(body, parentAuthConfig, parentAuthDeps)
+        : await signupParent(body, parentAuthConfig, parentAuthDeps);
+  return json(r.body, r.status, { 'Cache-Control': 'no-store' });
+}
+
 // ─── Router ─────────────────────────────────────────────────────────────────
 
 const UUID = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
@@ -712,6 +775,9 @@ Deno.serve(async (req) => {
     }
     if (path === '/leads/submit') return req.method === 'POST' ? await handleLeadSubmit(req) : postOnly();
     if (path === '/payment/ipn') return await handlePaymentIpnRoute(req, url);
+    if (path === '/parent/otp/request') return req.method === 'POST' ? await handleParentAuth(req, 'request') : postOnly();
+    if (path === '/parent/otp/verify') return req.method === 'POST' ? await handleParentAuth(req, 'verify') : postOnly();
+    if (path === '/parent/signup') return req.method === 'POST' ? await handleParentAuth(req, 'signup') : postOnly();
     const inv = PAYMENT_INVOICE.exec(path);
     if (inv) {
       if (inv[2]) return req.method === 'POST' ? await handleVnpayCheckout(req, inv[1].toLowerCase()) : postOnly();

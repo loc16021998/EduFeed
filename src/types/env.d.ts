@@ -8,5 +8,6 @@ declare const process: {
     PUBLIC_ZALO_OA_ID?: string;
     PUBLIC_WEB_URL?: string;
     PUBLIC_HOTLINE?: string;
+    PUBLIC_REFERRAL_REWARD?: string;
   };
 };

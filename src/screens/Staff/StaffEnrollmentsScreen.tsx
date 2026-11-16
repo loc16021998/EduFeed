@@ -1,7 +1,7 @@
 import { useFocusEffect } from '@react-navigation/native';
-import { Award, CheckCircle2, CircleAlert, CircleDashed, MinusCircle, Phone, PhoneCall, Receipt, Send, Wallet, XCircle } from 'lucide-react-native';
+import { Award, BookOpenCheck, CheckCircle2, CircleAlert, CircleDashed, ImagePlus, MinusCircle, Phone, PhoneCall, Receipt, Send, Wallet, X, XCircle } from 'lucide-react-native';
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
-import { ActivityIndicator, FlatList, KeyboardAvoidingView, Linking, Modal, Platform, Pressable, RefreshControl, ScrollView, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, FlatList, Image, KeyboardAvoidingView, Linking, Modal, Platform, Pressable, RefreshControl, ScrollView, Text, TextInput, View } from 'react-native';
 
 import { Badge, Button, ScreenHeader } from '@/components';
 import { hasSupabase } from '@/config/env';
@@ -17,6 +17,10 @@ import {
   type EnrollmentFilter,
   type LifecycleStage,
 } from '@/services/enrollments';
+import { checkMedia } from '@/services/media/storageUpload';
+import { pickImage } from '@/services/media/mediaPicker';
+import { createDailyReport, type Attendance } from '@/services/parentPortal';
+import type { PickedMedia } from '@/types';
 import { cancelInvoice, confirmInvoiceManually, createInvoice, getInvoiceDraft, invoiceInputProblem, paymentLink, type InvoiceDraft } from '@/services/paymentService';
 import { courseTitle, MAX_LEVEL, recommendNextCourses } from '@/services/recommendationService';
 import { useStaffStore } from '@/store';
@@ -71,6 +75,7 @@ export default function StaffEnrollmentsScreen({ navigation }: RootStackScreenPr
   const [notice, setNotice] = useState<string | null>(null);
   const [invoicing, setInvoicing] = useState<Enrollment | null>(null);
   const [confirming, setConfirming] = useState<Enrollment | null>(null);
+  const [reporting, setReporting] = useState<Enrollment | null>(null);
 
   useEffect(() => {
     if (authStatus === 'signedOut' || (authStatus === 'signedIn' && !isStaff)) navigation.replace('StaffLogin');
@@ -169,6 +174,7 @@ export default function StaffEnrollmentsScreen({ navigation }: RootStackScreenPr
             onDrop={() => onDrop(item)}
             onContacted={() => onContacted(item)}
             onCertificate={() => item.certificateCode && navigation.navigate('Certificate', { code: item.certificateCode })}
+            onReport={() => setReporting(item)}
             payment={
               <PaymentSection
                 e={item}
@@ -186,6 +192,15 @@ export default function StaffEnrollmentsScreen({ navigation }: RootStackScreenPr
         ListEmptyComponent={
           loading ? <ActivityIndicator className="mt-10" color={COLORS.brand} /> : !error ? <Text className="mt-10 px-8 text-center text-ink-muted">{FILTERS.find((f) => f.id === filter)!.empty}</Text> : null
         }
+      />
+      <ReportModal
+        enrollment={reporting}
+        onClose={() => setReporting(null)}
+        onDone={async (text) => {
+          setReporting(null);
+          setNotice(text);
+          await load();
+        }}
       />
       <InvoiceModal
         enrollment={invoicing}
@@ -232,7 +247,7 @@ export default function StaffEnrollmentsScreen({ navigation }: RootStackScreenPr
   );
 }
 
-function EnrollmentCard({ e, busy, onComplete, onDrop, onContacted, onCertificate, payment }: { e: Enrollment; busy: boolean; onComplete: () => void; onDrop: () => void; onContacted: () => void; onCertificate: () => void; payment: ReactNode }) {
+function EnrollmentCard({ e, busy, onComplete, onDrop, onContacted, onCertificate, onReport, payment }: { e: Enrollment; busy: boolean; onComplete: () => void; onDrop: () => void; onContacted: () => void; onCertificate: () => void; onReport: () => void; payment: ReactNode }) {
   const title = courseTitle(e.course as never, e.level);
   const recs = e.status === 'COMPLETED' ? recommendNextCourses({ courseCode: e.course, level: e.level }) : [];
   return (
@@ -269,6 +284,13 @@ function EnrollmentCard({ e, busy, onComplete, onDrop, onContacted, onCertificat
       )}
 
       {payment}
+
+      {e.status === 'ACTIVE' &&
+        (e.studentId ? (
+          <Button size="sm" title={`Ghi sổ liên lạc${e.sessionsRemaining !== null ? ` · còn ${e.sessionsRemaining} buổi` : ''}`} variant="outline" icon={<BookOpenCheck size={14} color={COLORS.brand} />} onPress={onReport} />
+        ) : (
+          <Text className="text-[11px] leading-4 text-ink-subtle">Chưa liên kết tài khoản phụ huynh — quản trị viên liên kết ở "Phụ huynh & học viên" để ghi sổ liên lạc.</Text>
+        ))}
 
       {e.status === 'ACTIVE' && (
         <View className="flex-row gap-2.5">
@@ -611,6 +633,129 @@ function ConfirmPaidModal({ enrollment, onClose, onSubmit }: { enrollment: Enrol
               <Button className="flex-[2]" title="Xác nhận đã nhận" loading={busy} onPress={submit} />
             </View>
           </View>
+        )}
+      </KeyboardAvoidingView>
+    </Modal>
+  );
+}
+
+// ─── Contact book (parent portal) ───────────────────────────────────────────
+
+const ATTENDANCE_OPTIONS: { id: Attendance; label: string }[] = [
+  { id: 'PRESENT', label: 'Có mặt' },
+  { id: 'ABSENT', label: 'Vắng' },
+  { id: 'EXCUSED', label: 'Nghỉ có phép' },
+];
+
+function ReportModal({ enrollment, onClose, onDone }: { enrollment: Enrollment | null; onClose: () => void; onDone: (notice: string) => void }) {
+  const [date, setDate] = useState('');
+  const [attendance, setAttendance] = useState<Attendance>('PRESENT');
+  const [feedback, setFeedback] = useState('');
+  const [photos, setPhotos] = useState<PickedMedia[]>([]);
+  const [progress, setProgress] = useState<number | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    const t = new Date();
+    setDate(`${pad(t.getDate())}/${pad(t.getMonth() + 1)}/${t.getFullYear()}`);
+    setAttendance('PRESENT');
+    setFeedback('');
+    setPhotos([]);
+    setProgress(null);
+    setError(null);
+  }, [enrollment?.id]);
+
+  const addPhoto = async () => {
+    try {
+      const p = await pickImage();
+      if (!p) return;
+      const problem = checkMedia(p, 'image');
+      if (problem) return setError(problem);
+      setPhotos((cur) => [...cur, p].slice(0, 6));
+      setError(null);
+    } catch (e) {
+      setError(msg(e));
+    }
+  };
+
+  const submit = async () => {
+    const m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(date.trim());
+    if (!m) return setError('Ngày học dạng dd/mm/yyyy');
+    const iso = `${m[3]}-${pad(+m[2])}-${pad(+m[1])}`;
+    if (attendance === 'PRESENT' && feedback.trim().length < 10) return setError('Viết nhận xét cho phụ huynh (ít nhất 10 ký tự)');
+    setBusy(true);
+    setError(null);
+    try {
+      const r = await createDailyReport({ enrollmentId: enrollment!.id, studentId: enrollment!.studentId!, sessionDate: iso, attendance, feedback, photos, onProgress: setProgress });
+      onDone(`Đã ghi sổ liên lạc của ${enrollment!.studentName} ngày ${date}${r.sessionsRemaining !== null ? ` · còn ${r.sessionsRemaining} buổi` : ''}. Phụ huynh xem trong mục "Sổ liên lạc".`);
+    } catch (e) {
+      setError(msg(e));
+    } finally {
+      setBusy(false);
+      setProgress(null);
+    }
+  };
+
+  return (
+    <Modal visible={!!enrollment} transparent animationType="slide" onRequestClose={onClose}>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} className="flex-1 justify-end bg-black/40">
+        <Pressable className="flex-1" onPress={onClose} accessibilityLabel="Đóng" />
+        {enrollment && (
+          <ScrollView className="max-h-[90%] rounded-t-[28px] bg-white" contentContainerClassName="gap-3 p-5" keyboardShouldPersistTaps="handled" testID="report-modal">
+            <Text className="text-lg font-extrabold text-ink" accessibilityRole="header">
+              Sổ liên lạc · {enrollment.studentName}
+            </Text>
+            <FormField label="Ngày học" value={date} onChangeText={(t) => { setDate(t); setError(null); }} placeholder="dd/mm/yyyy" keyboardType="numbers-and-punctuation" />
+            <View className="flex-row gap-2">
+              {ATTENDANCE_OPTIONS.map((o) => {
+                const on = attendance === o.id;
+                return (
+                  <Pressable key={o.id} onPress={() => setAttendance(o.id)} accessibilityRole="radio" aria-checked={on} accessibilityState={{ checked: on }} className={`flex-1 items-center rounded-2xl border py-2.5 ${on ? 'border-brand-500 bg-brand-50' : 'border-slate-200 bg-white'}`}>
+                    <Text className={`text-[13px] font-semibold ${on ? 'text-brand-700' : 'text-ink'}`}>{o.label}</Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+            {attendance === 'PRESENT' && <Text className="-mt-1 text-[11px] text-ink-subtle">"Có mặt" trừ 1 buổi trong số buổi còn lại của khóa.</Text>}
+            <View className="gap-1.5">
+              <Text className="text-[13px] font-semibold text-ink-muted">Nhận xét gửi phụ huynh</Text>
+              <TextInput
+                value={feedback}
+                onChangeText={(t) => { setFeedback(t); setError(null); }}
+                multiline
+                maxLength={2000}
+                placeholder="VD: Hôm nay con viết nét khuyết đều, ngồi đúng tư thế; cần luyện thêm chữ hoa."
+                placeholderTextColor={COLORS.subtle}
+                accessibilityLabel="Nhận xét gửi phụ huynh"
+                className="min-h-[100px] rounded-2xl border border-slate-200 bg-white px-4 py-3 text-[15px] text-ink"
+                style={{ textAlignVertical: 'top' }}
+              />
+            </View>
+            <View className="flex-row flex-wrap gap-2">
+              {photos.map((p, i) => (
+                <View key={`${p.uri}-${i}`} className="h-20 w-20 overflow-hidden rounded-xl">
+                  <Image source={{ uri: p.uri }} style={{ width: '100%', height: '100%' }} />
+                  <Pressable onPress={() => setPhotos((cur) => cur.filter((_, j) => j !== i))} accessibilityLabel={`Bỏ ảnh ${i + 1}`} className="absolute right-1 top-1 h-6 w-6 items-center justify-center rounded-full bg-black/60">
+                    <X size={13} color="#fff" />
+                  </Pressable>
+                </View>
+              ))}
+              {photos.length < 6 && (
+                <Pressable onPress={addPhoto} accessibilityRole="button" accessibilityLabel="Thêm ảnh bài làm" className="h-20 w-20 items-center justify-center gap-1 rounded-xl border border-dashed border-slate-300 active:bg-slate-50">
+                  <ImagePlus size={20} color={COLORS.subtle} />
+                  <Text className="text-[10px] text-ink-subtle">Ảnh bài làm</Text>
+                </Pressable>
+              )}
+            </View>
+            <Text className="-mt-1 text-[11px] text-ink-subtle">Ảnh được lưu riêng tư — chỉ phụ huynh của bé và giáo viên xem được.</Text>
+            {progress !== null && <Text className="text-xs text-brand-700">Đang tải ảnh… {Math.round(progress * 100)}%</Text>}
+            {!!error && <Text className="rounded-xl bg-red-50 p-2.5 text-xs leading-[18px] text-red-700">{error}</Text>}
+            <View className="flex-row gap-2.5">
+              <Button className="flex-1" title="Để sau" variant="outline" onPress={onClose} disabled={busy} />
+              <Button className="flex-[2]" title="Lưu & gửi phụ huynh" loading={busy} onPress={submit} />
+            </View>
+          </ScrollView>
         )}
       </KeyboardAvoidingView>
     </Modal>

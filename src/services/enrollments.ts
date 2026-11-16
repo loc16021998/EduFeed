@@ -60,6 +60,9 @@ export interface Enrollment {
   automations: Automation[];
   /** null = no invoice yet. */
   paymentStatus: 'PENDING_PAYMENT' | 'PAID' | null;
+  /** Linked student profile (parent portal); null = not linked yet → no contact book. */
+  studentId: string | null;
+  sessionsRemaining: number | null;
   invoice: EnrollmentInvoice | null;
 }
 
@@ -107,6 +110,8 @@ interface Row {
   leads: { parent_name: string; phone_number: string } | null;
   lifecycle_automations: { stage: LifecycleStage; scheduled_at: string; status: AutomationStatus; error: string | null }[];
   payment_status?: 'PENDING_PAYMENT' | 'PAID' | null;
+  student_id?: string | null;
+  sessions_remaining?: number | null;
   tuition_invoices?: { id: string; ref: string; amount_vnd: number; status: InvoiceStatus; receipt_no: string | null; paid_at: string | null; method: PaymentMethod | null; created_at: string }[];
 }
 
@@ -131,6 +136,8 @@ const toEnrollment = (r: Row): Enrollment => ({
     .sort((a, b) => STAGE_ORDER.indexOf(a.stage) - STAGE_ORDER.indexOf(b.stage))
     .map((a) => ({ stage: a.stage, scheduledAt: a.scheduled_at, status: a.status, error: a.error })),
   paymentStatus: r.payment_status ?? null,
+  studentId: r.student_id ?? null,
+  sessionsRemaining: r.sessions_remaining ?? null,
   invoice: (() => {
     const t = [...(r.tuition_invoices ?? [])].sort((a, b) => b.created_at.localeCompare(a.created_at))[0];
     return t ? { id: t.id, ref: t.ref, amountVnd: t.amount_vnd, status: t.status, receiptNo: t.receipt_no, paidAt: t.paid_at, method: t.method, createdAt: t.created_at } : null;
@@ -139,6 +146,7 @@ const toEnrollment = (r: Row): Enrollment => ({
 
 const BASE_SELECT = 'id, lead_id, student_name, course_code, level, campus_location, start_date, end_date, status, teacher_note, certificate_code, advisor_priority, advisor_flagged_at, advisor_contacted_at, leads(parent_name, phone_number), lifecycle_automations(stage, scheduled_at, status, error)';
 const PAYMENT_SELECT = ', payment_status, tuition_invoices(id, ref, amount_vnd, status, receipt_no, paid_at, method, created_at)';
+const PORTAL_SELECT = ', student_id, sessions_remaining';
 
 export async function listEnrollments(filter: EnrollmentFilter): Promise<Enrollment[]> {
   if (!supabase) return mockList(filter);
@@ -149,7 +157,9 @@ export async function listEnrollments(filter: EnrollmentFilter): Promise<Enrollm
     else q = q.eq('advisor_priority', true).order('advisor_flagged_at', { ascending: true });
     return q;
   };
-  let { data, error } = await run(BASE_SELECT + PAYMENT_SELECT);
+  let { data, error } = await run(BASE_SELECT + PAYMENT_SELECT + PORTAL_SELECT);
+  // Parent-portal upgrade not applied yet: without student / session columns.
+  if (error && /student_id|sessions_remaining/i.test(error.message)) ({ data, error } = await run(BASE_SELECT + PAYMENT_SELECT));
   // Tuition upgrade not applied yet: the list still works, without payment info.
   if (error && /payment_status|tuition_invoices/i.test(error.message)) ({ data, error } = await run(BASE_SELECT));
   if (error) throw mapDbError(error);
@@ -235,7 +245,7 @@ const cancelPending = (a: Automation[], why: string): Automation[] => a.map((x) 
 
 function demo(): Enrollment[] {
   if (demoList) return demoList;
-  const base = { leadId: uuidv4(), parentName: 'Mẹ Thu Trang (mẫu)', phone: '0912345678', teacherNote: null, certificateCode: null, advisorPriority: false, advisorFlaggedAt: null, advisorContactedAt: null, automations: [] as Automation[], paymentStatus: null, invoice: null };
+  const base = { leadId: uuidv4(), parentName: 'Mẹ Thu Trang (mẫu)', phone: '0912345678', teacherNote: null, certificateCode: null, advisorPriority: false, advisorFlaggedAt: null, advisorContactedAt: null, automations: [] as Automation[], paymentStatus: null, invoice: null, studentId: 'demo-student-khoi', sessionsRemaining: 12 };
   demoList = [
     { ...base, id: uuidv4(), studentName: 'Bé Gia Bảo (mẫu)', course: 'TIEN_TIEU_HOC', level: 1, campus: 'XA_LA', startDate: iso(daysAgo(80)), endDate: null, status: 'ACTIVE' },
     { ...base, id: uuidv4(), leadId: uuidv4(), parentName: 'Bố Minh Đức (mẫu)', phone: '0987654321', studentName: 'Bé Khánh Linh (mẫu)', course: 'TOAN_TU_DUY', level: 1, campus: 'NGO_THI_NHAM', startDate: iso(daysAgo(100)), endDate: iso(daysAgo(15)), status: 'COMPLETED', teacherNote: 'Khánh Linh tính nhẩm nhanh, cần luyện thêm toán có lời văn.', certificateCode: 'THEDU-DEMO0001', advisorPriority: true, advisorFlaggedAt: daysAgo(1).toISOString(), automations: schedule(daysAgo(15), 4) },

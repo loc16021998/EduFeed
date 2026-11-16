@@ -1,4 +1,4 @@
-import { Bell, Search, Trophy, X } from 'lucide-react-native';
+import { Bell, BookOpenCheck, Search, Trophy, X } from 'lucide-react-native';
 import { useEffect, useRef } from 'react';
 import { Image, Pressable, Text, TextInput, View, type GestureResponderEvent, type ImageSourcePropType } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -22,6 +22,8 @@ interface HomeHeaderProps {
   /** CLB Phụ huynh: badges collected / total. */
   club?: { done: number; total: number };
   onClubPress?: () => void;
+  /** Parent portal (contact book); sign-in first if needed. */
+  onParentPress?: () => void;
 }
 
 export default function HomeHeader({
@@ -34,6 +36,7 @@ export default function HomeHeader({
   onBrandLongPress,
   club,
   onClubPress,
+  onParentPress,
 }: HomeHeaderProps) {
   const insets = useSafeAreaInsets();
   const inputRef = useRef<TextInput>(null);
@@ -116,6 +119,12 @@ export default function HomeHeader({
               {club.done}/{club.total}
             </Text>
           </Pressable>
+        )}
+
+        {onParentPress && (
+          <IconButton label="Sổ liên lạc của bé" onPress={onParentPress}>
+            <BookOpenCheck size={22} color={COLORS.ink} />
+          </IconButton>
         )}
 
         <IconButton label={searchOpen ? 'Đóng tìm kiếm' : 'Tìm kiếm'} onPress={onToggleSearch}>
