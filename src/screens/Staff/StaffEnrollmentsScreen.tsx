@@ -1,5 +1,6 @@
-import { Award, CheckCircle2, CircleAlert, CircleDashed, MinusCircle, Phone, PhoneCall, XCircle } from 'lucide-react-native';
-import { useCallback, useEffect, useState } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
+import { Award, CheckCircle2, CircleAlert, CircleDashed, MinusCircle, Phone, PhoneCall, Receipt, Send, Wallet, XCircle } from 'lucide-react-native';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { ActivityIndicator, FlatList, KeyboardAvoidingView, Linking, Modal, Platform, Pressable, RefreshControl, ScrollView, Text, TextInput, View } from 'react-native';
 
 import { Badge, Button, ScreenHeader } from '@/components';
@@ -16,11 +17,14 @@ import {
   type EnrollmentFilter,
   type LifecycleStage,
 } from '@/services/enrollments';
+import { cancelInvoice, confirmInvoiceManually, createInvoice, getInvoiceDraft, invoiceInputProblem, paymentLink, type InvoiceDraft } from '@/services/paymentService';
 import { courseTitle, MAX_LEVEL, recommendNextCourses } from '@/services/recommendationService';
 import { useStaffStore } from '@/store';
 import { CAMPUS_LABELS, CATEGORY_COLORS, COLORS } from '@/utils/constants';
 import { formatPhone } from '@/utils/helpers';
-import { confirmAsync } from '@/utils/platform';
+import { confirmAsync, shareText } from '@/utils/platform';
+
+import { formatVnd } from '../../../supabase/functions/_shared/payments';
 
 const FILTERS: { id: EnrollmentFilter; label: string; empty: string }[] = [
   { id: 'ACTIVE', label: 'Đang học', empty: 'Chưa có học viên đang học. Học viên được thêm tự động khi đánh dấu "Đã nhập học" trong Lịch học thử.' },
@@ -57,7 +61,7 @@ const msg = (e: unknown) => (e instanceof Error ? e.message : 'Đã có lỗi x�
 
 /** Teachers / staff: courses in progress → complete with a final review → automated follow-ups + advisor calls. */
 export default function StaffEnrollmentsScreen({ navigation }: RootStackScreenProps<'StaffEnrollments'>) {
-  const { status: authStatus, isStaff, demo } = useStaffStore();
+  const { status: authStatus, isStaff, isAdmin, demo } = useStaffStore();
   const [filter, setFilter] = useState<EnrollmentFilter>('ACTIVE');
   const [items, setItems] = useState<Enrollment[]>([]);
   const [loading, setLoading] = useState(false);
@@ -65,6 +69,8 @@ export default function StaffEnrollmentsScreen({ navigation }: RootStackScreenPr
   const [busyId, setBusyId] = useState<string | null>(null);
   const [completing, setCompleting] = useState<Enrollment | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [invoicing, setInvoicing] = useState<Enrollment | null>(null);
+  const [confirming, setConfirming] = useState<Enrollment | null>(null);
 
   useEffect(() => {
     if (authStatus === 'signedOut' || (authStatus === 'signedIn' && !isStaff)) navigation.replace('StaffLogin');
@@ -82,9 +88,12 @@ export default function StaffEnrollmentsScreen({ navigation }: RootStackScreenPr
     }
   }, [filter]);
 
-  useEffect(() => {
-    if (isStaff) load();
-  }, [isStaff, load]);
+  // Also on coming back to this screen (e.g. from the payment page), so payment status is never stale.
+  useFocusEffect(
+    useCallback(() => {
+      if (isStaff) load();
+    }, [isStaff, load]),
+  );
 
   const act = async (e: Enrollment, fn: () => Promise<void>) => {
     setBusyId(e.id);
@@ -102,6 +111,15 @@ export default function StaffEnrollmentsScreen({ navigation }: RootStackScreenPr
   const onDrop = async (e: Enrollment) => {
     if (await confirmAsync('Dừng học?', `${e.studentName} sẽ được đánh dấu dừng học khóa ${courseTitle(e.course as never, e.level)}.`, 'Dừng học')) {
       act(e, () => dropEnrollment(e.id));
+    }
+  };
+  const onShareLink = (e: Enrollment) => {
+    if (!e.invoice) return;
+    shareText(invoiceShareText(e.studentName, e.invoice.amountVnd, e.invoice.id)).catch(() => {});
+  };
+  const onCancelInvoice = async (e: Enrollment) => {
+    if (e.invoice && (await confirmAsync('Hủy hóa đơn?', `Hóa đơn ${e.invoice.ref} (${formatVnd(e.invoice.amountVnd)}) sẽ không còn thanh toán được.`, 'Hủy hóa đơn'))) {
+      act(e, () => cancelInvoice(e.invoice!.id));
     }
   };
   const onContacted = async (e: Enrollment) => {
@@ -151,11 +169,49 @@ export default function StaffEnrollmentsScreen({ navigation }: RootStackScreenPr
             onDrop={() => onDrop(item)}
             onContacted={() => onContacted(item)}
             onCertificate={() => item.certificateCode && navigation.navigate('Certificate', { code: item.certificateCode })}
+            payment={
+              <PaymentSection
+                e={item}
+                isAdmin={isAdmin}
+                busy={busyId === item.id}
+                onCreate={() => setInvoicing(item)}
+                onShare={() => onShareLink(item)}
+                onOpen={() => item.invoice && navigation.navigate('Payment', { id: item.invoice.id })}
+                onCancel={() => onCancelInvoice(item)}
+                onConfirm={() => setConfirming(item)}
+              />
+            }
           />
         )}
         ListEmptyComponent={
           loading ? <ActivityIndicator className="mt-10" color={COLORS.brand} /> : !error ? <Text className="mt-10 px-8 text-center text-ink-muted">{FILTERS.find((f) => f.id === filter)!.empty}</Text> : null
         }
+      />
+      <InvoiceModal
+        enrollment={invoicing}
+        onClose={() => {
+          setInvoicing(null);
+          load();
+        }}
+        onOpenPayment={(id) => {
+          setInvoicing(null);
+          navigation.navigate('Payment', { id });
+        }}
+      />
+      <ConfirmPaidModal
+        enrollment={confirming}
+        onClose={() => setConfirming(null)}
+        onSubmit={async (note) => {
+          try {
+            await confirmInvoiceManually(confirming!.invoice!.id, note);
+            setNotice(`Đã xác nhận học phí của ${confirming!.studentName}. Biên lai đã được lập.`);
+            setConfirming(null);
+            await load();
+            return null;
+          } catch (e) {
+            return msg(e);
+          }
+        }}
       />
       <CompleteModal
         enrollment={completing}
@@ -176,7 +232,7 @@ export default function StaffEnrollmentsScreen({ navigation }: RootStackScreenPr
   );
 }
 
-function EnrollmentCard({ e, busy, onComplete, onDrop, onContacted, onCertificate }: { e: Enrollment; busy: boolean; onComplete: () => void; onDrop: () => void; onContacted: () => void; onCertificate: () => void }) {
+function EnrollmentCard({ e, busy, onComplete, onDrop, onContacted, onCertificate, payment }: { e: Enrollment; busy: boolean; onComplete: () => void; onDrop: () => void; onContacted: () => void; onCertificate: () => void; payment: ReactNode }) {
   const title = courseTitle(e.course as never, e.level);
   const recs = e.status === 'COMPLETED' ? recommendNextCourses({ courseCode: e.course, level: e.level }) : [];
   return (
@@ -211,6 +267,8 @@ function EnrollmentCard({ e, busy, onComplete, onDrop, onContacted, onCertificat
           )}
         </View>
       )}
+
+      {payment}
 
       {e.status === 'ACTIVE' && (
         <View className="flex-row gap-2.5">
@@ -333,6 +391,226 @@ function CompleteModal({ enrollment, onClose, onSubmit }: { enrollment: Enrollme
               <Button className="flex-[2]" title="Lưu & hoàn thành" variant="accent" loading={busy} onPress={submit} />
             </View>
           </ScrollView>
+        )}
+      </KeyboardAvoidingView>
+    </Modal>
+  );
+}
+
+// ─── Tuition ────────────────────────────────────────────────────────────────
+
+const invoiceShareText = (student: string, amountVnd: number, id: string) =>
+  `TH EDU gửi ba mẹ hóa đơn học phí của bé ${student} (${formatVnd(amountVnd)}). Ba mẹ thanh toán bằng VietQR hoặc VNPay tại: ${paymentLink(id)}`;
+
+function PaymentSection({ e, isAdmin, busy, onCreate, onShare, onOpen, onCancel, onConfirm }: { e: Enrollment; isAdmin: boolean; busy: boolean; onCreate: () => void; onShare: () => void; onOpen: () => void; onCancel: () => void; onConfirm: () => void }) {
+  const inv = e.invoice;
+  const pending = inv?.status === 'PENDING_PAYMENT';
+  const paid = inv?.status === 'PAID';
+  if (!isAdmin && !inv) return null;
+  return (
+    <View className="gap-2 rounded-2xl border border-slate-100 bg-slate-50 p-3" testID="payment-section">
+      <View className="flex-row items-center gap-2">
+        <Wallet size={15} color={paid ? '#059669' : pending ? '#B45309' : COLORS.subtle} />
+        <Text className={`flex-1 text-xs font-semibold ${paid ? 'text-emerald-700' : pending ? 'text-amber-700' : 'text-ink-muted'}`} testID="payment-status">
+          {paid
+            ? `Đã đóng học phí ${formatVnd(inv!.amountVnd)} · ${inv!.receiptNo ?? ''}`
+            : pending
+              ? `Chờ thanh toán ${formatVnd(inv!.amountVnd)} · ${inv!.ref}`
+              : inv?.status === 'CANCELLED'
+                ? 'Hóa đơn gần nhất đã hủy'
+                : 'Chưa lập hóa đơn học phí'}
+        </Text>
+      </View>
+      {pending && (
+        <View className="flex-row gap-2">
+          <Button className="flex-1" size="sm" title="Gửi link thanh toán" icon={<Send size={14} color="#fff" />} onPress={onShare} />
+          <Button size="sm" title="Mở" variant="outline" onPress={onOpen} />
+        </View>
+      )}
+      {pending && isAdmin && (
+        <View className="flex-row gap-2">
+          <Button className="flex-1" size="sm" title="Đã nhận tiền" variant="outline" disabled={busy} onPress={onConfirm} />
+          <Button className="flex-1" size="sm" title="Hủy hóa đơn" variant="ghost" loading={busy} onPress={onCancel} />
+        </View>
+      )}
+      {paid && <Button size="sm" title="Xem biên lai" variant="outline" icon={<Receipt size={14} color={COLORS.brand} />} onPress={onOpen} />}
+      {isAdmin && !pending && !paid && <Button size="sm" title="Lập hóa đơn học phí" variant="outline" icon={<Wallet size={14} color={COLORS.brand} />} onPress={onCreate} />}
+    </View>
+  );
+}
+
+const digits = (t: string) => t.replace(/\D/g, '').slice(0, 9);
+const vndInput = (n: number) => (n ? n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.') : '');
+
+function InvoiceModal({ enrollment, onClose, onOpenPayment }: { enrollment: Enrollment | null; onClose: () => void; onOpenPayment: (id: string) => void }) {
+  const [draft, setDraft] = useState<InvoiceDraft | null>(null);
+  const [base, setBase] = useState('');
+  const [withDiscount, setWithDiscount] = useState(false);
+  const [discount, setDiscount] = useState('');
+  const [label, setLabel] = useState('');
+  const [note, setNote] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [created, setCreated] = useState<{ id: string; ref: string; amountVnd: number } | null>(null);
+
+  useEffect(() => {
+    if (!enrollment) return;
+    setDraft(null);
+    setCreated(null);
+    setError(null);
+    setDiscount('');
+    setNote('');
+    setWithDiscount(false);
+    setLabel('');
+    getInvoiceDraft(enrollment.id).then(
+      (d) => {
+        setDraft(d);
+        setBase(d.baseAmountVnd ? String(d.baseAmountVnd) : '');
+        // Only the label is suggested; the amount of a real offer is always typed by the admin.
+        if (d.isAlumni) setLabel('Ưu đãi học viên cũ');
+      },
+      (e) => setError(msg(e)),
+    );
+  }, [enrollment?.id]);
+
+  const baseN = Number(digits(base)) || 0;
+  const discN = withDiscount ? Number(digits(discount)) || 0 : 0;
+  const total = Math.max(baseN - discN, 0);
+
+  const submit = async () => {
+    const input = { enrollmentId: enrollment!.id, baseAmountVnd: baseN, discountVnd: discN, discountLabel: withDiscount ? label : undefined, note };
+    const p = invoiceInputProblem(input);
+    if (p) return setError(p.message);
+    setBusy(true);
+    setError(null);
+    try {
+      setCreated(await createInvoice(input));
+    } catch (e) {
+      setError(msg(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Modal visible={!!enrollment} transparent animationType="slide" onRequestClose={onClose}>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} className="flex-1 justify-end bg-black/40">
+        <Pressable className="flex-1" onPress={onClose} accessibilityLabel="Đóng" />
+        {enrollment && (
+          <ScrollView className="max-h-[90%] rounded-t-[28px] bg-white" contentContainerClassName="gap-3 p-5" keyboardShouldPersistTaps="handled" testID="invoice-modal">
+            <Text className="text-lg font-extrabold text-ink" accessibilityRole="header">
+              {created ? 'Đã lập hóa đơn' : `Lập hóa đơn học phí · ${enrollment.studentName}`}
+            </Text>
+            {created ? (
+              <>
+                <View className="gap-1 rounded-2xl bg-emerald-50 p-3">
+                  <Text className="text-[13px] font-bold text-emerald-800">
+                    {created.ref} · {formatVnd(created.amountVnd)}
+                  </Text>
+                  <Text selectable className="text-xs leading-[18px] text-emerald-800" testID="invoice-link">
+                    {paymentLink(created.id)}
+                  </Text>
+                </View>
+                <Text className="text-[13px] leading-5 text-ink-muted">
+                  Gửi link cho phụ huynh qua Zalo. Khi ba mẹ thanh toán, trạng thái tự chuyển sang "Đã đóng học phí" và biên lai được gửi qua Zalo (nếu đã cấu hình mẫu tin).
+                </Text>
+                <Button
+                  title="Gửi link cho phụ huynh"
+                  icon={<Send size={16} color="#fff" />}
+                  onPress={() => shareText(invoiceShareText(enrollment.studentName, created.amountVnd, created.id)).catch(() => {})}
+                />
+                <View className="flex-row gap-2.5">
+                  <Button className="flex-1" title="Mở trang thanh toán" variant="outline" onPress={() => onOpenPayment(created.id)} />
+                  <Button className="flex-1" title="Xong" variant="ghost" onPress={onClose} />
+                </View>
+              </>
+            ) : !draft && !error ? (
+              <ActivityIndicator className="my-6" color={COLORS.brand} />
+            ) : (
+              <>
+                <Text className="text-[13px] leading-5 text-ink-muted">
+                  {courseTitle(enrollment.course as never, enrollment.level)} · {CAMPUS_LABELS[enrollment.campus]}
+                  {draft && !draft.baseAmountVnd ? ' · Khóa này chưa có học phí mặc định — nhập số tiền.' : ''}
+                </Text>
+                <FormField label="Học phí (đồng)" value={vndInput(baseN)} onChangeText={(t) => { setBase(digits(t)); setError(null); }} placeholder="VD: 1.500.000" keyboardType="number-pad" />
+                <Pressable
+                  onPress={() => setWithDiscount((v) => !v)}
+                  accessibilityRole="checkbox"
+                  accessibilityState={{ checked: withDiscount }}
+                  className="flex-row items-center gap-2.5 py-1"
+                  testID="discount-toggle"
+                >
+                  <View className={`h-5 w-5 items-center justify-center rounded-md border-2 ${withDiscount ? 'border-brand-500 bg-brand-500' : 'border-slate-300'}`}>
+                    {withDiscount && <CheckCircle2 size={14} color="#fff" />}
+                  </View>
+                  <Text className="flex-1 text-[14px] text-ink">Áp dụng ưu đãi</Text>
+                  {draft?.isAlumni && (
+                    <View className="rounded-full bg-emerald-50 px-2 py-0.5">
+                      <Text className="text-[11px] font-bold text-emerald-700">Học viên cũ</Text>
+                    </View>
+                  )}
+                </Pressable>
+                {withDiscount && (
+                  <>
+                    <FormField label="Số tiền ưu đãi (đồng)" value={vndInput(discN)} onChangeText={(t) => { setDiscount(digits(t)); setError(null); }} placeholder="VD: 200.000" keyboardType="number-pad" />
+                    <FormField label="Tên ưu đãi (phụ huynh nhìn thấy)" value={label} onChangeText={(t) => { setLabel(t); setError(null); }} placeholder="VD: Ưu đãi học viên cũ" maxLength={80} />
+                  </>
+                )}
+                <FormField label="Ghi chú (không bắt buộc)" value={note} onChangeText={(t) => { setNote(t); setError(null); }} placeholder="VD: Học phí tháng 12/2026" maxLength={200} />
+                <View className="flex-row items-end justify-between rounded-2xl bg-slate-50 p-3">
+                  <Text className="text-[13px] font-semibold text-ink">Phụ huynh thanh toán</Text>
+                  <Text className="text-xl font-black text-accent-600" testID="invoice-modal-total">
+                    {formatVnd(total)}
+                  </Text>
+                </View>
+                {!!error && <Text className="rounded-xl bg-red-50 p-2.5 text-xs leading-[18px] text-red-700">{error}</Text>}
+                <View className="flex-row gap-2.5">
+                  <Button className="flex-1" title="Để sau" variant="outline" onPress={onClose} disabled={busy} />
+                  <Button className="flex-[2]" title="Lập hóa đơn" variant="accent" loading={busy} disabled={!draft} onPress={submit} />
+                </View>
+              </>
+            )}
+          </ScrollView>
+        )}
+      </KeyboardAvoidingView>
+    </Modal>
+  );
+}
+
+function ConfirmPaidModal({ enrollment, onClose, onSubmit }: { enrollment: Enrollment | null; onClose: () => void; onSubmit: (note: string) => Promise<string | null> }) {
+  const [note, setNote] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    setNote('');
+    setError(null);
+  }, [enrollment?.id]);
+  const submit = async () => {
+    if (note.trim().length < 5) return setError('Ghi rõ cách nhận tiền (ít nhất 5 ký tự)');
+    setBusy(true);
+    const err = await onSubmit(note.trim());
+    setBusy(false);
+    if (err) setError(err);
+  };
+  return (
+    <Modal visible={!!enrollment} transparent animationType="slide" onRequestClose={onClose}>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} className="flex-1 justify-end bg-black/40">
+        <Pressable className="flex-1" onPress={onClose} accessibilityLabel="Đóng" />
+        {enrollment?.invoice && (
+          <View className="gap-3 rounded-t-[28px] bg-white p-5" testID="confirm-paid-modal">
+            <Text className="text-lg font-extrabold text-ink" accessibilityRole="header">
+              Xác nhận đã nhận học phí
+            </Text>
+            <Text className="text-[13px] leading-5 text-ink-muted">
+              {enrollment.studentName} · {formatVnd(enrollment.invoice.amountVnd)} · {enrollment.invoice.ref}. Dùng khi phụ huynh nộp tiền mặt hoặc chuyển khoản sai nội dung. Thao tác được lưu lại cùng người xác nhận.
+            </Text>
+            <FormField label="Cách nhận tiền" value={note} onChangeText={(t) => { setNote(t); setError(null); }} placeholder="VD: Tiền mặt tại quầy Xa La" maxLength={200} />
+            {!!error && <Text className="rounded-xl bg-red-50 p-2.5 text-xs leading-[18px] text-red-700">{error}</Text>}
+            <View className="flex-row gap-2.5">
+              <Button className="flex-1" title="Để sau" variant="outline" onPress={onClose} disabled={busy} />
+              <Button className="flex-[2]" title="Xác nhận đã nhận" loading={busy} onPress={submit} />
+            </View>
+          </View>
         )}
       </KeyboardAvoidingView>
     </Modal>

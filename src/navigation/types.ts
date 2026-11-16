@@ -42,6 +42,8 @@ export type RootStackParamList = {
   StaffEnrollments: undefined;
   /** Public digital certificate. */
   Certificate: { code: string };
+  /** Tuition invoice: pay by VietQR / VNPay, then the digital receipt (link sent to the parent). */
+  Payment: { id: string };
   /** No id → create a new video. */
   VideoEditor: { id?: string } | undefined;
 };

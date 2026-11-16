@@ -4,6 +4,11 @@
  * Public (parents, anonymous):
  *   GET  /api/feed?category=TOAN_TU_DUY&limit=10&cursor=…   → FeedPageResponse
  *   POST /api/leads/submit   (LeadSubmitRequest)             → LeadSubmitResponse (201 | 200 duplicate)
+ *   GET  /api/payment/invoices/:id                           → PaymentInvoiceResponse (invoice + VietQR / VNPay options)
+ *   POST /api/payment/invoices/:id/vnpay                     → { url }  signed VNPay checkout URL
+ *
+ * Payment gateways (verified here — VNPay HMAC-SHA512 signature / bank webhook API key):
+ *   GET|POST /api/payment/ipn   VNPay IPN or SePay bank-transfer webhook → invoice PAID + receipt + Zalo message
  *
  * Admin (Authorization: Bearer <admin user JWT>, app_metadata.role = 'admin'):
  *   POST /api/admin/users                 (CreateStaffRequest) → StaffAccountDTO (201)
@@ -46,7 +51,20 @@ import { corsHeaders } from '../_shared/cors.ts';
 import { notifyNewLead, parseAdminContacts, type NotifyConfig } from '../_shared/notify.ts';
 import { runLifecycleTick, type LifecycleDeps } from '../_shared/lifecycleCron.ts';
 import { LIFECYCLE_STAGES, LIFECYCLE_TEMPLATE_ENV, type LifecycleConfig, type LifecycleStage } from '../_shared/lifecycleMessages.ts';
+import {
+  buildReceiptMessage,
+  buildVietQrPayload,
+  buildVnpayPaymentUrl,
+  toInvoiceDTO,
+  VNPAY_SANDBOX_URL,
+  type PaymentInvoiceResponse,
+  type PaymentOptionsDTO,
+  type PublicInvoiceRow,
+  type ReceiptContext,
+} from '../_shared/payments.ts';
+import { handlePaymentIpn, type PaymentIpnConfig } from '../_shared/paymentWebhook.ts';
 import { runReminderTick, sendCrmMessage, type CrmDeps } from '../_shared/reminderCron.ts';
+import { toZaloPhone } from '../_shared/zaloPayloads.ts';
 import { bearerToken, verifyCronSecret } from '../_shared/security.ts';
 import { getAccessToken } from '../_shared/zaloToken.ts';
 import { isQuietHour, sendZaloMessage, type MessagingConfig } from '../_shared/znsService.ts';
@@ -536,12 +554,149 @@ async function handleCompleteEnrollment(req: Request, enrollmentId: string): Pro
   return json(res);
 }
 
+// ─── Tuition payments ───────────────────────────────────────────────────────
+// Secrets (supabase secrets set …): VNPAY_HASH_SECRET, BANK_WEBHOOK_API_KEY. Never in the app / Vercel.
+
+const WEB_URL = env('WEB_URL').replace(/\/+$/, '');
+const bank = {
+  bin: env('VIETQR_BANK_BIN'),
+  name: env('VIETQR_BANK_NAME'),
+  accountNo: env('VIETQR_ACCOUNT_NO').replace(/\s+/g, ''),
+  accountName: env('VIETQR_ACCOUNT_NAME'),
+};
+const vnpay = {
+  tmnCode: env('VNPAY_TMN_CODE'),
+  hashSecret: env('VNPAY_HASH_SECRET'),
+  payUrl: env('VNPAY_PAY_URL') || VNPAY_SANDBOX_URL,
+  /** Where VNPay sends the parent back; default: the invoice page of the web app. */
+  returnBase: (env('VNPAY_RETURN_URL') || (WEB_URL ? `${WEB_URL}/thanh-toan` : '')).replace(/\/+$/, ''),
+};
+const vnpayReady = () => !!(vnpay.tmnCode && vnpay.hashSecret && vnpay.returnBase);
+const ipnConfig: PaymentIpnConfig = {
+  vnpayTmnCode: vnpay.tmnCode,
+  vnpayHashSecret: vnpay.hashSecret,
+  bankWebhookKey: env('BANK_WEBHOOK_API_KEY'),
+  bankAccountNo: bank.accountNo,
+};
+
+async function loadInvoice(id: string): Promise<PublicInvoiceRow | null> {
+  const { data, error } = await publicDb.rpc('payment_invoice_public', { p_id: id });
+  if (error) throw new Error(`payment_invoice_public: ${error.message}`);
+  return (data as PublicInvoiceRow | null) ?? null;
+}
+
+function paymentOptions(inv: PublicInvoiceRow): PaymentOptionsDTO {
+  let vietqr: PaymentOptionsDTO['vietqr'] = null;
+  if (bank.bin && bank.accountNo && bank.accountName) {
+    try {
+      vietqr = {
+        bankName: bank.name || bank.bin,
+        accountNo: bank.accountNo,
+        accountName: bank.accountName,
+        content: inv.ref,
+        amountVnd: Number(inv.amount_vnd),
+        qrPayload: buildVietQrPayload({ bankBin: bank.bin, accountNo: bank.accountNo, amountVnd: Number(inv.amount_vnd), content: inv.ref }),
+        autoConfirm: ipnConfig.bankWebhookKey.length >= 16,
+      };
+    } catch (e) {
+      console.error('[payment] VietQR config', e);
+    }
+  }
+  return { vietqr, vnpay: vnpayReady() };
+}
+
+/** Public: the parent's payment page / receipt. The invoice id (uuid) is the capability. */
+async function handleGetInvoice(id: string): Promise<Response> {
+  const inv = await loadInvoice(id);
+  if (!inv) return fail('NOT_FOUND', 'Không tìm thấy hóa đơn học phí', 404);
+  const body: PaymentInvoiceResponse = {
+    invoice: toInvoiceDTO(inv),
+    options: inv.status === 'PENDING_PAYMENT' ? paymentOptions(inv) : { vietqr: null, vnpay: false },
+  };
+  return json(body, 200, { 'Cache-Control': 'no-store' });
+}
+
+/** Public: a signed VNPay checkout URL for one attempt (amount and reference come from the database only). */
+async function handleVnpayCheckout(req: Request, id: string): Promise<Response> {
+  if (!vnpayReady()) return fail('SERVICE_UNAVAILABLE', 'Thanh toán VNPay chưa được trung tâm kích hoạt', 503);
+  const { data, error } = await adminDb.rpc('payment_vnpay_attempt', { p_invoice_id: id });
+  if (error) {
+    const mapped = failFromDb(error);
+    if (mapped) return mapped;
+    throw error;
+  }
+  const a = data as { txn_ref: string; amount_vnd: number; ref: string };
+  const ip = (req.headers.get('x-forwarded-for') ?? '').split(',')[0].trim() || req.headers.get('x-real-ip') || '127.0.0.1';
+  const url = await buildVnpayPaymentUrl(vnpay, {
+    txnRef: a.txn_ref,
+    amountVnd: Number(a.amount_vnd),
+    orderInfo: `Thanh toan hoc phi ${a.ref}`,
+    returnUrl: `${vnpay.returnBase}/${id}`,
+    ipAddr: ip,
+  });
+  return json({ url }, 200, { 'Cache-Control': 'no-store' });
+}
+
+/** After an invoice becomes PAID: Zalo confirmation (ZNS template → OA message → skip), logged on the invoice. */
+async function sendPaymentReceipt(invoiceId: string): Promise<void> {
+  const ctx = await rpc<ReceiptContext | null>('payment_receipt_context', { p_invoice_id: invoiceId });
+  if (!ctx || ctx.invoice.notified_at) return;
+  const built = buildReceiptMessage(ctx, WEB_URL);
+  let log: Record<string, unknown>;
+  if ('missing' in built) {
+    log = { ok: false, skip: `Thiếu dữ liệu: ${built.missing}` };
+  } else {
+    const { messaging } = await liveConfig();
+    const templateId = env('ZNS_TEMPLATE_PAYMENT_RECEIPT');
+    const phone = toZaloPhone(ctx.family!.phone_number);
+    const plan = !messaging.accessToken
+      ? null
+      : templateId && /^84[35789]\d{8}$/.test(phone)
+        ? ({ channel: 'ZNS', payload: { phone, template_id: templateId, template_data: built.data, tracking_id: `${invoiceId}:RECEIPT`, ...(ZNS_MODE === 'development' ? { mode: 'development' as const } : {}) } } as const)
+        : ctx.family!.zalo_user_id
+          ? ({ channel: 'OA', payload: { recipient: { user_id: ctx.family!.zalo_user_id }, message: { text: built.text } } } as const)
+          : null;
+    if (!plan) {
+      log = { ok: false, skip: !messaging.accessToken ? 'Chưa cấu hình ZALO_OA_ACCESS_TOKEN' : 'Chưa cấu hình ZNS_TEMPLATE_PAYMENT_RECEIPT và phụ huynh chưa liên kết Zalo OA' };
+    } else {
+      const res = await sendZaloMessage(plan, messaging.accessToken);
+      log = { ok: res.ok, channel: plan.channel, providerMessageId: res.providerMessageId ?? null, error: res.error ?? null };
+    }
+  }
+  await rpc('payment_mark_notified', { p_invoice_id: invoiceId, p_log: { ...log, at: new Date().toISOString() } });
+  console.log('[payment] receipt message', invoiceId, JSON.stringify(log));
+}
+
+async function handlePaymentIpnRoute(req: Request, url: URL): Promise<Response> {
+  const res = await handlePaymentIpn(
+    { method: req.method, query: url.searchParams, headers: req.headers, rawBody: req.method === 'POST' ? await req.text() : '' },
+    ipnConfig,
+    {
+      apply: (a) =>
+        rpc<{ result: never; invoice_id: string | null }>('payment_apply', {
+          p_provider: a.provider,
+          p_txn_id: a.txnId,
+          p_ref: a.ref ?? '',
+          p_amount_vnd: a.amountVnd,
+          p_success: a.success,
+          p_payload: a.payload,
+          p_paid_at: a.paidAt,
+          p_exact: a.exact,
+        }),
+      onPaid: (id) => void inBackground(sendPaymentReceipt(id)),
+      log: (event, data) => console.log('[payment-ipn]', event, JSON.stringify(data)),
+    },
+  );
+  return json(res.body, res.status);
+}
+
 // ─── Router ─────────────────────────────────────────────────────────────────
 
 const UUID = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
 const LEAD_ACTION = new RegExp(`^/leads/(${UUID})/(complete-trial|status)$`, 'i');
 const ENROLLMENT_COMPLETE = new RegExp(`^/enrollments/(${UUID})/complete$`, 'i');
 const USER_PASSWORD = new RegExp(`^/admin/users/(${UUID})/password$`, 'i');
+const PAYMENT_INVOICE = new RegExp(`^/payment/invoices/(${UUID})(/vnpay)?$`, 'i');
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
@@ -556,6 +711,12 @@ Deno.serve(async (req) => {
       return req.method === 'GET' ? await handleFeed(url) : fail('METHOD_NOT_ALLOWED', 'Chỉ hỗ trợ GET', 405);
     }
     if (path === '/leads/submit') return req.method === 'POST' ? await handleLeadSubmit(req) : postOnly();
+    if (path === '/payment/ipn') return await handlePaymentIpnRoute(req, url);
+    const inv = PAYMENT_INVOICE.exec(path);
+    if (inv) {
+      if (inv[2]) return req.method === 'POST' ? await handleVnpayCheckout(req, inv[1].toLowerCase()) : postOnly();
+      return req.method === 'GET' ? await handleGetInvoice(inv[1].toLowerCase()) : fail('METHOD_NOT_ALLOWED', 'Chỉ hỗ trợ GET', 405);
+    }
     if (path === '/cron/reminders') return req.method === 'POST' ? await handleCronReminders(req) : postOnly();
     if (path === '/cron/lifecycle') return req.method === 'POST' ? await handleCronLifecycle(req) : postOnly();
     const enr = ENROLLMENT_COMPLETE.exec(path);

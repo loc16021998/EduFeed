@@ -8,6 +8,7 @@ import AdminHomeScreen from '@/screens/Admin/AdminHomeScreen';
 import TeacherUploadScreen from '@/screens/Admin/TeacherUploadScreen';
 import ManageBookingsScreen from '@/screens/Booking/ManageBookingsScreen';
 import CertificateScreen from '@/screens/Share/CertificateScreen';
+import PaymentScreen from '@/screens/Payment/PaymentScreen';
 import StaffEnrollmentsScreen from '@/screens/Staff/StaffEnrollmentsScreen';
 import DashboardScreen from '@/screens/Admin/DashboardScreen';
 import BookingSuccessScreen from '@/screens/Booking/BookingSuccessScreen';
@@ -59,6 +60,7 @@ const linking: LinkingOptions<RootStackParamList> = {
       ManageBookings: 'lich-hen',
       VideoShare: 'v/:slug',
       Certificate: 'chung-nhan/:code',
+      Payment: 'thanh-toan/:id',
       StaffLogin: 'quan-ly/dang-nhap',
       StaffRegister: 'quan-ly/dang-ky',
       StaffVideos: 'quan-ly',
@@ -124,6 +126,7 @@ export default function AppNavigator() {
         <Stack.Screen name="TeacherUpload" component={TeacherUploadScreen} options={{ headerShown: false }} />
         <Stack.Screen name="StaffEnrollments" component={StaffEnrollmentsScreen} options={{ headerShown: false }} />
         <Stack.Screen name="Certificate" component={CertificateScreen} options={{ headerShown: false }} />
+        <Stack.Screen name="Payment" component={PaymentScreen} options={{ headerShown: false }} />
         <Stack.Screen name="VideoEditor" component={VideoEditorScreen} options={{ headerShown: false }} />
         <Stack.Screen
           name="QuizModal"

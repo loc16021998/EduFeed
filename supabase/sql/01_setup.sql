@@ -4,11 +4,11 @@
 -- HOW TO RUN: Supabase Dashboard → project → SQL Editor → New query → paste this whole file → Run.
 -- Run ONCE on a fresh project. It is wrapped in a transaction: if anything fails, nothing is applied.
 --
--- Includes migrations: 20261111090000_core_schema.sql, 20261111090100_rls_policies.sql, 20261111090200_functions.sql, 20261112090000_trust.sql, 20261113090000_video_publishing.sql, 20261114090000_crm_automation.sql, 20261115090000_zalo_tokens.sql, 20261116090000_dashboard_analytics.sql, 20261117090000_admin_accounts.sql, 20261118090000_admin_only_business.sql, 20261119090000_staff_signup_requests.sql, 20261120090000_parent_club_promo.sql, 20261121090000_parent_booking_actions.sql, 20261122090000_lifecycle_upsell.sql
+-- Includes migrations: 20261111090000_core_schema.sql, 20261111090100_rls_policies.sql, 20261111090200_functions.sql, 20261112090000_trust.sql, 20261113090000_video_publishing.sql, 20261114090000_crm_automation.sql, 20261115090000_zalo_tokens.sql, 20261116090000_dashboard_analytics.sql, 20261117090000_admin_accounts.sql, 20261118090000_admin_only_business.sql, 20261119090000_staff_signup_requests.sql, 20261120090000_parent_club_promo.sql, 20261121090000_parent_booking_actions.sql, 20261122090000_lifecycle_upsell.sql, 20261123090000_tuition_payments.sql
 -- plus required reference data (course categories, branches).
 --
 -- If you later switch to the Supabase CLI (supabase db push), first mark these as applied:
---   npx supabase migration repair --status applied 20261111090000 20261111090100 20261111090200 20261112090000 20261113090000 20261114090000 20261115090000 20261116090000 20261117090000 20261118090000 20261119090000 20261120090000 20261121090000 20261122090000
+--   npx supabase migration repair --status applied 20261111090000 20261111090100 20261111090200 20261112090000 20261113090000 20261114090000 20261115090000 20261116090000 20261117090000 20261118090000 20261119090000 20261120090000 20261121090000 20261122090000 20261123090000
 -- ═══════════════════════════════════════════════════════════════════════════
 
 begin;
@@ -2523,6 +2523,444 @@ grant execute on function public.lifecycle_flag_advisor(uuid) to service_role;
 
 revoke all on function public.get_certificate(text) from public;
 grant execute on function public.get_certificate(text) to anon, authenticated;
+
+-- ───────────────── 20261123090000_tuition_payments.sql ─────────────────
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Online tuition payments: invoices, VietQR bank transfer (auto-reconciled by a bank-notification webhook)
+-- and the VNPay gateway.
+--
+-- Flow
+--   1. An admin creates a tuition invoice for an enrollment (payment_create_invoice). The enrollment's
+--      payment_status becomes PENDING_PAYMENT and the parent receives a link: <web>/thanh-toan/<invoice id>.
+--   2. The parent pays by VietQR (transfer content = invoice ref, e.g. THEDU1A2B3C4D) or via VNPay.
+--   3. The Edge Function `api` verifies the gateway / bank webhook (POST|GET /api/payment/ipn) and calls
+--      payment_apply() — the ONLY place an invoice becomes PAID. It is idempotent per provider transaction,
+--      checks the amount, issues the receipt number and sets enrollments.payment_status = 'PAID'.
+--   4. The parent's screen polls payment_invoice_public() and turns into the digital receipt; a Zalo
+--      ZNS / OA confirmation is sent in the background.
+--
+-- enrollments.status (ACTIVE / COMPLETED / DROPPED) is the course lifecycle and is left untouched; payment
+-- has its own column so the post-course follow-ups keep working unchanged.
+-- ─────────────────────────────────────────────────────────────────────────────
+
+alter table public.enrollments
+  add column if not exists payment_status text check (payment_status is null or payment_status in ('PENDING_PAYMENT', 'PAID'));
+
+create sequence if not exists public.tuition_receipt_seq;
+
+create table public.tuition_invoices (
+  id                uuid primary key default gen_random_uuid(),
+  -- Bank transfer content and gateway order reference: letters + digits only (banks strip symbols).
+  ref               text not null unique check (ref ~ '^THEDU[0-9A-F]{8}$'),
+  enrollment_id     uuid not null references public.enrollments (id) on delete restrict,
+  lead_id           uuid references public.leads (id) on delete set null,
+  -- Snapshot at billing time: the receipt must not change if the enrollment is edited later.
+  student_name      text not null,
+  course_code       text not null references public.categories (code) on update cascade,
+  campus_location   text not null references public.branches (code) on update cascade,
+  base_amount_vnd   integer not null check (base_amount_vnd between 10000 and 100000000),
+  discount_vnd      integer not null default 0 check (discount_vnd >= 0),
+  discount_label    text check (discount_label is null or char_length(discount_label) between 2 and 80),
+  amount_vnd        integer generated always as (base_amount_vnd - discount_vnd) stored,
+  note              text check (note is null or char_length(note) <= 200),
+  status            text not null default 'PENDING_PAYMENT' check (status in ('PENDING_PAYMENT', 'PAID', 'CANCELLED')),
+  method            text check (method is null or method in ('VIETQR', 'VNPAY', 'MANUAL')),
+  vnpay_attempts    smallint not null default 0,
+  paid_at           timestamptz,
+  paid_amount_vnd   bigint,
+  provider_txn_id   text,
+  receipt_no        text unique,
+  created_by        uuid default auth.uid() references auth.users (id) on delete set null,
+  created_at        timestamptz not null default now(),
+  cancelled_at      timestamptz,
+  cancelled_by      uuid references auth.users (id) on delete set null,
+  notified_at       timestamptz,
+  notification_log  jsonb,
+  updated_at        timestamptz not null default now(),
+  constraint tuition_discount_below_base check (discount_vnd < base_amount_vnd),
+  constraint tuition_discount_labelled check (discount_vnd = 0 or discount_label is not null),
+  constraint tuition_paid_fields check (status <> 'PAID' or (paid_at is not null and receipt_no is not null and method is not null))
+);
+
+-- One open invoice per enrollment.
+create unique index tuition_invoices_one_open_idx on public.tuition_invoices (enrollment_id) where status = 'PENDING_PAYMENT';
+create index tuition_invoices_enrollment_idx on public.tuition_invoices (enrollment_id, created_at desc);
+
+create trigger tuition_invoices_set_updated_at
+  before update on public.tuition_invoices
+  for each row execute function public.set_updated_at();
+
+-- Every webhook / IPN call, verified or not: the audit trail and the idempotency key.
+create table public.payment_events (
+  id               bigint generated always as identity primary key,
+  provider         text not null check (provider in ('VNPAY', 'BANK', 'MANUAL')),
+  provider_txn_id  text not null,
+  invoice_id       uuid references public.tuition_invoices (id) on delete set null,
+  ref              text,
+  amount_vnd       bigint,
+  success          boolean not null,
+  result           text not null default 'RECEIVED',
+  payload          jsonb,
+  created_at       timestamptz not null default now(),
+  constraint payment_events_once unique (provider, provider_txn_id)
+);
+create index payment_events_invoice_idx on public.payment_events (invoice_id, created_at desc);
+
+alter table public.tuition_invoices enable row level security;
+alter table public.payment_events enable row level security;
+-- Reads only; every write goes through the functions below.
+create policy "staff read tuition invoices" on public.tuition_invoices for select to authenticated using (public.is_staff());
+create policy "admin read payment events" on public.payment_events for select to authenticated using (public.is_admin());
+revoke all on public.tuition_invoices from anon;
+revoke all on public.payment_events from anon;
+revoke insert, update, delete on public.tuition_invoices from authenticated;
+revoke insert, update, delete on public.payment_events from authenticated;
+
+-- ─── Admin: draft / create / cancel / confirm manually ──────────────────────
+
+-- Suggested amount (the course's monthly fee) and whether the family already completed a course with us.
+create or replace function public.payment_invoice_draft(p_enrollment_id uuid)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+declare
+  v_e public.enrollments;
+  v_phone text;
+begin
+  if not public.is_admin() then
+    raise exception 'Chỉ quản trị viên được lập hóa đơn học phí' using hint = 'FORBIDDEN';
+  end if;
+  select * into v_e from public.enrollments where id = p_enrollment_id;
+  if not found then
+    raise exception 'Không tìm thấy khóa học của học viên' using hint = 'NOT_FOUND';
+  end if;
+  select phone_number into v_phone from public.leads where id = v_e.lead_id;
+  return jsonb_build_object(
+    'base_amount_vnd', (select monthly_fee_vnd from public.course_fees where course_code = v_e.course_code),
+    'is_alumni', exists (
+      select 1 from public.enrollments x
+       left join public.leads l on l.id = x.lead_id
+      where x.id <> v_e.id and x.status = 'COMPLETED'
+        and (x.lead_id = v_e.lead_id or (v_phone is not null and l.phone_number = v_phone))),
+    'open_invoice_id', (select id from public.tuition_invoices where enrollment_id = v_e.id and status = 'PENDING_PAYMENT'));
+end;
+$$;
+
+create or replace function public.payment_create_invoice(
+  p_enrollment_id uuid,
+  p_base_amount_vnd integer,
+  p_discount_vnd integer default 0,
+  p_discount_label text default null,
+  p_note text default null)
+returns jsonb
+language plpgsql
+volatile
+security definer
+set search_path = public
+as $$
+declare
+  v_e     public.enrollments;
+  v_inv   public.tuition_invoices;
+  v_disc  integer := coalesce(p_discount_vnd, 0);
+  v_label text := nullif(btrim(coalesce(p_discount_label, '')), '');
+  v_note  text := nullif(btrim(coalesce(p_note, '')), '');
+  v_ref   text;
+  i       int := 0;
+begin
+  if not public.is_admin() then
+    raise exception 'Chỉ quản trị viên được lập hóa đơn học phí' using hint = 'FORBIDDEN';
+  end if;
+  if p_base_amount_vnd is null or p_base_amount_vnd not between 10000 and 100000000 then
+    raise exception 'Học phí phải từ 10.000đ đến 100.000.000đ' using hint = 'VALIDATION:base_amount_vnd';
+  end if;
+  if v_disc < 0 or v_disc >= p_base_amount_vnd then
+    raise exception 'Ưu đãi phải nhỏ hơn học phí' using hint = 'VALIDATION:discount_vnd';
+  end if;
+  if v_disc > 0 and (v_label is null or char_length(v_label) not between 2 and 80) then
+    raise exception 'Ghi rõ tên ưu đãi (2–80 ký tự), ví dụ "Ưu đãi học viên cũ"' using hint = 'VALIDATION:discount_label';
+  end if;
+  if v_disc = 0 then v_label := null; end if;
+  if v_note is not null and char_length(v_note) > 200 then
+    raise exception 'Ghi chú tối đa 200 ký tự' using hint = 'VALIDATION:note';
+  end if;
+
+  select * into v_e from public.enrollments where id = p_enrollment_id for update;
+  if not found then
+    raise exception 'Không tìm thấy khóa học của học viên' using hint = 'NOT_FOUND';
+  end if;
+  if v_e.status = 'DROPPED' then
+    raise exception 'Học viên đã dừng học, không lập hóa đơn' using hint = 'CONFLICT';
+  end if;
+  if exists (select 1 from public.tuition_invoices where enrollment_id = v_e.id and status = 'PENDING_PAYMENT') then
+    raise exception 'Học viên đang có hóa đơn chờ thanh toán — hủy hóa đơn đó trước khi lập hóa đơn mới' using hint = 'CONFLICT';
+  end if;
+
+  loop
+    i := i + 1;
+    v_ref := 'THEDU' || upper(substr(replace(gen_random_uuid()::text, '-', ''), 1, 8));
+    exit when not exists (select 1 from public.tuition_invoices where ref = v_ref) or i > 5;
+  end loop;
+
+  insert into public.tuition_invoices (ref, enrollment_id, lead_id, student_name, course_code, campus_location,
+                                       base_amount_vnd, discount_vnd, discount_label, note)
+  values (v_ref, v_e.id, v_e.lead_id, v_e.student_name, v_e.course_code, v_e.campus_location,
+          p_base_amount_vnd, v_disc, v_label, v_note)
+  returning * into v_inv;
+
+  update public.enrollments set payment_status = 'PENDING_PAYMENT' where id = v_e.id;
+
+  return jsonb_build_object('id', v_inv.id, 'ref', v_inv.ref, 'amount_vnd', v_inv.amount_vnd, 'status', v_inv.status);
+end;
+$$;
+
+create or replace function public.payment_cancel_invoice(p_invoice_id uuid)
+returns jsonb
+language plpgsql
+volatile
+security definer
+set search_path = public
+as $$
+declare
+  v_inv public.tuition_invoices;
+begin
+  if not public.is_admin() then
+    raise exception 'Chỉ quản trị viên được hủy hóa đơn' using hint = 'FORBIDDEN';
+  end if;
+  update public.tuition_invoices
+     set status = 'CANCELLED', cancelled_at = now(), cancelled_by = auth.uid()
+   where id = p_invoice_id and status = 'PENDING_PAYMENT'
+  returning * into v_inv;
+  if not found then
+    raise exception 'Chỉ hủy được hóa đơn đang chờ thanh toán' using hint = 'CONFLICT';
+  end if;
+  update public.enrollments e
+     set payment_status = case when exists (select 1 from public.tuition_invoices t where t.enrollment_id = e.id and t.status = 'PAID')
+                               then 'PAID' else null end
+   where e.id = v_inv.enrollment_id;
+  return jsonb_build_object('id', v_inv.id, 'status', v_inv.status);
+end;
+$$;
+
+-- ─── The single place an invoice becomes PAID ───────────────────────────────
+-- Called by the Edge Function after it has verified the gateway signature / webhook key (service_role),
+-- and by payment_confirm_manual(). Idempotent: one row per (provider, provider transaction).
+--   p_exact = true  → the amount must match exactly (VNPay: the amount is part of the signed order)
+--   p_exact = false → bank transfer: paying more is accepted (noted), paying less is not
+-- Results: PAID | ALREADY_PAID | DUPLICATE | NOT_FOUND | AMOUNT_MISMATCH | UNDERPAID | INVOICE_CANCELLED | FAILED
+create or replace function public.payment_apply(
+  p_provider text,
+  p_txn_id text,
+  p_ref text,
+  p_amount_vnd bigint,
+  p_success boolean,
+  p_payload jsonb,
+  p_paid_at timestamptz default null,
+  p_exact boolean default true)
+returns jsonb
+language plpgsql
+volatile
+security definer
+set search_path = public
+as $$
+declare
+  v_event  bigint;
+  v_inv    public.tuition_invoices;
+  v_result text;
+  v_ref    text := upper(btrim(coalesce(p_ref, '')));
+begin
+  if p_provider not in ('VNPAY', 'BANK', 'MANUAL') or coalesce(btrim(p_txn_id), '') = '' then
+    raise exception 'invalid payment event' using hint = 'VALIDATION:provider';
+  end if;
+
+  insert into public.payment_events (provider, provider_txn_id, ref, amount_vnd, success, payload)
+  values (p_provider, left(p_txn_id, 120), nullif(v_ref, ''), p_amount_vnd, p_success, p_payload)
+  on conflict (provider, provider_txn_id) do nothing
+  returning id into v_event;
+  if v_event is null then
+    return jsonb_build_object('result', 'DUPLICATE');
+  end if;
+
+  select * into v_inv from public.tuition_invoices where ref = v_ref for update;
+  if not found then
+    v_result := 'NOT_FOUND';
+  elsif not p_success then
+    v_result := 'FAILED';
+  elsif v_inv.status = 'PAID' then
+    v_result := 'ALREADY_PAID';
+  elsif v_inv.status = 'CANCELLED' then
+    v_result := 'INVOICE_CANCELLED';   -- money received for a cancelled invoice: needs a manual refund / re-issue
+  elsif p_amount_vnd is null or (p_exact and p_amount_vnd <> v_inv.amount_vnd) then
+    v_result := 'AMOUNT_MISMATCH';
+  elsif p_amount_vnd < v_inv.amount_vnd then
+    v_result := 'UNDERPAID';
+  else
+    update public.tuition_invoices
+       set status = 'PAID',
+           method = case p_provider when 'VNPAY' then 'VNPAY' when 'BANK' then 'VIETQR' else 'MANUAL' end,
+           paid_at = coalesce(p_paid_at, now()),
+           paid_amount_vnd = p_amount_vnd,
+           provider_txn_id = left(p_txn_id, 120),
+           receipt_no = 'BL' || to_char(now() at time zone 'Asia/Ho_Chi_Minh', 'YYMMDD') || '-'
+                        || lpad(nextval('public.tuition_receipt_seq')::text, 5, '0')
+     where id = v_inv.id
+    returning * into v_inv;
+    update public.enrollments set payment_status = 'PAID' where id = v_inv.enrollment_id;
+    v_result := 'PAID';
+  end if;
+
+  update public.payment_events set invoice_id = v_inv.id, result = v_result where id = v_event;
+
+  return jsonb_build_object(
+    'result', v_result,
+    'invoice_id', v_inv.id,
+    'ref', v_inv.ref,
+    'status', v_inv.status,
+    'amount_vnd', v_inv.amount_vnd,
+    'receipt_no', v_inv.receipt_no,
+    'overpaid_vnd', case when v_result = 'PAID' then greatest(p_amount_vnd - v_inv.amount_vnd, 0) else null end);
+end;
+$$;
+
+-- Admin: money received outside the gateways (cash, a transfer without the reference…).
+create or replace function public.payment_confirm_manual(p_invoice_id uuid, p_note text)
+returns jsonb
+language plpgsql
+volatile
+security definer
+set search_path = public
+as $$
+declare
+  v_inv  public.tuition_invoices;
+  v_note text := btrim(coalesce(p_note, ''));
+begin
+  if not public.is_admin() then
+    raise exception 'Chỉ quản trị viên được xác nhận đã nhận học phí' using hint = 'FORBIDDEN';
+  end if;
+  if char_length(v_note) not between 5 and 200 then
+    raise exception 'Ghi rõ cách nhận tiền (5–200 ký tự), ví dụ "Tiền mặt tại quầy, cô Hương nhận"' using hint = 'VALIDATION:note';
+  end if;
+  select * into v_inv from public.tuition_invoices where id = p_invoice_id;
+  if not found then
+    raise exception 'Không tìm thấy hóa đơn' using hint = 'NOT_FOUND';
+  end if;
+  if v_inv.status <> 'PENDING_PAYMENT' then
+    raise exception 'Hóa đơn này không còn chờ thanh toán' using hint = 'CONFLICT';
+  end if;
+  return public.payment_apply('MANUAL', gen_random_uuid()::text, v_inv.ref, v_inv.amount_vnd, true,
+                              jsonb_build_object('note', v_note, 'by', auth.uid()), now(), true);
+end;
+$$;
+
+-- ─── Edge Function helpers (service_role) ───────────────────────────────────
+
+-- A fresh VNPay order reference per attempt (VNPay rejects a reused vnp_TxnRef): <ref>V<n>.
+create or replace function public.payment_vnpay_attempt(p_invoice_id uuid)
+returns jsonb
+language plpgsql
+volatile
+security definer
+set search_path = public
+as $$
+declare
+  v_inv public.tuition_invoices;
+begin
+  update public.tuition_invoices
+     set vnpay_attempts = vnpay_attempts + 1
+   where id = p_invoice_id and status = 'PENDING_PAYMENT' and vnpay_attempts < 30
+  returning * into v_inv;
+  if not found then
+    if exists (select 1 from public.tuition_invoices where id = p_invoice_id and status = 'PENDING_PAYMENT') then
+      raise exception 'Đã thử thanh toán quá nhiều lần, vui lòng liên hệ trung tâm' using hint = 'RATE_LIMITED';
+    end if;
+    raise exception 'Hóa đơn không còn chờ thanh toán' using hint = 'CONFLICT';
+  end if;
+  return jsonb_build_object('txn_ref', v_inv.ref || 'V' || v_inv.vnpay_attempts, 'amount_vnd', v_inv.amount_vnd, 'ref', v_inv.ref);
+end;
+$$;
+
+-- Everything the receipt message needs.
+create or replace function public.payment_receipt_context(p_invoice_id uuid)
+returns jsonb
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select jsonb_build_object(
+    'invoice', jsonb_build_object('id', t.id, 'ref', t.ref, 'status', t.status, 'amount_vnd', t.amount_vnd,
+                                  'paid_amount_vnd', t.paid_amount_vnd, 'paid_at', t.paid_at, 'receipt_no', t.receipt_no,
+                                  'method', t.method, 'student_name', t.student_name, 'notified_at', t.notified_at),
+    'course_name', c.name,
+    'branch_name', b.name,
+    'family', case when l.id is null then null else
+              jsonb_build_object('parent_name', l.parent_name, 'phone_number', l.phone_number, 'zalo_user_id', l.zalo_user_id) end)
+  from public.tuition_invoices t
+  join public.categories c on c.code = t.course_code
+  join public.branches b on b.code = t.campus_location
+  left join public.leads l on l.id = t.lead_id
+  where t.id = p_invoice_id;
+$$;
+
+create or replace function public.payment_mark_notified(p_invoice_id uuid, p_log jsonb)
+returns void
+language sql
+volatile
+security definer
+set search_path = public
+as $$
+  update public.tuition_invoices
+     set notification_log = p_log,
+         notified_at = case when (p_log ->> 'ok')::boolean then now() else notified_at end
+   where id = p_invoice_id;
+$$;
+
+-- ─── Public: the parent's payment page / receipt (by the unguessable invoice id) ───
+create or replace function public.payment_invoice_public(p_id uuid)
+returns jsonb
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select jsonb_build_object(
+    'id', t.id, 'ref', t.ref, 'status', t.status,
+    'student_name', t.student_name, 'course_code', t.course_code, 'course_name', c.name,
+    'campus_location', t.campus_location, 'branch_name', b.name,
+    'base_amount_vnd', t.base_amount_vnd, 'discount_vnd', t.discount_vnd, 'discount_label', t.discount_label,
+    'amount_vnd', t.amount_vnd, 'note', t.note, 'created_at', t.created_at,
+    'method', t.method, 'paid_at', t.paid_at, 'paid_amount_vnd', t.paid_amount_vnd, 'receipt_no', t.receipt_no)
+  from public.tuition_invoices t
+  join public.categories c on c.code = t.course_code
+  join public.branches b on b.code = t.campus_location
+  where t.id = p_id;
+$$;
+
+-- ─── Grants ─────────────────────────────────────────────────────────────────
+revoke all on function public.payment_invoice_draft(uuid) from public, anon;
+revoke all on function public.payment_create_invoice(uuid, integer, integer, text, text) from public, anon;
+revoke all on function public.payment_cancel_invoice(uuid) from public, anon;
+revoke all on function public.payment_confirm_manual(uuid, text) from public, anon;
+grant execute on function public.payment_invoice_draft(uuid) to authenticated;
+grant execute on function public.payment_create_invoice(uuid, integer, integer, text, text) to authenticated;
+grant execute on function public.payment_cancel_invoice(uuid) to authenticated;
+grant execute on function public.payment_confirm_manual(uuid, text) to authenticated;
+
+revoke all on function public.payment_apply(text, text, text, bigint, boolean, jsonb, timestamptz, boolean) from public, anon, authenticated;
+revoke all on function public.payment_vnpay_attempt(uuid) from public, anon, authenticated;
+revoke all on function public.payment_receipt_context(uuid) from public, anon, authenticated;
+revoke all on function public.payment_mark_notified(uuid, jsonb) from public, anon, authenticated;
+grant execute on function public.payment_apply(text, text, text, bigint, boolean, jsonb, timestamptz, boolean) to service_role;
+grant execute on function public.payment_vnpay_attempt(uuid) to service_role;
+grant execute on function public.payment_receipt_context(uuid) to service_role;
+grant execute on function public.payment_mark_notified(uuid, jsonb) to service_role;
+
+revoke all on function public.payment_invoice_public(uuid) from public;
+grant execute on function public.payment_invoice_public(uuid) to anon, authenticated;
+
+revoke all on sequence public.tuition_receipt_seq from public, anon, authenticated;
 
 -- ───────────────── Reference data (required) ─────────────────
 insert into public.categories (code, name, icon, color, sort_order) values
