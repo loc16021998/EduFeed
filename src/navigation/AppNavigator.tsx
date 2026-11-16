@@ -11,6 +11,7 @@ import CertificateScreen from '@/screens/Share/CertificateScreen';
 import PaymentScreen from '@/screens/Payment/PaymentScreen';
 import ParentAuthScreen from '@/screens/Auth/ParentAuthScreen';
 import ParentPortalScreen from '@/screens/Parent/ParentPortalScreen';
+import ReferralScreen from '@/screens/Parent/ReferralScreen';
 import AccountManagementScreen from '@/screens/Admin/AccountManagementScreen';
 import StaffEnrollmentsScreen from '@/screens/Staff/StaffEnrollmentsScreen';
 import DashboardScreen from '@/screens/Admin/DashboardScreen';
@@ -66,6 +67,7 @@ const linking: LinkingOptions<RootStackParamList> = {
       Payment: 'thanh-toan/:id',
       ParentPortal: 'con-toi',
       ParentAuth: 'con-toi/dang-nhap',
+      Referral: 'con-toi/gioi-thieu',
       AccountManagement: 'quan-tri/phu-huynh',
       StaffLogin: 'quan-ly/dang-nhap',
       StaffRegister: 'quan-ly/dang-ky',
@@ -137,6 +139,7 @@ export default function AppNavigator() {
         <Stack.Screen name="Payment" component={PaymentScreen} options={{ headerShown: false }} />
         <Stack.Screen name="ParentAuth" component={ParentAuthScreen} options={{ headerShown: false }} />
         <Stack.Screen name="ParentPortal" component={ParentPortalScreen} options={{ headerShown: false }} />
+        <Stack.Screen name="Referral" component={ReferralScreen} options={{ headerShown: false }} />
         <Stack.Screen name="AccountManagement" component={AccountManagementScreen} options={{ headerShown: false }} />
         <Stack.Screen name="VideoEditor" component={VideoEditorScreen} options={{ headerShown: false }} />
         <Stack.Screen

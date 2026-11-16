@@ -23,6 +23,8 @@ import GiftBanner from './components/GiftBanner';
 import SchedulePicker from './components/SchedulePicker';
 import ZaloQuickFillButton from './components/ZaloQuickFillButton';
 import ZaloTrustNote from './components/ZaloTrustNote';
+import ReferralCodeField, { shortVnd } from './components/ReferralCodeField';
+import { getAttribution } from '@/services/analytics';
 import { useExitIntent } from './hooks/useExitIntent';
 
 const COURSE_OPTIONS: SelectOption<CourseCategory>[] = COURSE_CATEGORIES.map((c) => {
@@ -68,6 +70,16 @@ export default function BookingScreen({ route, navigation }: TabScreenProps<'Boo
   const promoCode = clubReward ? clubReward.promoCode : exitOffer.claimed ? ('EBOOK_VAO_LOP_1' as const) : undefined;
   const { claimExitOffer, dismissExitOffer, consumeExitOffer } = useTrustStore();
   const [interacted, setInteracted] = useState(false);
+  // Friend's referral code: from a shared link (?ref=… or utm_source=referral) or typed; set only when valid.
+  const [referralCode, setReferralCode] = useState<string | undefined>();
+  const [referralDiscount, setReferralDiscount] = useState(0);
+  const [referralInitial, setReferralInitial] = useState<string | undefined>(params?.ref);
+  useEffect(() => {
+    if (params?.ref) return setReferralInitial(params.ref);
+    getAttribution().then((a) => {
+      if (a?.source === 'referral' && a.campaign) setReferralInitial(a.campaign);
+    }, () => {});
+  }, [params?.ref]);
   const edit = <K extends BookingField>(field: K, value: BookingForm[K]) => {
     setInteracted(true);
     setField(field, value);
@@ -122,6 +134,7 @@ export default function BookingScreen({ route, navigation }: TabScreenProps<'Boo
       sourceRef: params?.sourceRef,
       zaloUserId,
       ...(promoCode ? { promoCode } : {}),
+      ...(referralCode ? { referralCode } : {}),
       ...(quizSummary ? { quizSummary, quizAnswers } : {}),
     });
 
@@ -295,6 +308,16 @@ export default function BookingScreen({ route, navigation }: TabScreenProps<'Boo
           />
         </FormSection>
 
+        <View className="px-1">
+          <ReferralCodeField
+            initial={referralInitial}
+            onValidCode={(code, discount) => {
+              setReferralCode(code);
+              setReferralDiscount(discount ?? 0);
+            }}
+          />
+        </View>
+
         <Text className="px-2 text-center text-[11px] leading-4 text-ink-subtle">
           Bằng việc đăng ký, ba mẹ đồng ý để TH EDU liên hệ qua điện thoại / Zalo để xác nhận lịch học thử. Thông tin
           chỉ dùng cho mục đích tư vấn và không chia sẻ cho bên thứ ba. Lượt đăng ký có thể hiển thị ẩn danh trong ứng dụng (VD: "Phụ huynh T. vừa đặt lịch…").
@@ -314,6 +337,14 @@ export default function BookingScreen({ route, navigation }: TabScreenProps<'Boo
             <Gift size={16} color="#059669" />
             <Text className="flex-1 text-xs font-semibold text-emerald-700">
               {clubReward ? `Ưu đãi CLB Phụ huynh: ${clubReward.title}` : `Đã thêm quà: ${PROMO_CODES[promoCode]}`}
+            </Text>
+          </View>
+        )}
+        {!!referralCode && (
+          <View className="flex-row items-center gap-2 rounded-xl bg-emerald-50 p-2.5" testID="booking-referral">
+            <Gift size={16} color="#059669" />
+            <Text className="flex-1 text-xs font-semibold text-emerald-700">
+              Mã giới thiệu {referralCode}{referralDiscount > 0 ? ` · giảm ${shortVnd(referralDiscount)} học phí khóa đầu` : ''}
             </Text>
           </View>
         )}

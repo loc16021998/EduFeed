@@ -15,8 +15,6 @@ export const ENV = {
   webUrl: (process.env.PUBLIC_WEB_URL ?? '').replace(/\/+$/, ''),
   /** Centre hotline for parents (digits only), e.g. 0987654321. Empty = call buttons hidden. */
   hotline: (process.env.PUBLIC_HOTLINE ?? '').replace(/[^\d+]/g, ''),
-  /** REAL referral reward shown to parents, e.g. "Tặng 200.000đ học phí khi bạn bè nhập học". Empty = no reward promised. */
-  referralReward: (process.env.PUBLIC_REFERRAL_REWARD ?? '').trim(),
 } as const;
 
 export const hasSupabase = !!(ENV.supabaseUrl && ENV.supabaseAnonKey);

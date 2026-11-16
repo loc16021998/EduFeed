@@ -306,6 +306,39 @@ Migration `20261124090000_parent_portal.sql` (upgrade file in `sql/upgrades/`).
 `/booking?utm_source=referral&utm_medium=parent&utm_campaign=<code>`, so sign-ups show up in the dashboard's UTM sources.
 A reward is shown **only** when `PUBLIC_REFERRAL_REWARD` holds a real offer.
 
+## Referral & rewards (`/con-toi/gioi-thieu`)
+
+Migration `20261125090000_referral_rewards.sql`. Run it after `…parent_portal`.
+
+- **Program:** the `referral_program` table holds one row: on/off, the referrer's voucher (default **200.000đ**), the
+  new family's discount (default **150.000đ**) and the voucher validity (180 days).
+  Admins change it in *Phụ huynh & học viên → Giới thiệu*. Every referral keeps the amounts in force when the family
+  booked, so a later program change never alters an existing promise.
+- **Booking:** the form has an optional "Mã giới thiệu (Nếu có)" field.
+  - It is checked live with `referral_check()`, which only says valid/invalid and the discount, never who owns the code.
+  - Shared links `/booking?ref=CODE` fill it in automatically.
+  - `submit_lead()` applies the code via `referral_attach()`. A bad code never blocks the booking; the response's
+    `referral` field says whether it was applied and why not.
+- **Rules (database):**
+  - The code must belong to an active parent and the program must be on.
+  - No self-referral (same phone).
+  - New families only (no course with TH EDU yet).
+  - One referral per family (phone).
+- **Status:**
+  - `PENDING_TRIAL` when the trial is booked.
+  - `PENDING_PAYMENT` once the trial is completed or the child is enrolled.
+  - `VOID` if the trial is cancelled.
+  - `REWARDED` when the referred family pays an invoice, through any route (VietQR / VNPay webhook or confirmed by hand).
+    This is done by the trigger `tuition_invoices_referral`, which also issues the voucher (`GT…`, status AVAILABLE).
+- **Discount and vouchers on invoices:** in *Lập hóa đơn học phí*:
+  - The new family's discount is pre-filled ("Ưu đãi mã giới thiệu").
+  - The family's own vouchers appear as chips. Picking one adds it to the discount and marks it USED (`referral_voucher_redeem`).
+  - Cancelling that invoice frees the voucher again.
+- **Zalo:** after each payment and in the daily job (`/api/cron/lifecycle`), the Edge Function messages new referrers.
+  It uses the ZNS template `ZNS_TEMPLATE_REFERRAL_REWARD` (params C_NAME, AMOUNT, FRIEND, VOUCHER_CODE, EXPIRY), or an
+  OA message. If neither is configured, the message waits and is sent once one is.
+- **Privacy:** parents see their friends by given name only (no phone), and RLS limits `referral_rewards` to the referrer and admins.
+
 ## Zalo access token (automatic refresh)
 
 Zalo rotates tokens: each refresh returns a new access token **and** a new refresh token, and the old refresh token

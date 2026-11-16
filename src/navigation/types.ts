@@ -9,7 +9,8 @@ export type TabParamList = {
   /** Optional itemId deep-links to a specific student (thedu://portfolio/p-001). */
   Portfolio: { itemId?: string } | undefined;
   Quiz: undefined;
-  Booking: { course?: CourseCategory; fromQuiz?: boolean; source?: LeadSource; sourceRef?: string } | undefined;
+  /** ref = a friend's referral code from a shared link (/booking?ref=TH…). */
+  Booking: { course?: CourseCategory; fromQuiz?: boolean; source?: LeadSource; sourceRef?: string; ref?: string } | undefined;
 };
 
 export type RootStackParamList = {
@@ -48,6 +49,8 @@ export type RootStackParamList = {
   ParentAuth: undefined;
   /** Parents: electronic contact book (children, sessions, reports, leave requests, fees, referral). */
   ParentPortal: undefined;
+  /** Parents: referral code, rewards, vouchers, invited friends. */
+  Referral: undefined;
   /** Admin: parent accounts, students, sessions, leave / make-up requests. */
   AccountManagement: undefined;
   /** No id → create a new video. */

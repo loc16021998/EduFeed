@@ -57,6 +57,7 @@ export function toSubmitRequest(r: BookingRecord): LeadSubmitRequest {
     ...(r.sourceRef ? { sourceRef: r.sourceRef } : {}),
     ...(r.zaloUserId ? { zaloUserId: r.zaloUserId } : {}),
     ...(r.promoCode ? { promoCode: r.promoCode } : {}),
+    ...(r.referralCode ? { referralCode: r.referralCode } : {}),
     ...(r.quizAnswers ? { quizAnswers: r.quizAnswers } : {}),
     ...(r.quizSummary ? { quizSummary: r.quizSummary } : {}),
   };
@@ -83,7 +84,7 @@ export async function submitLead(payload: BookingPayload, idempotencyKey?: strin
   }
   try {
     const res = await callApi<LeadSubmitResponse>('leads/submit', { method: 'POST', body: request });
-    return { ...record, id: res.id, code: res.code, createdAt: res.createdAt, confirmation: res.confirmation };
+    return { ...record, id: res.id, code: res.code, createdAt: res.createdAt, confirmation: res.confirmation, ...(res.referral ? { referral: res.referral } : {}) };
   } catch (e) {
     // Edge Function unreachable → save the lead directly in the database.
     //  • FUNCTION_UNAVAILABLE: function not deployed (native sees the 404).
@@ -94,7 +95,7 @@ export async function submitLead(payload: BookingPayload, idempotencyKey?: strin
     if (e instanceof ApiError && (e.code === 'FUNCTION_UNAVAILABLE' || e.code === 'NETWORK')) {
       const res = await submitLeadViaRpc(request);
       // Saved directly in the database: no ZNS is sent on this path.
-      return { ...record, id: res.id, code: res.code, createdAt: res.createdAt, confirmation: 'NONE' };
+      return { ...record, id: res.id, code: res.code, createdAt: res.createdAt, confirmation: 'NONE', ...(res.referral ? { referral: res.referral } : {}) };
     }
     throw e;
   }
@@ -118,6 +119,7 @@ async function submitLeadViaRpc(r: LeadSubmitRequest): Promise<LeadSubmitRespons
       source_ref: r.sourceRef ?? null,
       zalo_user_id: r.zaloUserId ?? null,
       promo_code: r.promoCode ?? null,
+      referral_code: r.referralCode ?? null,
       quiz_answers: r.quizAnswers ?? null,
       quiz_summary: r.quizSummary ?? null,
       utm_source: r.utmSource ?? null,
@@ -133,6 +135,9 @@ async function submitLeadViaRpc(r: LeadSubmitRequest): Promise<LeadSubmitRespons
     }
     throw new ApiError('Không gửi được đăng ký. Ba mẹ vui lòng thử lại hoặc gọi hotline.', 'INTERNAL');
   }
-  const d = data as { id: string; code: string; created_at: string; duplicate: boolean };
-  return { id: d.id, code: d.code, createdAt: d.created_at, duplicate: d.duplicate, confirmation: 'NONE' };
+  const d = data as { id: string; code: string; created_at: string; duplicate: boolean; referral?: { applied: boolean; reason?: string; discount_vnd?: number } };
+  return {
+    id: d.id, code: d.code, createdAt: d.created_at, duplicate: d.duplicate, confirmation: 'NONE',
+    ...(d.referral ? { referral: { applied: d.referral.applied, reason: d.referral.reason as never, discountVnd: d.referral.discount_vnd } } : {}),
+  };
 }

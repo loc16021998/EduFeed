@@ -90,6 +90,7 @@ const REQUIRES = {
     ['public.enrollments', '20261122090000_lifecycle_upsell.sql'],
     ['public.tuition_invoices', '20261123090000_tuition_payments.sql'],
   ],
+  '20261125090000_referral_rewards.sql': [['public.parent_student_links', '20261124090000_parent_portal.sql']],
 };
 const guard = (f) =>
   (REQUIRES[f] ?? [])

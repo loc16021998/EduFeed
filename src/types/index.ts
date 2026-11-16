@@ -97,6 +97,8 @@ export interface BookingPayload {
   zaloUserId?: string;
   /** In-app incentive the parent claimed (see PROMO_CODES). */
   promoCode?: PromoCode;
+  /** A friend's referral code, already checked valid in the form. */
+  referralCode?: string;
   quizAnswers?: QuizAnswers;
   quizSummary?: QuizSummary;
 }
@@ -358,6 +360,8 @@ export interface BookingRecord extends BookingPayload {
   status: 'NEW';
   /** 'ZNS' when the server is sending a Zalo confirmation to the parent's phone. */
   confirmation?: 'ZNS' | 'NONE';
+  /** Referral code result from the server (applied / why not). */
+  referral?: { applied: boolean; reason?: string; discountVnd?: number };
   /** Denormalised labels — what CRM / Zalo notifications display. */
   display: {
     course: string;

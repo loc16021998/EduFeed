@@ -104,6 +104,8 @@ export interface LeadSubmitRequest {
   utmSource?: string;
   utmMedium?: string;
   utmCampaign?: string;
+  /** Friend's referral code (TH + 6 characters); checked and applied by the database. */
+  referralCode?: string;
 }
 
 export interface LeadSubmitResponse {
@@ -117,7 +119,12 @@ export interface LeadSubmitResponse {
    * (sent in the background right after this response); 'NONE' = no automatic message — staff call.
    */
   confirmation: ConfirmationChannel;
+  /** Result of the referral code, when one was sent. */
+  referral?: { applied: boolean; reason?: ReferralRejectReason; discountVnd?: number };
 }
+
+export type ReferralRejectReason = 'INACTIVE' | 'NOT_FOUND' | 'SELF' | 'NOT_NEW' | 'ALREADY';
+export const REFERRAL_CODE_RE = /^[A-Z0-9]{4,12}$/;
 
 export type ConfirmationChannel = 'ZNS' | 'NONE';
 
@@ -241,6 +248,10 @@ export function validateLeadRequest(body: unknown): Result {
 
   for (const k of ['utmSource', 'utmMedium', 'utmCampaign'] as const) {
     if (b[k] !== undefined && !(typeof b[k] === 'string' && (b[k] as string).length <= 150)) return fail(k, 'Nguồn quảng cáo không hợp lệ');
+  }
+
+  if (b.referralCode !== undefined && !(typeof b.referralCode === 'string' && REFERRAL_CODE_RE.test(b.referralCode.trim().toUpperCase()))) {
+    return fail('referralCode', 'Mã giới thiệu không hợp lệ');
   }
 
   return { ok: true, value: b as unknown as LeadSubmitRequest };

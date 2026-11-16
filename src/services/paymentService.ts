@@ -168,6 +168,10 @@ export interface InvoiceDraft {
   /** The family already completed a course at TH EDU. */
   isAlumni: boolean;
   openInvoiceId: string | null;
+  /** New family referred by a friend (first invoice): the promised discount. */
+  referral: { id: string; discountVnd: number } | null;
+  /** Vouchers this family earned by referring friends. */
+  vouchers: { id: string; code: string; amountVnd: number; expiresAt: string }[];
 }
 
 export interface CreateInvoiceInput {
@@ -181,12 +185,28 @@ export interface CreateInvoiceInput {
 export async function getInvoiceDraft(enrollmentId: string): Promise<InvoiceDraft> {
   if (!supabase) {
     await sleep(150);
-    return { baseAmountVnd: 1_500_000, isAlumni: true, openInvoiceId: [...demoInvoices().values()].find((i) => i.enrollmentId === enrollmentId && i.dto.status === 'PENDING_PAYMENT')?.dto.id ?? null };
+    return {
+      baseAmountVnd: 1_500_000,
+      isAlumni: true,
+      openInvoiceId: [...demoInvoices().values()].find((i) => i.enrollmentId === enrollmentId && i.dto.status === 'PENDING_PAYMENT')?.dto.id ?? null,
+      referral: null,
+      vouchers: [{ id: 'demo-ref-1', code: 'GT7C1E09A2', amountVnd: 200_000, expiresAt: new Date(Date.now() + 150 * 86400_000).toISOString() }],
+    };
   }
   const { data, error } = await supabase.rpc('payment_invoice_draft' as never, { p_enrollment_id: enrollmentId } as never);
   if (error) throw mapDbError(error);
-  const d = data as unknown as { base_amount_vnd: number | null; is_alumni: boolean; open_invoice_id: string | null };
-  return { baseAmountVnd: d.base_amount_vnd, isAlumni: d.is_alumni, openInvoiceId: d.open_invoice_id };
+  const d = data as unknown as {
+    base_amount_vnd: number | null; is_alumni: boolean; open_invoice_id: string | null;
+    referral?: { id: string; discount_vnd: number } | null;
+    vouchers?: { id: string; code: string; amount_vnd: number; expires_at: string }[];
+  };
+  return {
+    baseAmountVnd: d.base_amount_vnd,
+    isAlumni: d.is_alumni,
+    openInvoiceId: d.open_invoice_id,
+    referral: d.referral ? { id: d.referral.id, discountVnd: Number(d.referral.discount_vnd) } : null,
+    vouchers: (d.vouchers ?? []).map((v) => ({ id: v.id, code: v.code, amountVnd: Number(v.amount_vnd), expiresAt: v.expires_at })),
+  };
 }
 
 /** Same rules as payment_create_invoice() — checked here first for instant feedback. */

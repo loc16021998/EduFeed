@@ -44,6 +44,7 @@ import {
   type CompleteTrialResponse,
   type FeedPageResponse,
   type LeadSubmitResponse,
+  type ReferralRejectReason,
   type CompleteEnrollmentResponse,
   type StaffAccountDTO,
   type VideoDTO,
@@ -56,6 +57,8 @@ import {
   buildReceiptMessage,
   buildVietQrPayload,
   buildVnpayPaymentUrl,
+  formatVnd,
+  vnDateTime,
   toInvoiceDTO,
   VNPAY_SANDBOX_URL,
   type PaymentInvoiceResponse,
@@ -326,6 +329,7 @@ async function handleLeadSubmit(req: Request): Promise<Response> {
       utm_source: r.utmSource ?? null,
       utm_medium: r.utmMedium ?? null,
       utm_campaign: r.utmCampaign ?? null,
+      referral_code: r.referralCode ? r.referralCode.trim().toUpperCase() : null,
     },
   });
 
@@ -335,7 +339,7 @@ async function handleLeadSubmit(req: Request): Promise<Response> {
     throw error;
   }
 
-  const result = data as { id: string; code: string; created_at: string; duplicate: boolean };
+  const result = data as { id: string; code: string; created_at: string; duplicate: boolean; referral?: { applied: boolean; reason?: string; discount_vnd?: number } };
   const live = await liveConfig();
   const willConfirmByZns = !!(live.messaging.accessToken && live.messaging.templates.CONFIRMATION && live.messaging.hotline);
   const response: LeadSubmitResponse = {
@@ -343,6 +347,7 @@ async function handleLeadSubmit(req: Request): Promise<Response> {
     code: result.code,
     createdAt: result.created_at,
     duplicate: result.duplicate,
+    ...(result.referral ? { referral: { applied: result.referral.applied, reason: result.referral.reason as ReferralRejectReason | undefined, discountVnd: result.referral.discount_vnd } } : {}),
     // Only promise a ZNS when everything needed to send one is configured.
     confirmation: willConfirmByZns ? 'ZNS' : 'NONE',
   };
@@ -517,8 +522,9 @@ async function handleCronLifecycle(req: Request): Promise<Response> {
   if (!(await verifyCronSecret(req, CRON_SECRET))) return fail('UNAUTHORIZED', 'Sai cron secret', 401);
   const { cfg, deps } = await lifecycleLive();
   const summary = await runLifecycleTick(deps, cfg);
-  console.log('[cron] lifecycle', JSON.stringify(summary));
-  return json(summary);
+  const referral = await sendReferralNotices().catch((e) => ({ error: String(e) }));
+  console.log('[cron] lifecycle', JSON.stringify(summary), 'referral', JSON.stringify(referral));
+  return json({ ...summary, referral });
 }
 
 /** Teacher / staff: mark a course completed → certificate + the 4 follow-ups; the certificate message goes out now. */
@@ -669,6 +675,55 @@ async function sendPaymentReceipt(invoiceId: string): Promise<void> {
   console.log('[payment] receipt message', invoiceId, JSON.stringify(log));
 }
 
+// ─── Referral rewards: Zalo message to the referrer ─────────────────────────
+
+interface ReferralNotice {
+  id: string;
+  reward_vnd: number | string;
+  voucher_code: string;
+  voucher_expires_at: string;
+  friend: string;
+  referrer: { full_name: string; phone: string; zalo_id: string | null };
+}
+
+/**
+ * Congratulate referrers whose friend just paid (ZNS template ZNS_TEMPLATE_REFERRAL_REWARD with
+ * C_NAME, AMOUNT, FRIEND, VOUCHER_CODE, EXPIRY — or an OA message). Runs after each payment and in the
+ * daily job (rewards confirmed by hand). Not configured → left pending, so nothing is lost.
+ */
+async function sendReferralNotices(): Promise<{ sent: number; pending: number }> {
+  const list = await rpc<ReferralNotice[]>('referral_pending_notices', { p_limit: 20 });
+  if (!list.length) return { sent: 0, pending: 0 };
+  const { messaging } = await liveConfig();
+  const templateId = env('ZNS_TEMPLATE_REFERRAL_REWARD');
+  let sent = 0;
+  for (const n of list) {
+    const amount = formatVnd(Number(n.reward_vnd));
+    const expiry = vnDateTime(n.voucher_expires_at).slice(0, 10);
+    const name = n.referrer.full_name.length > 30 ? `${n.referrer.full_name.slice(0, 29)}…` : n.referrer.full_name;
+    const text =
+      `🎉 Chúc mừng ${n.referrer.full_name} vừa nhận được Voucher ${amount} từ lời giới thiệu thành công — bạn ${n.friend} đã nhập học tại TH EDU!\n` +
+      `Mã voucher: ${n.voucher_code}, trừ vào học phí của bé đến ${expiry}.`;
+    const phone = toZaloPhone(n.referrer.phone);
+    const plan = !messaging.accessToken
+      ? null
+      : templateId && /^84[35789]\d{8}$/.test(phone)
+        ? ({ channel: 'ZNS', payload: { phone, template_id: templateId, template_data: { C_NAME: name, AMOUNT: amount, FRIEND: n.friend.slice(0, 30), VOUCHER_CODE: n.voucher_code, EXPIRY: expiry }, tracking_id: `${n.id}:REFERRAL`, ...(ZNS_MODE === 'development' ? { mode: 'development' as const } : {}) } } as const)
+        : n.referrer.zalo_id
+          ? ({ channel: 'OA', payload: { recipient: { user_id: n.referrer.zalo_id }, message: { text } } } as const)
+          : null;
+    if (!plan) continue; // not configured yet: keep pending
+    const res = await sendZaloMessage(plan, messaging.accessToken);
+    if (res.ok) {
+      sent++;
+      await rpc('referral_mark_notified', { p_id: n.id, p_log: { ok: true, channel: plan.channel, providerMessageId: res.providerMessageId ?? null, at: new Date().toISOString() } });
+    } else {
+      console.error('[referral] Zalo', n.id, res.error);
+    }
+  }
+  return { sent, pending: list.length - sent };
+}
+
 async function handlePaymentIpnRoute(req: Request, url: URL): Promise<Response> {
   const res = await handlePaymentIpn(
     { method: req.method, query: url.searchParams, headers: req.headers, rawBody: req.method === 'POST' ? await req.text() : '' },
@@ -685,7 +740,7 @@ async function handlePaymentIpnRoute(req: Request, url: URL): Promise<Response> 
           p_paid_at: a.paidAt,
           p_exact: a.exact,
         }),
-      onPaid: (id) => void inBackground(sendPaymentReceipt(id)),
+      onPaid: (id) => void inBackground(sendPaymentReceipt(id).then(() => sendReferralNotices())),
       log: (event, data) => console.log('[payment-ipn]', event, JSON.stringify(data)),
     },
   );

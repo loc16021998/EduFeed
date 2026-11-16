@@ -22,6 +22,7 @@ export interface SubmitMeta {
   source: LeadSource;
   sourceRef?: string;
   promoCode?: PromoCode;
+  referralCode?: string;
   zaloUserId?: string;
   quizAnswers?: QuizAnswers;
   quizSummary?: QuizSummary;

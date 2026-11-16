@@ -21,6 +21,7 @@ import { checkMedia } from '@/services/media/storageUpload';
 import { pickImage } from '@/services/media/mediaPicker';
 import { createDailyReport, type Attendance } from '@/services/parentPortal';
 import type { PickedMedia } from '@/types';
+import { redeemVoucher } from '@/services/referrals';
 import { cancelInvoice, confirmInvoiceManually, createInvoice, getInvoiceDraft, invoiceInputProblem, paymentLink, type InvoiceDraft } from '@/services/paymentService';
 import { courseTitle, MAX_LEVEL, recommendNextCourses } from '@/services/recommendationService';
 import { useStaffStore } from '@/store';
@@ -474,9 +475,11 @@ function InvoiceModal({ enrollment, onClose, onOpenPayment }: { enrollment: Enro
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [created, setCreated] = useState<{ id: string; ref: string; amountVnd: number } | null>(null);
+  const [voucherId, setVoucherId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!enrollment) return;
+    setVoucherId(null);
     setDraft(null);
     setCreated(null);
     setError(null);
@@ -490,23 +493,39 @@ function InvoiceModal({ enrollment, onClose, onOpenPayment }: { enrollment: Enro
         setBase(d.baseAmountVnd ? String(d.baseAmountVnd) : '');
         // Only the label is suggested; the amount of a real offer is always typed by the admin.
         if (d.isAlumni) setLabel('Ưu đãi học viên cũ');
+        // Referred new family: the discount promised when they booked with a friend's code.
+        if (d.referral) {
+          setWithDiscount(true);
+          setDiscount(String(d.referral.discountVnd));
+          setLabel('Ưu đãi mã giới thiệu');
+        }
       },
       (e) => setError(msg(e)),
     );
   }, [enrollment?.id]);
 
   const baseN = Number(digits(base)) || 0;
-  const discN = withDiscount ? Number(digits(discount)) || 0 : 0;
+  const voucher = draft?.vouchers.find((v) => v.id === voucherId) ?? null;
+  const discN = (withDiscount ? Number(digits(discount)) || 0 : 0) + (voucher?.amountVnd ?? 0);
+  const discLabel = [withDiscount ? label.trim() : '', voucher ? `Voucher giới thiệu ${voucher.code}` : ''].filter(Boolean).join(' + ').slice(0, 80);
   const total = Math.max(baseN - discN, 0);
 
   const submit = async () => {
-    const input = { enrollmentId: enrollment!.id, baseAmountVnd: baseN, discountVnd: discN, discountLabel: withDiscount ? label : undefined, note };
+    const input = { enrollmentId: enrollment!.id, baseAmountVnd: baseN, discountVnd: discN, discountLabel: discN > 0 ? discLabel : undefined, note };
     const p = invoiceInputProblem(input);
     if (p) return setError(p.message);
     setBusy(true);
     setError(null);
     try {
-      setCreated(await createInvoice(input));
+      const inv = await createInvoice(input);
+      setCreated(inv);
+      if (voucher) {
+        try {
+          await redeemVoucher(voucher.id, inv.id);
+        } catch (e) {
+          setError(`Đã lập hóa đơn nhưng chưa trừ được voucher ${voucher.code}: ${msg(e)}`);
+        }
+      }
     } catch (e) {
       setError(msg(e));
     } finally {
@@ -572,6 +591,25 @@ function InvoiceModal({ enrollment, onClose, onOpenPayment }: { enrollment: Enro
                     </View>
                   )}
                 </Pressable>
+                {draft?.referral && <Text className="-mt-1 text-xs text-emerald-700">Gia đình mới đăng ký bằng mã giới thiệu — ưu đãi đã được điền sẵn.</Text>}
+                {!!draft?.vouchers.length && (
+                  <View className="gap-1.5" testID="voucher-picker">
+                    <Text className="text-[13px] font-semibold text-ink-muted">Voucher giới thiệu của gia đình</Text>
+                    <View className="flex-row flex-wrap gap-2">
+                      {draft.vouchers.map((v) => {
+                        const on = v.id === voucherId;
+                        return (
+                          <Pressable key={v.id} onPress={() => setVoucherId(on ? null : v.id)} accessibilityRole="checkbox" aria-checked={on} accessibilityState={{ checked: on }} className={`rounded-full border px-3 py-2 ${on ? 'border-emerald-500 bg-emerald-50' : 'border-slate-200 bg-white'}`}>
+                            <Text className={`text-[13px] font-semibold ${on ? 'text-emerald-700' : 'text-ink'}`}>
+                              {on ? '✓ ' : ''}
+                              {v.code} · {formatVnd(v.amountVnd)}
+                            </Text>
+                          </Pressable>
+                        );
+                      })}
+                    </View>
+                  </View>
+                )}
                 {withDiscount && (
                   <>
                     <FormField label="Số tiền ưu đãi (đồng)" value={vndInput(discN)} onChangeText={(t) => { setDiscount(digits(t)); setError(null); }} placeholder="VD: 200.000" keyboardType="number-pad" />
@@ -580,7 +618,7 @@ function InvoiceModal({ enrollment, onClose, onOpenPayment }: { enrollment: Enro
                 )}
                 <FormField label="Ghi chú (không bắt buộc)" value={note} onChangeText={(t) => { setNote(t); setError(null); }} placeholder="VD: Học phí tháng 12/2026" maxLength={200} />
                 <View className="flex-row items-end justify-between rounded-2xl bg-slate-50 p-3">
-                  <Text className="text-[13px] font-semibold text-ink">Phụ huynh thanh toán</Text>
+                  <Text className="text-[13px] font-semibold text-ink">Phụ huynh thanh toán{discN > 0 ? ` (đã trừ ${formatVnd(discN)})` : ''}</Text>
                   <Text className="text-xl font-black text-accent-600" testID="invoice-modal-total">
                     {formatVnd(total)}
                   </Text>

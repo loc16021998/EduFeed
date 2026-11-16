@@ -22,10 +22,13 @@ import {
   type Relationship,
   type ScheduleSlot,
 } from '@/services/parentPortal';
+import { adminListReferrals, fetchProgram, programProblem, updateProgram, type AdminReferralRow, type ReferralProgram } from '@/services/referrals';
 import { useStaffStore } from '@/store';
 import type { CampusLocation, CourseCategory } from '@/types';
 import { CAMPUS_LABELS, CATEGORY_LABELS, COLORS } from '@/utils/constants';
 import { formatPhone } from '@/utils/helpers';
+
+import { formatVnd } from '../../../supabase/functions/_shared/payments';
 import { confirmAsync } from '@/utils/platform';
 
 const msg = (e: unknown) => (e instanceof Error ? e.message : 'Đã có lỗi xảy ra');
@@ -53,7 +56,7 @@ const dmy = (iso: string) => {
 /** Admin: parent accounts, linked students, course sessions and leave / make-up requests. */
 export default function AccountManagementScreen({ navigation }: RootStackScreenProps<'AccountManagement'>) {
   const { status: authStatus, isStaff, isAdmin, demo } = useStaffStore();
-  const [tab, setTab] = useState<'accounts' | 'requests'>('accounts');
+  const [tab, setTab] = useState<'accounts' | 'requests' | 'referral'>('accounts');
   const [search, setSearch] = useState('');
   const [query, setQuery] = useState('');
   const [campus, setCampus] = useState<CampusLocation | null>(null);
@@ -131,6 +134,7 @@ export default function AccountManagementScreen({ navigation }: RootStackScreenP
             [
               ['accounts', 'Tài khoản'],
               ['requests', `Nghỉ / học bù${requests.length ? ` (${requests.length})` : ''}`],
+              ['referral', 'Giới thiệu'],
             ] as const
           ).map(([id, label]) => (
             <Pressable key={id} onPress={() => setTab(id)} accessibilityRole="tab" aria-selected={tab === id} accessibilityState={{ selected: tab === id }} className={`flex-1 items-center rounded-xl py-2.5 ${tab === id ? 'bg-white' : ''}`}>
@@ -164,7 +168,9 @@ export default function AccountManagementScreen({ navigation }: RootStackScreenP
         )}
       </View>
 
-      {tab === 'accounts' ? (
+      {tab === 'referral' ? (
+        <ReferralAdminPanel demo={demo || !hasSupabase} />
+      ) : tab === 'accounts' ? (
         <FlatList
           data={rows}
           keyExtractor={(p) => p.id}
@@ -496,5 +502,112 @@ function CreateParentModal({ initial, onClose, onDone }: { initial: { phone: str
         </ScrollView>
       </KeyboardAvoidingView>
     </Modal>
+  );
+}
+
+// ─── Referral program ───────────────────────────────────────────────────────
+
+const REF_STATUS: Record<AdminReferralRow['status'], { label: string; cls: string }> = {
+  PENDING_TRIAL: { label: 'Đăng ký học thử', cls: 'bg-sky-50 text-sky-700' },
+  PENDING_PAYMENT: { label: 'Chờ đóng học phí', cls: 'bg-amber-50 text-amber-800' },
+  REWARDED: { label: 'Đã thưởng', cls: 'bg-emerald-50 text-emerald-700' },
+  VOID: { label: 'Đã hủy', cls: 'bg-slate-100 text-slate-500' },
+};
+const vnd = (n: number) => (n ? n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.') : '0');
+const digitsOnly = (t: string) => t.replace(/\D/g, '').slice(0, 8);
+
+function ReferralAdminPanel({ demo }: { demo: boolean }) {
+  const [program, setProgram] = useState<ReferralProgram | null>(null);
+  const [form, setForm] = useState({ active: true, reward: '', discount: '', days: '' });
+  const [rows, setRows] = useState<AdminReferralRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const [p, r] = await Promise.all([fetchProgram(), adminListReferrals()]);
+      setProgram(p);
+      setForm({ active: p.active, reward: String(p.referrerRewardVnd), discount: String(p.refereeDiscountVnd), days: String(p.voucherValidDays) });
+      setRows(r);
+    } catch (e) {
+      setError(msg(e));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const save = async () => {
+    const next: ReferralProgram = { active: form.active, referrerRewardVnd: Number(form.reward || 0), refereeDiscountVnd: Number(form.discount || 0), voucherValidDays: Number(form.days || 0) };
+    const problem = programProblem(next);
+    if (problem) return setError(problem);
+    setSaving(true);
+    setError(null);
+    try {
+      await updateProgram(next);
+      setProgram(next);
+      setNotice(`Đã lưu. Áp dụng cho các lượt giới thiệu từ bây giờ; lượt đã đăng ký giữ nguyên mức đã hứa.`);
+    } catch (e) {
+      setError(msg(e));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <FlatList
+      data={rows}
+      keyExtractor={(r) => r.id}
+      contentContainerClassName="gap-3 px-4 pb-10"
+      refreshControl={<RefreshControl refreshing={loading && !!program} onRefresh={load} tintColor={COLORS.brand} />}
+      ListHeaderComponent={
+        <View className="gap-3">
+          <Banners demo={demo} notice={notice} error={error} />
+          <View className="gap-3 rounded-3xl bg-white p-4" testID="referral-program">
+            <View className="flex-row items-center justify-between">
+              <Text className="text-[15px] font-bold text-ink">Chương trình giới thiệu</Text>
+              <View className="flex-row items-center gap-2">
+                <Text className="text-xs text-ink-muted">{form.active ? 'Đang chạy' : 'Tạm dừng'}</Text>
+                <Switch value={form.active} onValueChange={(v) => setForm((f) => ({ ...f, active: v }))} accessibilityLabel="Bật chương trình giới thiệu" trackColor={{ true: COLORS.brand, false: '#CBD5E1' }} thumbColor="#FFFFFF" {...({ activeThumbColor: '#FFFFFF' } as object)} />
+              </View>
+            </View>
+            <FormField label="Voucher cho người giới thiệu (đồng)" value={vnd(Number(form.reward || 0))} onChangeText={(t) => setForm((f) => ({ ...f, reward: digitsOnly(t) }))} keyboardType="number-pad" />
+            <FormField label="Ưu đãi cho học viên mới (đồng)" value={vnd(Number(form.discount || 0))} onChangeText={(t) => setForm((f) => ({ ...f, discount: digitsOnly(t) }))} keyboardType="number-pad" />
+            <FormField label="Hạn dùng voucher (ngày)" value={form.days} onChangeText={(t) => setForm((f) => ({ ...f, days: t.replace(/\D/g, '').slice(0, 3) }))} keyboardType="number-pad" />
+            <Text className="text-[11px] leading-4 text-ink-subtle">
+              Voucher được tạo tự động khi gia đình được giới thiệu đóng học phí lần đầu (gia đình mới, không tự giới thiệu, mỗi gia đình một lần) và báo cho người giới thiệu qua Zalo.
+            </Text>
+            <Button title="Lưu chương trình" loading={saving} onPress={save} />
+          </View>
+          <Text className="px-1 text-[15px] font-bold text-ink">Lượt giới thiệu</Text>
+        </View>
+      }
+      renderItem={({ item: r }) => (
+        <View className="gap-1.5 rounded-3xl bg-white p-4" testID="referral-row">
+          <View className="flex-row items-start justify-between gap-2">
+            <Text className="flex-1 text-[14px] font-bold text-ink">
+              {r.referrerName} <Text className="font-normal text-ink-muted">giới thiệu</Text> {r.refereeName}
+            </Text>
+            <Text className={`overflow-hidden rounded-full px-2.5 py-1 text-[11px] font-bold ${REF_STATUS[r.status].cls}`}>{REF_STATUS[r.status].label}</Text>
+          </View>
+          <Text className="text-xs text-ink-muted">
+            {formatPhone(r.referrerPhone)} → {formatPhone(r.refereePhone)} · voucher hứa {formatVnd(r.promisedRewardVnd)}
+          </Text>
+          {!!r.voucherCode && (
+            <Text className="text-xs text-emerald-700">
+              Voucher {r.voucherCode} · {r.voucherStatus === 'USED' ? 'đã dùng' : 'chưa dùng'} · {r.notifiedAt ? 'đã báo Zalo' : 'chưa báo Zalo'}
+            </Text>
+          )}
+          {!!r.voidReason && <Text className="text-xs text-ink-subtle">{r.voidReason}</Text>}
+        </View>
+      )}
+      ListEmptyComponent={loading ? <ActivityIndicator className="mt-6" color={COLORS.brand} /> : <Text className="mt-6 px-8 text-center text-ink-muted">Chưa có lượt giới thiệu nào.</Text>}
+    />
   );
 }

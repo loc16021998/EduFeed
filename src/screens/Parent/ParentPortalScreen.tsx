@@ -5,7 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button, HeaderIconButton, ScreenHeader, Skeleton } from '@/components';
 import ImageZoomModal from '@/components/ImageZoomModal';
-import { ENV, hasSupabase } from '@/config/env';
+import { hasSupabase } from '@/config/env';
 import type { RootStackScreenProps } from '@/navigation/types';
 import {
   attendanceRate,
@@ -19,6 +19,7 @@ import {
   type RequestType,
   type ScheduleSlot,
 } from '@/services/parentPortal';
+import { referralShareLink } from '@/services/referrals';
 import { useParentStore } from '@/store';
 import { CATEGORY_COLORS, COLORS } from '@/utils/constants';
 import { confirmAsync, shareText } from '@/utils/platform';
@@ -162,7 +163,7 @@ export default function ParentPortalScreen({ navigation }: RootStackScreenProps<
               </>
             )}
 
-            <ReferralCard code={portal.parent.referralCode} />
+            <ReferralCard code={portal.parent.referralCode} onOpen={() => navigation.navigate('Referral')} />
           </>
         )}
       </ScrollView>
@@ -433,13 +434,26 @@ function ReportCard({ report, studentName, onChange }: { report: DailyReport; st
         <Text className={`overflow-hidden rounded-full px-2.5 py-1 text-[11px] font-bold ${a.cls}`}>{a.label}</Text>
       </View>
       {!!report.feedbackText && <Text className="text-[14px] leading-[21px] text-ink">{report.feedbackText}</Text>}
-      {urls.length > 0 && (
+      {report.media.length > 0 && (
+        // Space is reserved from the start (one tile per photo) so the page doesn't jump while signed links load.
         <View className="flex-row flex-wrap gap-2">
-          {urls.map((u, i) => (
-            <Pressable key={u} onPress={() => setZoom(i)} accessibilityRole="imagebutton" accessibilityLabel={`Xem ảnh bài làm ${i + 1} của ${studentName}`} className="overflow-hidden rounded-2xl" style={{ width: urls.length === 1 ? '100%' : '48.5%' }}>
-              <Image source={{ uri: u }} style={{ width: '100%', aspectRatio: urls.length === 1 ? 4 / 3 : 3 / 4 }} resizeMode="cover" />
-            </Pressable>
-          ))}
+          {report.media.map((m, i) => {
+            const u = urls[i];
+            const one = report.media.length === 1;
+            return (
+              <Pressable
+                key={m}
+                onPress={() => u && setZoom(i)}
+                disabled={!u}
+                accessibilityRole="imagebutton"
+                accessibilityLabel={`Xem ảnh bài làm ${i + 1} của ${studentName}`}
+                className="overflow-hidden rounded-2xl bg-slate-100"
+                style={{ width: one ? '100%' : '48.5%', aspectRatio: one ? 4 / 3 : 3 / 4 }}
+              >
+                {!!u && <Image source={{ uri: u }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />}
+              </Pressable>
+            );
+          })}
         </View>
       )}
       {report.attendance !== 'EXCUSED' && (
@@ -488,9 +502,9 @@ function ReportCard({ report, studentName, onChange }: { report: DailyReport; st
   );
 }
 
-function ReferralCard({ code }: { code: string }) {
+function ReferralCard({ code, onOpen }: { code: string; onOpen: () => void }) {
   const [copied, setCopied] = useState(false);
-  const link = `${ENV.webUrl || (Platform.OS === 'web' && typeof window !== 'undefined' ? window.location.origin : '')}/booking?utm_source=referral&utm_medium=parent&utm_campaign=${code}`;
+  const link = referralShareLink(code);
   const canCopy = Platform.OS === 'web' && typeof navigator !== 'undefined' && !!navigator.clipboard;
   const share = () =>
     shareText(`Mình thấy các lớp ở TH EDU rất hợp với bé. Ba mẹ đăng ký học thử miễn phí tại đây nhé (mã giới thiệu ${code}): ${link}`).catch(() => {});
@@ -498,11 +512,12 @@ function ReferralCard({ code }: { code: string }) {
     <View className="gap-2.5 rounded-3xl border border-amber-200 bg-amber-50 p-4" testID="referral-card">
       <View className="flex-row items-center gap-2">
         <Gift size={18} color="#B45309" />
-        <Text className="text-[15px] font-bold text-amber-900">Giới thiệu bạn bè</Text>
+        <Text className="flex-1 text-[15px] font-bold text-amber-900">Giới thiệu bạn bè</Text>
+        <Pressable onPress={onOpen} accessibilityRole="button" hitSlop={6} className="h-9 justify-center rounded-full bg-amber-100 px-3.5 active:bg-amber-200" testID="open-referral">
+          <Text className="text-[13px] font-bold text-amber-800">Xem quà & bạn bè ›</Text>
+        </Pressable>
       </View>
-      <Text className="text-[13px] leading-5 text-amber-900">
-        {ENV.referralReward ? ENV.referralReward : 'Chia sẻ mã của ba mẹ để bạn bè đăng ký học thử miễn phí cho bé.'}
-      </Text>
+      <Text className="text-[13px] leading-5 text-amber-900">Chia sẻ mã của ba mẹ để bạn bè đăng ký học thử miễn phí cho bé — mỗi bạn nhập học, ba mẹ nhận voucher học phí.</Text>
       <View className="flex-row items-center justify-between rounded-2xl bg-white px-4 py-3">
         <Text selectable className="text-[20px] font-black tracking-widest text-ink" testID="referral-code">
           {code}
