@@ -5,6 +5,14 @@
 
 begin;
 
+-- Prerequisites
+do $$
+begin
+  if to_regclass('public.enrollments') is null then
+    raise exception 'Chưa chạy bản nâng cấp trước: hãy chạy supabase/sql/upgrades/20261122090000_lifecycle_upsell.sql TRƯỚC, rồi chạy lại file này.';
+  end if;
+end $$;
+
 -- ─────────────────────────────────────────────────────────────────────────────
 -- Online tuition payments: invoices, VietQR bank transfer (auto-reconciled by a bank-notification webhook)
 -- and the VNPay gateway.

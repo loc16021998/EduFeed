@@ -5,6 +5,14 @@
 
 begin;
 
+-- Prerequisites
+do $$
+begin
+  if to_regclass('public.course_fees') is null then
+    raise exception 'Chưa chạy bản nâng cấp trước: hãy chạy supabase/sql/upgrades/20261116090000_dashboard_analytics.sql TRƯỚC, rồi chạy lại file này.';
+  end if;
+end $$;
+
 -- ─────────────────────────────────────────────────────────────────────────────
 -- Student lifecycle after a course: completion certificate → teacher review → alumni offer → advisor call.
 --
