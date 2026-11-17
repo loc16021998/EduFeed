@@ -1,6 +1,6 @@
 import { ChevronDown, Eye, Trophy } from 'lucide-react-native';
 import { useEffect, useState } from 'react';
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 import Animated, { FadeIn, LinearTransition, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 
 import { CURRICULUM, type CurriculumPhase } from '@/content/curriculum';
@@ -21,7 +21,8 @@ export default function CurriculumAccordion({ initialCourse = 'TIEN_TIEU_HOC' }:
 
   return (
     <View className="gap-3">
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerClassName="gap-2">
+      {/* Wraps instead of scrolling sideways: every course stays visible on a phone. */}
+      <View className="flex-row flex-wrap gap-2">
         {COURSE_CATEGORIES.map((c) => {
           const active = c === course;
           return (
@@ -33,7 +34,7 @@ export default function CurriculumAccordion({ initialCourse = 'TIEN_TIEU_HOC' }:
               }}
               accessibilityRole="tab"
               accessibilityState={{ selected: active }}
-              className="rounded-full border-2 px-3.5 py-1.5"
+              className="h-10 justify-center rounded-full border-2 px-3.5"
               style={{ borderColor: active ? CATEGORY_COLORS[c] : '#E2E8F0', backgroundColor: active ? `${CATEGORY_COLORS[c]}14` : '#fff' }}
             >
               <Text className="text-[13px] font-bold" style={{ color: active ? CATEGORY_COLORS[c] : COLORS.muted }}>
@@ -42,7 +43,7 @@ export default function CurriculumAccordion({ initialCourse = 'TIEN_TIEU_HOC' }:
             </Pressable>
           );
         })}
-      </ScrollView>
+      </View>
 
       <Animated.View layout={LAYOUT} className="gap-2">
         {CURRICULUM[course].map((phase, i) => (

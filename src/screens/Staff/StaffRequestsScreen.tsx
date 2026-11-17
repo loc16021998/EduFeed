@@ -125,7 +125,7 @@ export default function StaffRequestsScreen({ navigation }: RootStackScreenProps
               </View>
               {!!r.note && <Text className="rounded-2xl bg-slate-50 p-3 text-[13px] leading-5 text-ink">“{r.note}”</Text>}
               {!!r.phone && (
-                <Pressable onPress={() => Linking.openURL(`tel:${r.phone}`).catch(() => {})} accessibilityRole="button" className="flex-row items-center gap-1.5 self-start">
+                <Pressable onPress={() => Linking.openURL(`tel:${r.phone}`).catch(() => {})} accessibilityRole="button" className="h-10 flex-row items-center gap-1.5 self-start rounded-full bg-brand-50 px-3 active:bg-brand-100">
                   <Phone size={14} color={COLORS.brand} />
                   <Text className="text-[13px] font-semibold text-brand-600">{formatPhone(r.phone)} — gọi xác minh</Text>
                 </Pressable>

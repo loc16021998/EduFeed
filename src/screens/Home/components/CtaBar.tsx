@@ -34,9 +34,9 @@ export default function CtaBar({ text, onPress, pulse = false }: CtaBarProps) {
         onPress={onPress}
         accessibilityRole="button"
         accessibilityLabel={text}
-        className="h-12 flex-row items-center justify-center gap-1 rounded-2xl bg-accent-500 px-3 shadow-lg shadow-accent-600/40 active:bg-accent-600"
+        className="min-h-12 flex-row items-center justify-center gap-1 rounded-2xl py-2 bg-accent-500 px-3 shadow-lg shadow-accent-600/40 active:bg-accent-600"
       >
-        <Text className="flex-shrink text-[13px] font-extrabold tracking-tight text-white" numberOfLines={1} adjustsFontSizeToFit>
+        <Text className={`flex-shrink text-center font-extrabold tracking-tight text-white ${text.length > 30 ? 'text-[12px] leading-[16px]' : 'text-[13px] leading-[17px]'}`} numberOfLines={2}>
           {text}
         </Text>
         <ChevronRight size={18} color="#fff" strokeWidth={3} />

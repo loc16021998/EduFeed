@@ -115,7 +115,7 @@ export default function DashboardScreen({ navigation }: RootStackScreenProps<'Ad
               onPress={() => setPeriod(p)}
               accessibilityRole="radio"
               accessibilityState={{ checked: active }}
-              className={`rounded-full px-3.5 py-1.5 ${active ? 'bg-white shadow-sm shadow-black/10' : ''}`}
+              className={`h-9 justify-center rounded-full px-3.5 ${active ? 'bg-white shadow-sm shadow-black/10' : ''}`}
             >
               <Text className={`text-[13px] font-semibold ${active ? 'text-ink' : 'text-ink-muted'}`}>{p} ngày</Text>
             </Pressable>
@@ -318,7 +318,7 @@ function Kpis({ summary: s, basis, onOpenTrials, onOpenFees }: KpisProps) {
         footer={
           <View className="gap-1">
             {!!missing && <Text className="text-xs leading-[17px] text-amber-800">Chưa nhập học phí: {missing}</Text>}
-            <Pressable onPress={onOpenFees} accessibilityRole="button" className="self-start py-0.5">
+            <Pressable onPress={onOpenFees} accessibilityRole="button" className="-ml-1 h-9 justify-center self-start px-1">
               <Text className="text-xs font-semibold text-brand-600">{missing ? 'Nhập học phí →' : 'Sửa học phí →'}</Text>
             </Pressable>
           </View>

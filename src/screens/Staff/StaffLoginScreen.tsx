@@ -139,7 +139,7 @@ export default function StaffLoginScreen({ navigation, route }: RootStackScreenP
                 returnKeyType="go"
                 onSubmitEditing={onSubmit}
               />
-              <Pressable onPress={() => setShowPassword((v) => !v)} hitSlop={8} className="self-end" accessibilityRole="button">
+              <Pressable onPress={() => setShowPassword((v) => !v)} hitSlop={8} className="-mr-2 h-10 justify-center self-end px-2" accessibilityRole="button">
                 <Text className="text-xs font-semibold text-brand-600">{showPassword ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}</Text>
               </Pressable>
             </View>

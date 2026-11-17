@@ -112,7 +112,7 @@ export default function TeacherUploadScreen({ navigation }: RootStackScreenProps
           <FormField label="Giáo viên" value={d.teacherName} onChangeText={(t) => set('teacherName', t)} error={errors.teacherName} placeholder="VD: Cô Hường" maxLength={60} />
           <View className="flex-row flex-wrap gap-1.5">
             {TEACHERS.map((t) => (
-              <Pressable key={t.id} onPress={() => set('teacherName', t.name)} accessibilityRole="button" className="rounded-full border border-dashed border-slate-300 px-2.5 py-1 active:bg-slate-50">
+              <Pressable key={t.id} onPress={() => set('teacherName', t.name)} accessibilityRole="button" className="h-9 justify-center rounded-full border border-dashed border-slate-300 px-3.5 active:bg-slate-50">
                 <Text className="text-xs text-ink-muted">{t.name}</Text>
               </Pressable>
             ))}
@@ -205,7 +205,7 @@ function Check({ value, onChange, label, disabled, testID }: { value: boolean; o
       accessibilityRole="checkbox"
       accessibilityState={{ checked: on, disabled }}
       testID={testID}
-      className={`flex-row items-center gap-2.5 ${disabled ? 'opacity-50' : ''}`}
+      className={`min-h-11 flex-row items-center gap-2.5 py-1 ${disabled ? 'opacity-50' : ''}`}
     >
       <View className={`h-5 w-5 items-center justify-center rounded-md border-2 ${on ? 'border-brand-500 bg-brand-500' : 'border-slate-300 bg-white'}`}>
         {on && <Text className="text-[11px] font-black text-white">✓</Text>}

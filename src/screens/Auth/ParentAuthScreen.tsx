@@ -188,10 +188,10 @@ export default function ParentAuthScreen({ navigation }: RootStackScreenProps<'P
             {!!error && <Text className="rounded-xl bg-red-50 p-2.5 text-xs leading-[18px] text-red-700">{error.message}</Text>}
             <Button title="Xác nhận" size="lg" loading={busy} disabled={code.length !== 4} onPress={() => checkCode()} icon={<ShieldCheck size={18} color="#fff" />} />
             <View className="flex-row items-center justify-between">
-              <Pressable onPress={() => setStep('phone')} accessibilityRole="button" hitSlop={8}>
+              <Pressable onPress={() => setStep('phone')} accessibilityRole="button" hitSlop={8} className="-ml-2 h-11 justify-center px-2">
                 <Text className="text-[13px] font-semibold text-brand-700">Đổi số điện thoại</Text>
               </Pressable>
-              <Pressable onPress={sendCode} disabled={resendIn > 0 || busy} accessibilityRole="button" hitSlop={8}>
+              <Pressable onPress={sendCode} disabled={resendIn > 0 || busy} accessibilityRole="button" hitSlop={8} className="-mr-2 h-11 justify-center px-2">
                 <Text className={`text-[13px] font-semibold ${resendIn > 0 ? 'text-ink-subtle' : 'text-brand-700'}`}>{resendIn > 0 ? `Gửi lại mã sau ${resendIn}s` : 'Gửi lại mã'}</Text>
               </Pressable>
             </View>

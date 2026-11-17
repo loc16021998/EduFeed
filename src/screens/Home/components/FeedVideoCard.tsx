@@ -65,19 +65,21 @@ function FeedVideoCard({
         <View className="flex-shrink">
           <View className="flex-row items-center gap-1">
             <Text className="text-[15px] font-bold text-white" numberOfLines={1}>
-              {item.teacherName} TH EDU
+              {item.teacherName}
             </Text>
             <BadgeCheck size={14} color="#60A5FA" fill="#fff" />
           </View>
-          <Text className="text-xs font-medium" style={{ color: CATEGORY_COLORS[item.category] }}>
-            {CATEGORY_LABELS[item.category]}
-          </Text>
+          {/* Course: white text on a dark pill + a colour dot — readable on any video frame. */}
+          <View className="mt-0.5 flex-row items-center gap-1 self-start rounded-full bg-black/35 px-2 py-0.5">
+            <View className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: CATEGORY_COLORS[item.category] }} />
+            <Text className="text-[11px] font-semibold text-white">{CATEGORY_LABELS[item.category]}</Text>
+          </View>
         </View>
         <Pressable
           onPress={() => onFollow(item.teacherName)}
           accessibilityRole="button"
           accessibilityState={{ selected: following }}
-          className={`ml-1 rounded-full px-3 py-1.5 ${following ? 'border border-white/70 bg-white/10' : 'bg-white'}`}
+          className={`ml-1 h-9 justify-center rounded-full px-3.5 ${following ? 'border border-white/70 bg-white/10' : 'bg-white'}`}
         >
           <Text className={`text-xs font-bold ${following ? 'text-white' : 'text-brand-600'}`}>
             {following ? 'Đang theo dõi' : '+ Theo dõi'}
@@ -90,7 +92,7 @@ function FeedVideoCard({
           hitSlop={8}
           accessibilityRole="button"
           accessibilityLabel={muted ? 'Bật tiếng' : 'Tắt tiếng'}
-          className="h-9 w-9 items-center justify-center rounded-full bg-black/40"
+          className="h-11 w-11 items-center justify-center rounded-full bg-black/40"
         >
           {muted ? <VolumeX size={18} color="#fff" /> : <Volume2 size={18} color="#fff" />}
         </Pressable>
@@ -98,8 +100,8 @@ function FeedVideoCard({
 
       {/* ── Bottom overlay: caption, hashtags, sticky CTA ── */}
       <View pointerEvents="box-none" className="absolute bottom-0 left-0 right-0 gap-3 p-3">
-        <View pointerEvents="box-none" className="flex-row items-end gap-3">
-          <Text className="flex-1 text-base font-semibold leading-[22px] text-white" numberOfLines={3}>
+        <View pointerEvents="box-none" className="flex-row items-end gap-1">
+          <Text className="mr-2 flex-1 text-base font-semibold leading-[22px] text-white" numberOfLines={3}>
             {item.title}
           </Text>
           <Pressable
@@ -107,18 +109,18 @@ function FeedVideoCard({
             hitSlop={10}
             accessibilityRole="button"
             accessibilityLabel={liked ? 'Bỏ yêu thích' : 'Yêu thích'}
-            className="items-center"
+            className="h-11 w-11 items-center justify-center rounded-full bg-black/25 active:bg-black/40"
           >
-            <Heart size={28} color={liked ? '#EF4444' : '#fff'} fill={liked ? '#EF4444' : 'transparent'} />
+            <Heart size={26} color={liked ? '#EF4444' : '#fff'} fill={liked ? '#EF4444' : 'transparent'} />
           </Pressable>
           {onShare && item.shareSlug && (
-            <Pressable onPress={() => onShare(item)} hitSlop={10} accessibilityRole="button" accessibilityLabel="Chia sẻ video">
-              <Share2 size={26} color="#fff" />
+            <Pressable onPress={() => onShare(item)} hitSlop={6} accessibilityRole="button" accessibilityLabel="Chia sẻ video" className="h-11 w-11 items-center justify-center rounded-full bg-black/25 active:bg-black/40">
+              <Share2 size={23} color="#fff" />
             </Pressable>
           )}
           {onExpand && (
-            <Pressable onPress={() => onExpand(item)} hitSlop={10} accessibilityRole="button" accessibilityLabel="Xem toàn màn hình" testID="feed-expand">
-              <Maximize2 size={25} color="#fff" />
+            <Pressable onPress={() => onExpand(item)} hitSlop={6} accessibilityRole="button" accessibilityLabel="Xem toàn màn hình" testID="feed-expand" className="h-11 w-11 items-center justify-center rounded-full bg-black/25 active:bg-black/40">
+              <Maximize2 size={22} color="#fff" />
             </Pressable>
           )}
         </View>

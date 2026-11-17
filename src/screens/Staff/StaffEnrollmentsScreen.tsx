@@ -276,7 +276,7 @@ function EnrollmentCard({ e, busy, onComplete, onDrop, onContacted, onCertificat
         <View className="flex-row items-center justify-between">
           <Text className="text-[13px] text-ink-muted">{e.parentName}</Text>
           {!!e.phone && (
-            <Pressable onPress={() => Linking.openURL(`tel:${e.phone}`).catch(() => {})} accessibilityRole="link" className="flex-row items-center gap-1 rounded-full bg-brand-50 px-2.5 py-1 active:bg-brand-100">
+            <Pressable onPress={() => Linking.openURL(`tel:${e.phone}`).catch(() => {})} accessibilityRole="link" className="h-9 flex-row items-center gap-1 rounded-full bg-brand-50 px-3 active:bg-brand-100">
               <Phone size={13} color={COLORS.brand} />
               <Text className="text-xs font-bold text-brand-700">{formatPhone(e.phone)}</Text>
             </Pressable>

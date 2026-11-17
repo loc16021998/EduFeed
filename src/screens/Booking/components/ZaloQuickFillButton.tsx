@@ -26,7 +26,7 @@ export default function ZaloQuickFillButton({ onProfile }: { onProfile: (p: Zalo
       disabled={loading}
       accessibilityRole="button"
       accessibilityLabel="Điền nhanh thông tin bằng Zalo"
-      className="flex-row items-center gap-1.5 rounded-full px-3 py-1.5 active:opacity-80"
+      className="h-9 flex-row items-center gap-1.5 rounded-full px-3.5 active:opacity-80"
       style={{ backgroundColor: ZALO_BLUE }}
     >
       {loading ? (
