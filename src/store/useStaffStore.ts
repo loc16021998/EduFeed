@@ -1,4 +1,5 @@
 import type { Session } from '@supabase/supabase-js';
+import { setDemoKind } from '@/services/staffOps';
 import { create } from 'zustand';
 
 import { supabase } from '@/lib/supabase';
@@ -73,6 +74,8 @@ export const useStaffStore = create<StaffState>()((set) => ({
       if (req === 'REJECTED') return 'Yêu cầu đăng ký tài khoản này đã bị từ chối. Liên hệ quản trị viên.';
       // Demo only: e-mails starting with "admin" (or the sample owner) try the admin area, others the teacher area.
       const admin = /^(admin|chu\.trung\.tam)/.test(e);
+      // Demo roles: admin… = quản trị, chi.mai / tu.van… = tư vấn, others = giáo viên.
+      setDemoKind(admin ? 'ADMIN' : /^(chi.mai|tu.van)/.test(e) ? 'ADVISOR' : 'TEACHER');
       set({ status: 'signedIn', email: e, isStaff: true, isAdmin: admin, demo: true });
       return null;
     }

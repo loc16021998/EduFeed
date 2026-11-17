@@ -1,6 +1,7 @@
-import { AlertTriangle, CalendarDays, CalendarOff, CheckCircle2, Copy, Gift, Heart, LogOut, MessageCircle, Send, Wallet } from 'lucide-react-native';
+import { AlertTriangle, CalendarDays, CalendarOff, CheckCircle2, Copy, Gift, Heart, LogOut, MessageCircle, Send, Wallet, QrCode } from 'lucide-react-native';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Image, KeyboardAvoidingView, Modal, Platform, Pressable, RefreshControl, ScrollView, Text, TextInput, View } from 'react-native';
+import QRCode from 'react-native-qrcode-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button, HeaderIconButton, ScreenHeader, Skeleton } from '@/components';
@@ -20,6 +21,7 @@ import {
   type ScheduleSlot,
 } from '@/services/parentPortal';
 import { referralShareLink } from '@/services/referrals';
+import { fetchStudentQr } from '@/services/staffOps';
 import { useParentStore } from '@/store';
 import { CATEGORY_COLORS, COLORS } from '@/utils/constants';
 import { confirmAsync, shareText } from '@/utils/platform';
@@ -223,6 +225,12 @@ function ChildSwitcher({ students, activeId, onSelect }: { students: PortalStude
 function Overview({ student }: { student: PortalStudent }) {
   const rate = attendanceRate(student.attendance);
   const active = student.enrollments.filter((e) => e.status === 'ACTIVE');
+  const [qr, setQr] = useState<string | null>(null);
+  const [qrOpen, setQrOpen] = useState(false);
+  const openQr = () => {
+    setQrOpen(true);
+    fetchStudentQr(student.id).then(setQr, () => setQr(null));
+  };
   return (
     <View className="gap-3 rounded-3xl bg-white p-4" testID="student-overview">
       <View className="flex-row items-center justify-between">
@@ -240,6 +248,21 @@ function Overview({ student }: { student: PortalStudent }) {
           <Text className="text-[11px] text-ink-subtle">chuyên cần</Text>
         </View>
       </View>
+      <Pressable onPress={openQr} accessibilityRole="button" testID="open-checkin-qr" className="h-11 flex-row items-center justify-center gap-2 rounded-2xl bg-slate-900 active:opacity-90">
+        <QrCode size={18} color="#fff" />
+        <Text className="text-[14px] font-bold text-white">Mã điểm danh của bé</Text>
+      </Pressable>
+      <Modal visible={qrOpen} transparent animationType="fade" onRequestClose={() => setQrOpen(false)}>
+        <Pressable className="flex-1 items-center justify-center bg-black/60 p-6" onPress={() => setQrOpen(false)} accessibilityLabel="Đóng mã điểm danh">
+          <View className="w-full max-w-[340px] items-center gap-3 rounded-3xl bg-white p-6" testID="checkin-qr">
+            <Text className="text-[17px] font-extrabold text-ink">{student.fullName}</Text>
+            {qr ? <QRCode value={qr} size={220} color="#0F172A" backgroundColor="#FFFFFF" ecl="M" /> : <ActivityIndicator color={COLORS.brand} />}
+            {!!qr && <Text selectable className="text-xs font-semibold tracking-widest text-ink-muted">{qr.replace('THEDU-HS:', '')}</Text>}
+            <Text className="text-center text-[13px] leading-5 text-ink-muted">Đưa mã này cho thầy cô quét khi bé đến lớp. Tăng độ sáng màn hình để quét nhanh hơn.</Text>
+            <Button className="w-full" title="Đóng" variant="outline" onPress={() => setQrOpen(false)} />
+          </View>
+        </Pressable>
+      </Modal>
       {active.length === 0 && <Text className="text-[13px] text-ink-muted">Bé chưa có khóa học đang theo học.</Text>}
       {active.map((e) => {
         const low = e.sessionsRemaining !== null && e.sessionsRemaining < 3;
@@ -433,6 +456,15 @@ function ReportCard({ report, studentName, onChange }: { report: DailyReport; st
         </View>
         <Text className={`overflow-hidden rounded-full px-2.5 py-1 text-[11px] font-bold ${a.cls}`}>{a.label}</Text>
       </View>
+      {report.tags.length > 0 && (
+        <View className="flex-row flex-wrap gap-1.5">
+          {report.tags.map((t) => (
+            <Text key={t} className="overflow-hidden rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">
+              {t}
+            </Text>
+          ))}
+        </View>
+      )}
       {!!report.feedbackText && <Text className="text-[14px] leading-[21px] text-ink">{report.feedbackText}</Text>}
       {report.media.length > 0 && (
         // Space is reserved from the start (one tile per photo) so the page doesn't jump while signed links load.

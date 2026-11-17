@@ -339,6 +339,46 @@ Migration `20261125090000_referral_rewards.sql`. Run it after `…parent_portal`
   OA message. If neither is configured, the message waits and is sent once one is.
 - **Privacy:** parents see their friends by given name only (no phone), and RLS limits `referral_rewards` to the referrer and admins.
 
+## Staff roles, classes, attendance & tasks
+
+Migration `20261126090000_staff_rbac_tasks.sql`. Run it after `…referral_rewards`.
+
+**Roles** (*Tài khoản nhân viên → Vai trò*): each staff account gets a `staff_profiles` row with a kind
+(Giáo viên / Tư vấn / Quản lý) and a campus (empty = every campus).
+
+| Role | Sees / does |
+|---|---|
+| Admin | Everything |
+| Quản lý, or staff **without a role yet** | Everything, so existing accounts keep working until roles are assigned |
+| Tư vấn (advisor) | Leads assigned to them or at their campus; enrollments, students and invoices at their campus |
+| Giáo viên (teacher) | Trial leads at their campus; enrollments, students, contact-book entries and photos **only in their classes** |
+
+- **Enforcement:** RLS on `leads`, `crm_logs`, `enrollments`, `lifecycle_automations`, `students`, `daily_reports`,
+  `attendance_requests`, `tuition_invoices` and storage. The staff actions are also guarded by scope:
+  `crm_set_status`, `crm_complete_trial`, `enrollment_complete`, `enrollment_drop`, `enrollment_mark_contacted` and
+  `daily_report_create` are now wrappers around their `…_core` versions.
+
+**Classes** (*Quản trị → Lớp học & phân công*): name, course, level, campus, teacher and weekly schedule. Students
+are added from the active enrollments of the same course and campus.
+
+**Teacher, "Lớp của tôi"** (`/quan-ly/lop-hoc`):
+- **Attendance:** by QR or by tapping Có mặt / Muộn / Vắng / Phép.
+  - Each child has an unguessable `students.qr_token`. Parents show it from *Sổ liên lạc → Mã điểm danh của bé*.
+  - A scan more than 10 minutes after today's class start is recorded as LATE.
+- **Batch contact book:** select the students, add quick tags, a note and up to 6 class photos. Photos are stored under
+  `class-reports/class/<class_id>/…`, readable by the class teacher and parents of that class.
+  Present or late students use one session.
+- **Web QR scanning** uses the rear camera + `jsqr` and needs https. The native app currently has no camera module:
+  teachers type the code or use the roll call (`src/components/QrScanner.tsx`).
+
+**Tasks** (`/quan-ly/cong-viec`): Overdue / Today / Upcoming, with buttons to call, open a Zalo chat
+(`https://zalo.me/<phone>`), start and complete (with a note). Admins and managers can assign tasks and see the whole centre.
+Tasks are also created automatically:
+- **New trial lead:** assigned to the campus advisor with the fewest open tasks (`leads.assigned_advisor`), as a
+  "Gọi xác nhận học thử" task due within 2 hours.
+- **Approved make-up request:** a task for the teacher of the child's class.
+- **T+14 advisor call after a course:** a task for the advisor.
+
 ## Zalo access token (automatic refresh)
 
 Zalo rotates tokens: each refresh returns a new access token **and** a new refresh token, and the old refresh token

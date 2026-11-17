@@ -1,8 +1,8 @@
 import { useFocusEffect } from '@react-navigation/native';
-import { BarChart3, Bell, CalendarClock, ChevronRight, Clapperboard, GraduationCap, House, HeartHandshake, ImagePlus, LogOut, ShieldCheck, UserCheck, Users } from 'lucide-react-native';
+import { BarChart3, Bell, CalendarClock, ChevronRight, Clapperboard, GraduationCap, House, HeartHandshake, ImagePlus, LogOut, ShieldCheck, UserCheck, Users, ListChecks, QrCode, School } from 'lucide-react-native';
 import type { ReactNode } from 'react';
 import { useCallback, useEffect, useState } from 'react';
-import { Image, Pressable, ScrollView, Text, View, type ImageSourcePropType } from 'react-native';
+import { Image, Pressable, ScrollView, Text, useWindowDimensions, View, type ImageSourcePropType } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import logo from '@/assets/branding/logo-th-mark.png';
@@ -15,12 +15,14 @@ import { confirmAsync } from '@/utils/platform';
 
 const LOGO: ImageSourcePropType = typeof logo === 'string' ? { uri: logo } : logo;
 
-type Target = 'AccountManagement' | 'AdminDashboard' | 'StaffAccounts' | 'StaffRequests' | 'StaffVideos' | 'StaffTrials' | 'TeacherUpload' | 'StaffEnrollments';
+type Target = 'Classes' | 'TeacherDashboard' | 'AdvisorTasks' | 'AccountManagement' | 'AdminDashboard' | 'StaffAccounts' | 'StaffRequests' | 'StaffVideos' | 'StaffTrials' | 'TeacherUpload' | 'StaffEnrollments';
 
 /** Admin area home (owner / manager). Teachers and staff have their own area at /quan-ly. */
 export default function AdminHomeScreen({ navigation }: RootStackScreenProps<'AdminHome'>) {
   const { status, isStaff, isAdmin, email, demo, signOut } = useStaffStore();
   const insets = useSafeAreaInsets();
+  // Narrow phones: icon-only "EduFeed" button so the title stays on one line.
+  const compact = useWindowDimensions().width < 400;
 
   useEffect(() => {
     if (status === 'signedOut' || (status === 'signedIn' && !isStaff)) navigation.replace('AdminLogin');
@@ -71,10 +73,10 @@ export default function AdminHomeScreen({ navigation }: RootStackScreenProps<'Ad
             accessibilityLabel="Về EduFeed"
             testID="admin-to-feed"
             hitSlop={4}
-            className="h-10 flex-row items-center gap-1.5 rounded-full bg-white/10 px-3 active:bg-white/20"
+            className={`h-10 flex-row items-center justify-center gap-1.5 rounded-full bg-white/10 active:bg-white/20 ${compact ? 'w-10' : 'px-3'}`}
           >
             <House size={18} color="#fff" />
-            <Text className="text-[13px] font-bold text-white">EduFeed</Text>
+            {!compact && <Text className="text-[13px] font-bold text-white">EduFeed</Text>}
           </Pressable>
           <Pressable
             onPress={onSignOut}
@@ -136,6 +138,12 @@ export default function AdminHomeScreen({ navigation }: RootStackScreenProps<'Ad
           subtitle="Tài khoản phụ huynh, số buổi học, duyệt nghỉ / học bù"
           onPress={() => go('AccountManagement')}
         />
+        <Tile
+          icon={<School size={22} color={COLORS.brand} />}
+          title="Lớp học & phân công"
+          subtitle="Tạo lớp, giáo viên phụ trách, lịch học, học viên trong lớp"
+          onPress={() => go('Classes')}
+        />
 
         <Section title="Công cụ giáo viên" note="Quản trị viên cũng dùng được các công cụ này." />
         <View className="flex-row flex-wrap gap-3">
@@ -143,6 +151,8 @@ export default function AdminHomeScreen({ navigation }: RootStackScreenProps<'Ad
           <GridTile icon={<CalendarClock size={22} color={COLORS.brand} />} title="Lịch học thử" subtitle="Xác nhận, hoàn thành" onPress={() => go('StaffTrials')} />
           <GridTile icon={<GraduationCap size={22} color={COLORS.brand} />} title="Học viên & lộ trình" subtitle="Chứng nhận, gọi tư vấn" onPress={() => go('StaffEnrollments')} />
           <GridTile icon={<ImagePlus size={22} color={COLORS.brand} />} title="Nhật ký tiến bộ" subtitle="Ảnh trước / sau" onPress={() => go('TeacherUpload')} />
+          <GridTile icon={<QrCode size={22} color={COLORS.brand} />} title="Lớp & điểm danh" subtitle="QR, sổ liên lạc cả lớp" onPress={() => go('TeacherDashboard')} />
+          <GridTile icon={<ListChecks size={22} color={COLORS.brand} />} title="Công việc" subtitle="Giao việc, theo dõi" onPress={() => go('AdvisorTasks')} />
         </View>
       </ScrollView>
     </View>

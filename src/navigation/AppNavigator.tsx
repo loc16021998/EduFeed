@@ -12,6 +12,9 @@ import PaymentScreen from '@/screens/Payment/PaymentScreen';
 import ParentAuthScreen from '@/screens/Auth/ParentAuthScreen';
 import ParentPortalScreen from '@/screens/Parent/ParentPortalScreen';
 import ReferralScreen from '@/screens/Parent/ReferralScreen';
+import TeacherDashboardScreen from '@/screens/Teacher/TeacherDashboardScreen';
+import AdvisorTaskScreen from '@/screens/Advisor/AdvisorTaskScreen';
+import ClassesScreen from '@/screens/Admin/ClassesScreen';
 import AccountManagementScreen from '@/screens/Admin/AccountManagementScreen';
 import StaffEnrollmentsScreen from '@/screens/Staff/StaffEnrollmentsScreen';
 import DashboardScreen from '@/screens/Admin/DashboardScreen';
@@ -68,6 +71,9 @@ const linking: LinkingOptions<RootStackParamList> = {
       ParentPortal: 'con-toi',
       ParentAuth: 'con-toi/dang-nhap',
       Referral: 'con-toi/gioi-thieu',
+      TeacherDashboard: 'quan-ly/lop-hoc',
+      AdvisorTasks: 'quan-ly/cong-viec',
+      Classes: 'quan-tri/lop-hoc',
       AccountManagement: 'quan-tri/phu-huynh',
       StaffLogin: 'quan-ly/dang-nhap',
       StaffRegister: 'quan-ly/dang-ky',
@@ -89,7 +95,7 @@ const linking: LinkingOptions<RootStackParamList> = {
 const navigationRef = createNavigationContainerRef<RootStackParamList>();
 
 /** Staff screens are not part of the parent funnel. */
-const STAFF_ROUTES = new Set(['StaffLogin', 'StaffVideos', 'StaffTrials', 'VideoEditor', 'AdminHome', 'AdminLogin', 'AdminDashboard', 'StaffAccounts', 'StaffRegister', 'StaffRequests', 'TeacherUpload', 'StaffEnrollments', 'AccountManagement']);
+const STAFF_ROUTES = new Set(['StaffLogin', 'StaffVideos', 'StaffTrials', 'VideoEditor', 'AdminHome', 'AdminLogin', 'AdminDashboard', 'StaffAccounts', 'StaffRegister', 'StaffRequests', 'TeacherUpload', 'StaffEnrollments', 'AccountManagement', 'TeacherDashboard', 'AdvisorTasks', 'Classes']);
 
 /** Count one anonymous "app open" per session for the dashboard funnel (parents only). */
 function onNavigationReady() {
@@ -140,6 +146,9 @@ export default function AppNavigator() {
         <Stack.Screen name="ParentAuth" component={ParentAuthScreen} options={{ headerShown: false }} />
         <Stack.Screen name="ParentPortal" component={ParentPortalScreen} options={{ headerShown: false }} />
         <Stack.Screen name="Referral" component={ReferralScreen} options={{ headerShown: false }} />
+        <Stack.Screen name="TeacherDashboard" component={TeacherDashboardScreen} options={{ headerShown: false }} />
+        <Stack.Screen name="AdvisorTasks" component={AdvisorTaskScreen} options={{ headerShown: false }} />
+        <Stack.Screen name="Classes" component={ClassesScreen} options={{ headerShown: false }} />
         <Stack.Screen name="AccountManagement" component={AccountManagementScreen} options={{ headerShown: false }} />
         <Stack.Screen name="VideoEditor" component={VideoEditorScreen} options={{ headerShown: false }} />
         <Stack.Screen

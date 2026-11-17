@@ -92,6 +92,8 @@ export interface DailyReport {
   feedbackText: string | null;
   /** Storage paths (class-reports) — or full URLs in demo mode. */
   media: string[];
+  /** Teacher's quick feedback chips. */
+  tags: string[];
   parentLiked: boolean;
   parentReply: string | null;
 }
@@ -156,6 +158,7 @@ const toReport = (r: any): DailyReport => ({
   teacherName: r.teacher_name,
   feedbackText: r.feedback_text ?? null,
   media: Array.isArray(r.media_urls) ? r.media_urls : [],
+  tags: Array.isArray(r.tags) ? r.tags : [],
   parentLiked: !!r.parent_liked,
   parentReply: r.parent_reply ?? null,
 });
@@ -558,10 +561,10 @@ function demoReports() {
   if (demoReportList) return demoReportList;
   const pic = (seed: string) => `https://picsum.photos/seed/${seed}/900/1200`;
   demoReportList = [
-    { id: 'demo-r1', studentId: KHOI, courseCode: 'TOAN_TU_DUY', courseName: 'Toán tư duy', sessionDate: isoDay(-1), attendance: 'PRESENT', teacherName: 'Thầy Tú (mẫu)', feedbackText: 'Khôi tính nhẩm phép cộng có nhớ rất nhanh, chủ động giơ tay trả lời. Ba mẹ cho con luyện thêm 2 bài toán có lời văn mỗi tối nhé.', media: [pic('thedu-math-1'), pic('thedu-math-2')], parentLiked: false, parentReply: null },
-    { id: 'demo-r2', studentId: KHOI, courseCode: 'TOAN_TU_DUY', courseName: 'Toán tư duy', sessionDate: isoDay(-5), attendance: 'PRESENT', teacherName: 'Thầy Tú (mẫu)', feedbackText: 'Con hoàn thành bài tập hình khối, cần cẩn thận hơn khi đếm cạnh.', media: [pic('thedu-math-3')], parentLiked: true, parentReply: 'Cảm ơn thầy, tối nay con sẽ luyện thêm ạ.' },
-    { id: 'demo-r3', studentId: KHOI, courseCode: 'TOAN_TU_DUY', courseName: 'Toán tư duy', sessionDate: isoDay(-6), attendance: 'EXCUSED', teacherName: 'Thầy Tú (mẫu)', feedbackText: null, media: [], parentLiked: false, parentReply: null },
-    { id: 'demo-r4', studentId: ANH, courseCode: 'LUYEN_CHU_DEP', courseName: 'Luyện chữ đẹp', sessionDate: isoDay(-2), attendance: 'PRESENT', teacherName: 'Cô Hường (mẫu)', feedbackText: 'Minh Anh viết nét khuyết đều hơn tuần trước, ngồi đúng tư thế. Cô gửi ba mẹ ảnh bài viết của con.', media: [pic('thedu-chu-1')], parentLiked: false, parentReply: null },
+    { id: 'demo-r1', studentId: KHOI, courseCode: 'TOAN_TU_DUY', courseName: 'Toán tư duy', sessionDate: isoDay(-1), attendance: 'PRESENT', teacherName: 'Thầy Tú (mẫu)', feedbackText: 'Khôi tính nhẩm phép cộng có nhớ rất nhanh, chủ động giơ tay trả lời. Ba mẹ cho con luyện thêm 2 bài toán có lời văn mỗi tối nhé.', media: [pic('thedu-math-1'), pic('thedu-math-2')], parentLiked: false, parentReply: null, tags: ['Tính nhẩm nhanh', 'Tích cực phát biểu'] },
+    { id: 'demo-r2', studentId: KHOI, courseCode: 'TOAN_TU_DUY', courseName: 'Toán tư duy', sessionDate: isoDay(-5), attendance: 'PRESENT', teacherName: 'Thầy Tú (mẫu)', feedbackText: 'Con hoàn thành bài tập hình khối, cần cẩn thận hơn khi đếm cạnh.', media: [pic('thedu-math-3')], parentLiked: true, parentReply: 'Cảm ơn thầy, tối nay con sẽ luyện thêm ạ.', tags: [] },
+    { id: 'demo-r3', studentId: KHOI, courseCode: 'TOAN_TU_DUY', courseName: 'Toán tư duy', sessionDate: isoDay(-6), attendance: 'EXCUSED', teacherName: 'Thầy Tú (mẫu)', feedbackText: null, media: [], parentLiked: false, parentReply: null, tags: [] },
+    { id: 'demo-r4', studentId: ANH, courseCode: 'LUYEN_CHU_DEP', courseName: 'Luyện chữ đẹp', sessionDate: isoDay(-2), attendance: 'PRESENT', teacherName: 'Cô Hường (mẫu)', feedbackText: 'Minh Anh viết nét khuyết đều hơn tuần trước, ngồi đúng tư thế. Cô gửi ba mẹ ảnh bài viết của con.', media: [pic('thedu-chu-1')], parentLiked: false, parentReply: null, tags: ['Chữ đẹp hơn'] },
   ];
   return demoReportList;
 }

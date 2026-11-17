@@ -1,4 +1,4 @@
-import { CalendarClock, ChevronLeft, ChevronRight, GraduationCap, ImagePlus, LogOut, Plus, ShieldCheck } from 'lucide-react-native';
+import { CalendarClock, ChevronLeft, ChevronRight, GraduationCap, ImagePlus, LogOut, Plus, ShieldCheck, ListChecks, QrCode } from 'lucide-react-native';
 import { useCallback, useEffect } from 'react';
 import { ActivityIndicator, FlatList, Pressable, RefreshControl, Text, View } from 'react-native';
 
@@ -88,6 +88,18 @@ export default function StaffVideosScreen({ navigation }: RootStackScreenProps<'
                 <Text className="text-[13px] font-semibold text-white">Về trang quản trị</Text>
               </Pressable>
             )}
+            <View className="flex-row gap-3">
+              <Pressable onPress={() => navigation.navigate('TeacherDashboard')} accessibilityRole="button" className="flex-1 gap-1.5 rounded-2xl bg-brand-500 p-3.5 active:bg-brand-600" testID="go-classes">
+                <QrCode size={22} color="#fff" />
+                <Text className="text-[15px] font-bold text-white">Lớp của tôi</Text>
+                <Text className="text-xs text-white/85">Điểm danh QR, gửi sổ liên lạc</Text>
+              </Pressable>
+              <Pressable onPress={() => navigation.navigate('AdvisorTasks')} accessibilityRole="button" className="flex-1 gap-1.5 rounded-2xl bg-ink p-3.5 active:opacity-90" testID="go-tasks">
+                <ListChecks size={22} color="#fff" />
+                <Text className="text-[15px] font-bold text-white">Công việc</Text>
+                <Text className="text-xs text-white/75">Gọi khách, học bù, chấm bài</Text>
+              </Pressable>
+            </View>
             <Pressable
               onPress={() => navigation.navigate('StaffTrials')}
               accessibilityRole="button"

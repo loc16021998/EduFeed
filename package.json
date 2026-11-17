@@ -22,6 +22,7 @@
     "@react-navigation/native": "^6.1.18",
     "@react-navigation/native-stack": "^6.11.0",
     "@supabase/supabase-js": "^2.119.0",
+    "jsqr": "^1.4.0",
     "lucide-react-native": "^0.441.0",
     "nativewind": "^4.1.23",
     "react": "18.2.0",

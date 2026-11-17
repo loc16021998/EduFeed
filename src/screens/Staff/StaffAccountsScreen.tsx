@@ -1,12 +1,15 @@
 import { KeyRound, ShieldCheck, UserMinus, UserPlus, UserRound } from 'lucide-react-native';
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
-import { ActivityIndicator, FlatList, Pressable, RefreshControl, Text, View } from 'react-native';
+import { ActivityIndicator, FlatList, Modal, Pressable, RefreshControl, Text, View } from 'react-native';
 
 import { Button, ScreenHeader } from '@/components';
 import { hasSupabase } from '@/config/env';
 import type { RootStackScreenProps } from '@/navigation/types';
 import { listStaff, ROLE_LABELS, setStaffRole, type StaffAccount, type StaffRole } from '@/services/staffAccounts';
+import { setStaffProfile, staffDirectory, type StaffMember } from '@/services/staffOps';
 import { useStaffStore } from '@/store';
+import type { CampusLocation } from '@/types';
+import { CAMPUS_LABELS } from '@/utils/constants';
 import { COLORS } from '@/utils/constants';
 import { confirmAsync } from '@/utils/platform';
 
@@ -29,6 +32,8 @@ export default function StaffAccountsScreen({ navigation }: RootStackScreenProps
   const [busyId, setBusyId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [resetting, setResetting] = useState<StaffAccount | null>(null);
+  const [profiles, setProfiles] = useState<Record<string, StaffMember>>({});
+  const [roleFor, setRoleFor] = useState<StaffAccount | null>(null);
 
   useEffect(() => {
     if (authStatus === 'signedOut' || (authStatus === 'signedIn' && !isStaff)) navigation.replace('AdminLogin');
@@ -40,6 +45,8 @@ export default function StaffAccountsScreen({ navigation }: RootStackScreenProps
     setError(null);
     try {
       setAccounts(await listStaff());
+      // Roles (Giáo viên / Tư vấn / Quản lý + cơ sở); older databases without the RBAC upgrade just skip this.
+      staffDirectory().then((d) => setProfiles(Object.fromEntries(d.map((x) => [x.email.toLowerCase(), x]))), () => setProfiles({}));
     } catch (e) {
       setError(msg(e));
     } finally {
@@ -114,6 +121,16 @@ export default function StaffAccountsScreen({ navigation }: RootStackScreenProps
                   </Text>
                   {!!item.displayName && <Text className="text-xs text-ink-muted" numberOfLines={1}>{item.email}</Text>}
                   <Text className="text-[11px] text-ink-subtle">{when(item.lastSignInAt)}</Text>
+                  {!admin && profiles[item.email.toLowerCase()] && (
+                    <Pressable onPress={() => setRoleFor(item)} accessibilityRole="button" accessibilityLabel="Phân vai trò và cơ sở" className="-ml-1 mt-1 min-h-9 flex-row items-center self-start rounded-full bg-brand-50 px-3 py-1.5 active:bg-brand-100">
+                    <Text className="text-xs font-semibold text-brand-700" testID="staff-kind">
+                      {KIND_LABEL[profiles[item.email.toLowerCase()].kind]}
+                      {profiles[item.email.toLowerCase()].campus ? ` · ${CAMPUS_LABELS[profiles[item.email.toLowerCase()].campus!]}` : ' · mọi cơ sở'}
+                      {!profiles[item.email.toLowerCase()].hasProfile ? ' (chưa phân vai trò)' : ''}
+                      {'  ✎'}
+                    </Text>
+                    </Pressable>
+                  )}
                 </View>
                 <View className={`rounded-full px-2.5 py-1 ${admin ? 'bg-brand-50' : 'bg-slate-100'}`}>
                   <Text className={`text-[11px] font-bold ${admin ? 'text-brand-700' : 'text-ink-muted'}`}>{ROLE_LABELS[item.role]}</Text>
@@ -148,6 +165,15 @@ export default function StaffAccountsScreen({ navigation }: RootStackScreenProps
 
       <CreateStaffModal visible={creating} onClose={() => setCreating(false)} onCreated={() => load()} />
       <ResetPasswordModal account={resetting} onClose={() => setResetting(null)} />
+      <RoleModal
+        account={roleFor}
+        current={roleFor ? profiles[roleFor.email.toLowerCase()] : undefined}
+        onClose={() => setRoleFor(null)}
+        onSaved={() => {
+          setRoleFor(null);
+          load();
+        }}
+      />
     </View>
   );
 }
@@ -163,5 +189,78 @@ function Action({ icon, label, a11y, onPress, danger }: { icon: ReactNode; label
       {icon}
       <Text className={`text-[13px] font-semibold ${danger ? 'text-red-700' : 'text-ink'}`}>{label}</Text>
     </Pressable>
+  );
+}
+
+const KIND_LABEL: Record<StaffMember['kind'], string> = { ADMIN: 'Quản trị', MANAGER: 'Quản lý', TEACHER: 'Giáo viên', ADVISOR: 'Tư vấn' };
+const KIND_HELP: Record<'TEACHER' | 'ADVISOR' | 'MANAGER', string> = {
+  TEACHER: 'Chỉ thấy học viên trong lớp mình dạy và lịch học thử của cơ sở.',
+  ADVISOR: 'Thấy khách hàng được giao + của cơ sở; nhận việc gọi khách tự động.',
+  MANAGER: 'Thấy toàn bộ trung tâm (như trước khi phân quyền).',
+};
+
+function RoleModal({ account, current, onClose, onSaved }: { account: StaffAccount | null; current?: StaffMember; onClose: () => void; onSaved: () => void }) {
+  const [kind, setKind] = useState<'TEACHER' | 'ADVISOR' | 'MANAGER'>('TEACHER');
+  const [campus, setCampus] = useState<CampusLocation | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    if (!account) return;
+    setKind(current && current.kind !== 'ADMIN' && current.hasProfile ? current.kind : 'TEACHER');
+    setCampus(current?.campus ?? null);
+    setError(null);
+  }, [account, current]);
+  const save = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      await setStaffProfile(current?.id ?? account!.id, kind, campus, account!.displayName ?? undefined);
+      onSaved();
+    } catch (e) {
+      setError(msg(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+  const Chip = ({ on, label, onPress }: { on: boolean; label: string; onPress: () => void }) => (
+    <Pressable onPress={onPress} accessibilityRole="radio" aria-checked={on} accessibilityState={{ checked: on }} className={`h-10 justify-center rounded-full border px-3.5 ${on ? 'border-brand-500 bg-brand-50' : 'border-slate-200 bg-white'}`}>
+      <Text className={`text-[14px] font-semibold ${on ? 'text-brand-700' : 'text-ink'}`}>{label}</Text>
+    </Pressable>
+  );
+  return (
+    <Modal visible={!!account} transparent animationType="slide" onRequestClose={onClose}>
+      <View className="flex-1 justify-end bg-black/40">
+        <Pressable className="flex-1" onPress={onClose} accessibilityLabel="Đóng" />
+        {account && (
+          <View className="gap-3 rounded-t-[28px] bg-white p-5" testID="role-modal">
+            <Text className="text-lg font-extrabold text-ink" accessibilityRole="header">
+              Vai trò · {account.displayName ?? account.email}
+            </Text>
+            <View className="flex-row flex-wrap gap-2">
+              {(['TEACHER', 'ADVISOR', 'MANAGER'] as const).map((k) => (
+                <Chip key={k} on={kind === k} label={KIND_LABEL[k]} onPress={() => setKind(k)} />
+              ))}
+            </View>
+            <Text className="text-xs leading-[18px] text-ink-muted">{KIND_HELP[kind]}</Text>
+            {kind !== 'MANAGER' && (
+              <>
+                <Text className="text-[13px] font-semibold text-ink-muted">Cơ sở phụ trách</Text>
+                <View className="flex-row flex-wrap gap-2">
+                  <Chip on={campus === null} label="Mọi cơ sở" onPress={() => setCampus(null)} />
+                  {(Object.keys(CAMPUS_LABELS) as CampusLocation[]).map((c) => (
+                    <Chip key={c} on={campus === c} label={CAMPUS_LABELS[c]} onPress={() => setCampus(c)} />
+                  ))}
+                </View>
+              </>
+            )}
+            {!!error && <Text className="rounded-xl bg-red-50 p-2.5 text-xs leading-[18px] text-red-700">{error}</Text>}
+            <View className="flex-row gap-2.5">
+              <Button className="flex-1" title="Để sau" variant="outline" onPress={onClose} disabled={busy} />
+              <Button className="flex-[2]" title="Lưu vai trò" loading={busy} onPress={save} />
+            </View>
+          </View>
+        )}
+      </View>
+    </Modal>
   );
 }

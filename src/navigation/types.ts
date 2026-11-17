@@ -51,6 +51,12 @@ export type RootStackParamList = {
   ParentPortal: undefined;
   /** Parents: referral code, rewards, vouchers, invited friends. */
   Referral: undefined;
+  /** Teachers: my classes, QR / manual attendance, batch contact book. */
+  TeacherDashboard: undefined;
+  /** Advisors / teachers: assigned tasks (call, Zalo, done). */
+  AdvisorTasks: undefined;
+  /** Admin: classes, teachers, schedules, students. */
+  Classes: undefined;
   /** Admin: parent accounts, students, sessions, leave / make-up requests. */
   AccountManagement: undefined;
   /** No id → create a new video. */
