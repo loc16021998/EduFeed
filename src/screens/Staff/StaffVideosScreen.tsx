@@ -97,7 +97,7 @@ export default function StaffVideosScreen({ navigation }: RootStackScreenProps<'
               <Pressable onPress={() => navigation.navigate('AdvisorTasks')} accessibilityRole="button" className="flex-1 gap-1.5 rounded-2xl bg-ink p-3.5 active:opacity-90" testID="go-tasks">
                 <ListChecks size={22} color="#fff" />
                 <Text className="text-[15px] font-bold text-white">Công việc</Text>
-                <Text className="text-xs text-white/75">Gọi khách, học bù, chấm bài</Text>
+                <Text className="text-xs text-white/75">Gọi phụ huynh, học bù, chấm bài</Text>
               </Pressable>
             </View>
             <Pressable

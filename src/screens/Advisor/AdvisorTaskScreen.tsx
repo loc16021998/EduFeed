@@ -14,7 +14,7 @@ import { formatPhone } from '@/utils/helpers';
 
 const msg = (e: unknown) => (e instanceof Error ? e.message : 'Đã có lỗi xảy ra');
 const TYPE_UI: Record<TaskType, { label: string; cls: string }> = {
-  LEAD_FOLLOWUP: { label: 'Gọi khách', cls: 'bg-brand-50 text-brand-700' },
+  LEAD_FOLLOWUP: { label: 'Gọi phụ huynh', cls: 'bg-brand-50 text-brand-700' },
   MAKEUP_CLASS: { label: 'Học bù', cls: 'bg-violet-50 text-violet-700' },
   HOMEWORK_GRADE: { label: 'Chấm bài', cls: 'bg-amber-50 text-amber-800' },
   OTHER: { label: 'Khác', cls: 'bg-slate-100 text-slate-600' },

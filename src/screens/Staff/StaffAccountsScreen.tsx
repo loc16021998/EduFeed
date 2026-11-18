@@ -195,7 +195,7 @@ function Action({ icon, label, a11y, onPress, danger }: { icon: ReactNode; label
 const KIND_LABEL: Record<StaffMember['kind'], string> = { ADMIN: 'Quản trị', MANAGER: 'Quản lý', TEACHER: 'Giáo viên', ADVISOR: 'Tư vấn' };
 const KIND_HELP: Record<'TEACHER' | 'ADVISOR' | 'MANAGER', string> = {
   TEACHER: 'Chỉ thấy học viên trong lớp mình dạy và lịch học thử của cơ sở.',
-  ADVISOR: 'Thấy khách hàng được giao + của cơ sở; nhận việc gọi khách tự động.',
+  ADVISOR: 'Thấy khách hàng được giao + của cơ sở; nhận việc gọi phụ huynh tự động.',
   MANAGER: 'Thấy toàn bộ trung tâm (như trước khi phân quyền).',
 };
 
