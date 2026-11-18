@@ -18,8 +18,8 @@ interface ButtonProps extends Omit<PressableProps, 'children'> {
 const VARIANT: Record<Variant, { box: string; text: string; spinner: string }> = {
   primary: { box: 'bg-brand-500 active:bg-brand-600', text: 'text-white', spinner: '#fff' },
   accent: { box: 'bg-accent-500 active:bg-accent-600', text: 'text-white', spinner: '#fff' },
-  outline: { box: 'border border-brand-500 bg-white active:bg-brand-50', text: 'text-brand-600', spinner: '#2F6BFF' },
-  ghost: { box: 'bg-transparent active:bg-brand-50', text: 'text-brand-600', spinner: '#2F6BFF' },
+  outline: { box: 'border border-brand-500 bg-white active:bg-brand-50', text: 'text-brand-600', spinner: '#1278BE' },
+  ghost: { box: 'bg-transparent active:bg-brand-50', text: 'text-brand-600', spinner: '#1278BE' },
 };
 
 const SIZE: Record<Size, { box: string; text: string }> = {

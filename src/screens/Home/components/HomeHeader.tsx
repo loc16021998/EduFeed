@@ -100,8 +100,8 @@ export default function HomeHeader({
           {/* TH EDU mark (white background removed; the wordmark is the text next to it). */}
           <Image source={MARK} style={{ width: 54, height: 54 / MARK_RATIO }} resizeMode="contain" accessibilityIgnoresInvertColors testID="brand-mark" />
           <View>
-            <Text className="text-lg font-black leading-5 text-ink">
-              TH <Text className="text-accent-500">EDU</Text>
+            <Text className="text-lg font-black leading-5 text-brand-500">
+              TH <Text className="text-leaf-500">EDU</Text>
             </Text>
             <Text className="text-[10px] font-medium uppercase tracking-widest text-ink-subtle">EduFeed</Text>
           </View>

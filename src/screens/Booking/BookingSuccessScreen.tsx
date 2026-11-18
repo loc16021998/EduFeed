@@ -130,7 +130,7 @@ export default function BookingSuccessScreen({ route, navigation }: RootStackScr
             className="flex-1"
             title="Chỉ đường"
             variant="outline"
-            icon={<MapPinned size={18} color="#1E54E0" />}
+            icon={<MapPinned size={18} color="#0F66A3" />}
             onPress={() => open(mapsUrl)}
             disabled={!mapsUrl}
           />
@@ -139,7 +139,7 @@ export default function BookingSuccessScreen({ route, navigation }: RootStackScr
               className="flex-1"
               title="Gọi hotline"
               variant="outline"
-              icon={<Phone size={18} color="#1E54E0" />}
+              icon={<Phone size={18} color="#0F66A3" />}
               onPress={() => open(`tel:${CONTACT.hotline}`)}
             />
           )}

@@ -27,7 +27,7 @@ export const VideoTestimonialCard = memo(function VideoTestimonialCard({
       <View className="absolute inset-0 bg-black/25" />
       <View className="absolute left-0 right-0 top-[38%] items-center">
         <View className="h-12 w-12 items-center justify-center rounded-full bg-white/90">
-          <Play size={22} color="#1A44B3" fill="#1A44B3" />
+          <Play size={22} color="#0C5285" fill="#0C5285" />
         </View>
       </View>
       {!!item.durationSec && (

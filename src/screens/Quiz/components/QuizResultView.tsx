@@ -28,7 +28,7 @@ export default function QuizResultView({ result, onBook, onRetake }: QuizResultV
         {/* Recommendation card */}
         <Animated.View entering={nativeOnly(ZoomIn.springify().damping(14))}>
           <Gradient
-            colors={['#2F6BFF', '#1A44B3']}
+            colors={['#1278BE', '#0C5285']}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={{ borderRadius: 24, padding: 20, gap: 12 }}

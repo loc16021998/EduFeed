@@ -2,7 +2,7 @@ import { memo, useEffect, useMemo } from 'react';
 import { StyleSheet, View } from 'react-native';
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withDelay, withTiming } from 'react-native-reanimated';
 
-const COLORS = ['#F97316', '#2F6BFF', '#EC4899', '#F59E0B', '#8B5CF6', '#10B981', '#8BC34A'];
+const COLORS = ['#F97316', '#1278BE', '#EC4899', '#F59E0B', '#8B5CF6', '#10B981', '#8BC34A'];
 
 interface ConfettiProps {
   /** Increment to fire a new burst (0 = nothing). Each value fires once. */

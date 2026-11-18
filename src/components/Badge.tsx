@@ -7,7 +7,7 @@ interface BadgeProps {
   className?: string;
 }
 
-export default function Badge({ label, color = '#2F6BFF', className = '' }: BadgeProps) {
+export default function Badge({ label, color = '#1278BE', className = '' }: BadgeProps) {
   return (
     <View
       className={`self-start rounded-full px-2.5 py-1 ${className}`}

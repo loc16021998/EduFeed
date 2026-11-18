@@ -3,14 +3,16 @@ import type { CampusLocation, Category, CourseCategory } from '@/types';
 
 /** Mirrors tailwind.config.js — for props that need raw colours (icons, nav). */
 export const COLORS = {
-  brand: '#2F6BFF',
-  brandDark: '#1A44B3',
-  brandLight: '#EEF4FF',
+  brand: '#1278BE',
+  brandDark: '#0C5285',
+  brandLight: '#EEF6FC',
   accent: '#F97316',
   ink: '#0F172A',
   muted: '#64748B',
   subtle: '#94A3B8',
-  surface: '#F8FAFC',
+  surface: '#F3F8F5',
+  leaf: '#8CC43F',
+  leafDark: '#5A8526',
   white: '#FFFFFF',
 } as const;
 

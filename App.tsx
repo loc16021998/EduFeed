@@ -17,13 +17,13 @@ export default function App() {
         {isWeb ? (
           // Web: centre the app in a phone-width column so layouts match the mobile design
           // (the admin dashboard opts into the full width — see useUiStore).
-          <View style={{ flex: 1, backgroundColor: '#E2E8F0', alignItems: 'center' }}>
+          <View style={{ flex: 1, backgroundColor: 'transparent', alignItems: 'center' }}>
             <View
               style={{
                 flex: 1,
                 width: '100%',
                 maxWidth: wide ? MAX_WIDE_WIDTH : MAX_APP_WIDTH,
-                backgroundColor: '#F8FAFC',
+                backgroundColor: '#F3F8F5',
                 overflow: 'hidden',
                 shadowColor: '#0F172A',
                 shadowOpacity: 0.12,
@@ -36,7 +36,7 @@ export default function App() {
         ) : (
           <AppNavigator />
         )}
-        <StatusBar barStyle="dark-content" backgroundColor="#F8FAFC" />
+        <StatusBar barStyle="dark-content" backgroundColor="#F3F8F5" />
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );

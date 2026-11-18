@@ -45,7 +45,7 @@ const STAGE_LABEL: Record<LifecycleStage, string> = {
 };
 const AUTO_UI: Record<AutomationStatus, { label: string; color: string; icon: typeof CheckCircle2 }> = {
   PENDING: { label: 'Chờ gửi', color: '#64748B', icon: CircleDashed },
-  SENDING: { label: 'Đang gửi', color: '#2F6BFF', icon: CircleDashed },
+  SENDING: { label: 'Đang gửi', color: '#1278BE', icon: CircleDashed },
   SENT: { label: 'Đã gửi', color: '#059669', icon: CheckCircle2 },
   FAILED: { label: 'Lỗi', color: '#DC2626', icon: CircleAlert },
   SKIPPED: { label: 'Bỏ qua', color: '#B45309', icon: MinusCircle },

@@ -16,7 +16,7 @@ interface SuccessBurstProps {
   color?: string;
 }
 
-const CONFETTI_COLORS = ['#F97316', '#2F6BFF', '#EC4899', '#F59E0B', '#8B5CF6', '#10B981'];
+const CONFETTI_COLORS = ['#F97316', '#1278BE', '#EC4899', '#F59E0B', '#8B5CF6', '#10B981'];
 const PARTICLES = 14;
 
 /** Celebratory check: circle pops in, tick follows, a ring pulses and confetti bursts outward. */

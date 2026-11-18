@@ -251,7 +251,7 @@ export default function InteractiveSlider({
             {/* Divider + handle */}
             <Animated.View pointerEvents="none" style={[styles.divider, { height }, dividerStyle]} />
             <Animated.View pointerEvents="none" style={[styles.handle, { top: height / 2 - HANDLE / 2 }, handleStyle]}>
-              <ChevronsLeftRight size={22} color="#1A44B3" strokeWidth={2.5} />
+              <ChevronsLeftRight size={22} color="#0C5285" strokeWidth={2.5} />
             </Animated.View>
 
             {/* Until both images are in: same-size skeleton (no blank frame, no layout shift). */}

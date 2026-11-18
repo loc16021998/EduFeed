@@ -43,7 +43,7 @@ function Segment({ filled }: { filled: boolean }) {
 
   return (
     <View className="h-2 flex-1 overflow-hidden rounded-full bg-slate-200">
-      <Animated.View style={[{ height: '100%', borderRadius: 999, backgroundColor: '#2F6BFF' }, fill]} />
+      <Animated.View style={[{ height: '100%', borderRadius: 999, backgroundColor: '#1278BE' }, fill]} />
     </View>
   );
 }

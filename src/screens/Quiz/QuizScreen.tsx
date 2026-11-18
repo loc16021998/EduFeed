@@ -28,9 +28,9 @@ export default function QuizScreen({ navigation }: TabScreenProps<'Quiz'>) {
           Trả lời 3 câu hỏi nhanh để nhận gợi ý khóa học phù hợp nhất với độ tuổi & khó khăn của bé.
         </Text>
         <View className="flex-row gap-4">
-          <Meta icon={<Clock size={14} color="#DCE7FF" />} text="30 giây" />
-          <Meta icon={<Sparkles size={14} color="#DCE7FF" />} text="3 bước" />
-          <Meta icon={<Gift size={14} color="#DCE7FF" />} text="Miễn phí" />
+          <Meta icon={<Clock size={14} color="#D6EAF7" />} text="30 giây" />
+          <Meta icon={<Sparkles size={14} color="#D6EAF7" />} text="3 bước" />
+          <Meta icon={<Gift size={14} color="#D6EAF7" />} text="Miễn phí" />
         </View>
         <Pressable
           onPress={start}

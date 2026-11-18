@@ -337,7 +337,7 @@ export default function VideoEditorScreen({ navigation, route }: RootStackScreen
               title={previewPlaying ? 'Dừng xem thử' : 'Phát xem thử'}
               variant="outline"
               size="sm"
-              icon={<Eye size={16} color="#1E54E0" />}
+              icon={<Eye size={16} color="#0F66A3" />}
               onPress={() => setPreviewPlaying((p) => !p)}
             />
           )}
