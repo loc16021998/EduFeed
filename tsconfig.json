@@ -5,9 +5,8 @@
     "lib": ["es2022", "dom", "dom.iterable"],
     "types": ["react-native"],
     "resolveJsonModule": true,
-    "baseUrl": ".",
     "paths": {
-      "@/*": ["src/*"]
+      "@/*": ["./src/*"]
     }
   },
   "include": ["**/*.ts", "**/*.tsx", "nativewind-env.d.ts"],
