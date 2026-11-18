@@ -1,21 +1,11 @@
 import { useFocusEffect } from '@react-navigation/native';
-import { CalendarCheck, ChevronLeft, Percent, RefreshCw, Search, Users, Wallet, X } from 'lucide-react-native';
+import { CalendarCheck, ChevronLeft, Percent, RefreshCw, Users, Wallet } from 'lucide-react-native';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import {
-  ActivityIndicator,
-  FlatList,
-  Image,
-  Pressable,
-  RefreshControl,
-  Text,
-  TextInput,
-  useWindowDimensions,
-  View,
-  type ImageSourcePropType,
-} from 'react-native';
+import { ActivityIndicator, FlatList, Image, Pressable, RefreshControl, Text, useWindowDimensions, View, type ImageSourcePropType } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import logo from '@/assets/branding/logo-th-mark.png';
+import SearchField from '@/components/SearchField';
 import { hasSupabase } from '@/config/env';
 import type { RootStackScreenProps } from '@/navigation/types';
 import { useDashboardStore, useStaffStore, useUiStore } from '@/store';
@@ -160,24 +150,7 @@ export default function DashboardScreen({ navigation }: RootStackScreenProps<'Ad
           </Text>
           <Text className="text-xs text-ink-muted">{period} ngày qua</Text>
         </View>
-        <View className="h-11 flex-row items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3">
-          <Search size={17} color={COLORS.subtle} />
-          <TextInput
-            value={search}
-            onChangeText={setSearch}
-            placeholder="Tìm tên phụ huynh, tên bé, số điện thoại, mã TH-…"
-            placeholderTextColor={COLORS.subtle}
-            accessibilityLabel="Tìm đăng ký"
-            autoCorrect={false}
-            returnKeyType="search"
-            className="h-full flex-1 text-[14px] text-ink"
-          />
-          {!!search && (
-            <Pressable onPress={() => setSearch('')} accessibilityRole="button" accessibilityLabel="Xóa tìm kiếm" hitSlop={8}>
-              <X size={16} color={COLORS.subtle} />
-            </Pressable>
-          )}
-        </View>
+        <SearchField value={search} onChangeText={setSearch} placeholder="Tìm tên phụ huynh, tên bé, số điện thoại, mã TH-…" accessibilityLabel="Tìm đăng ký" autoCorrect={false} />
         <StatusFilterBar value={group} onChange={setGroup} />
         {!!leadsError && <Text className="rounded-xl bg-red-50 p-2.5 text-xs text-red-700">{leadsError}</Text>}
       </View>

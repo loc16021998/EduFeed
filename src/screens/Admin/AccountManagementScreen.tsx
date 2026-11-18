@@ -1,8 +1,9 @@
-import { Check, Minus, Plus, Search, Trash2, UserPlus, X } from 'lucide-react-native';
+import { Check, Minus, Plus, Trash2, UserPlus } from 'lucide-react-native';
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, FlatList, KeyboardAvoidingView, Modal, Platform, Pressable, RefreshControl, ScrollView, Switch, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, FlatList, KeyboardAvoidingView, Modal, Platform, Pressable, RefreshControl, ScrollView, Switch, Text, View } from 'react-native';
 
 import { Button, HeaderIconButton, ScreenHeader, Select } from '@/components';
+import SearchField from '@/components/SearchField';
 import { hasSupabase } from '@/config/env';
 import type { RootStackScreenProps } from '@/navigation/types';
 import FormField from '@/screens/Booking/components/FormField';
@@ -144,15 +145,7 @@ export default function AccountManagementScreen({ navigation }: RootStackScreenP
         </View>
         {tab === 'accounts' && (
           <>
-            <View className="h-11 flex-row items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3">
-              <Search size={17} color={COLORS.subtle} />
-              <TextInput value={search} onChangeText={setSearch} placeholder="Tìm tên, số điện thoại, tên bé…" placeholderTextColor={COLORS.subtle} accessibilityLabel="Tìm phụ huynh" className="flex-1 text-[15px] text-ink" />
-              {!!search && (
-                <Pressable onPress={() => setSearch('')} accessibilityLabel="Xóa tìm kiếm" hitSlop={8}>
-                  <X size={16} color={COLORS.subtle} />
-                </Pressable>
-              )}
-            </View>
+            <SearchField value={search} onChangeText={setSearch} placeholder="Tìm tên, số điện thoại, tên bé…" accessibilityLabel="Tìm phụ huynh" />
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerClassName="gap-2">
               <Pill label="Mọi cơ sở" on={campus === null} onPress={() => setCampus(null)} />
               {CAMPUSES.map((c) => (

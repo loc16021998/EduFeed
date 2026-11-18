@@ -4,6 +4,7 @@ import { Image, Pressable, Text, TextInput, View, type GestureResponderEvent, ty
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import mark from '@/assets/branding/logo-th-mark.png';
+import SearchField from '@/components/SearchField';
 import { COLORS } from '@/utils/constants';
 
 const MARK: ImageSourcePropType = typeof mark === 'string' ? { uri: mark } : mark;
@@ -142,23 +143,7 @@ export default function HomeHeader({
       </View>
 
       {searchOpen && (
-        <View className="mx-4 mb-1 h-11 flex-row items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3">
-          <Search size={18} color={COLORS.subtle} />
-          <TextInput
-            ref={inputRef}
-            value={query}
-            onChangeText={onQueryChange}
-            placeholder="Tìm video, thầy cô, #hashtag…"
-            placeholderTextColor={COLORS.subtle}
-            returnKeyType="search"
-            className="flex-1 text-base text-ink"
-          />
-          {!!query && (
-            <Pressable onPress={() => onQueryChange('')} hitSlop={8} accessibilityLabel="Xóa">
-              <X size={16} color={COLORS.subtle} />
-            </Pressable>
-          )}
-        </View>
+        <SearchField ref={inputRef} value={query} onChangeText={onQueryChange} placeholder="Tìm video, thầy cô, #hashtag…" accessibilityLabel="Tìm video" boxClassName="mx-4 mb-1" />
       )}
     </View>
   );

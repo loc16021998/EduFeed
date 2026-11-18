@@ -18,6 +18,19 @@
       * { -webkit-tap-highlight-color: transparent; }
       /* iPhone zooms the page when focusing a field with text under 16px — keep form fields at 16px. */
       input, textarea, select { font-size: 16px !important; }
+      /* Text fields like a normal website: no black browser outline; the field's own box turns brand blue
+         with a soft ring while typing. Fields with their own border highlight themselves; search boxes
+         (a borderless input inside a bordered box) highlight the box. */
+      input, textarea { outline: none !important; -webkit-appearance: none; appearance: none; }
+      input[type="search"]::-webkit-search-decoration, input[type="search"]::-webkit-search-cancel-button { -webkit-appearance: none; }
+      input[class~="border"]:focus, textarea[class~="border"]:focus,
+      div[class~="border"]:has(> input:focus), div[class~="border"]:has(> textarea:focus) {
+        border-color: #2F6BFF !important;
+        box-shadow: 0 0 0 3px rgba(47, 107, 255, 0.16);
+        transition: border-color 120ms ease, box-shadow 120ms ease;
+      }
+      /* Inputs inside a highlighted box stay plain. */
+      div[class~="border"] > input:not([class~="border"]):focus { box-shadow: none; }
       /* Long-press on buttons / logo / images must not start text selection or the "Save image" callout. */
       [role="button"], [role="header"], [role="link"], [role="tab"], [role="radio"], [role="checkbox"], img {
         -webkit-touch-callout: none;
