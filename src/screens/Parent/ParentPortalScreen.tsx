@@ -1,4 +1,4 @@
-import { AlertTriangle, CalendarDays, CalendarOff, CheckCircle2, Copy, Gift, Heart, LogOut, MessageCircle, Send, Wallet, QrCode } from 'lucide-react-native';
+import { AlertTriangle, CalendarDays, CalendarOff, CheckCircle2, ChevronRight, Copy, Gift, Heart, LogOut, MessageCircle, Send, Sparkles, Wallet, QrCode } from 'lucide-react-native';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Image, KeyboardAvoidingView, Modal, Platform, Pressable, RefreshControl, ScrollView, Text, TextInput, View } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
@@ -25,6 +25,9 @@ import { fetchStudentQr } from '@/services/staffOps';
 import { useParentStore } from '@/store';
 import { CATEGORY_COLORS, COLORS } from '@/utils/constants';
 import { confirmAsync, shareText } from '@/utils/platform';
+
+import ClassroomFlashFeed from './components/ClassroomFlashFeed';
+import HabitStreakWidget from './components/HabitStreakWidget';
 
 const msg = (e: unknown) => (e instanceof Error ? e.message : 'Đã có lỗi xảy ra, vui lòng thử lại.');
 const pad = (n: number) => String(n).padStart(2, '0');
@@ -139,7 +142,27 @@ export default function ParentPortalScreen({ navigation }: RootStackScreenProps<
                 </View>
                 {!openInvoice && active.length > 0 && <Text className="-mt-1 px-1 text-[11px] text-ink-subtle">Chưa có hóa đơn học phí cần thanh toán.</Text>}
 
+                <Pressable
+                  onPress={() => navigation.navigate('NotebookCheck')}
+                  accessibilityRole="button"
+                  className="flex-row items-center gap-3 rounded-3xl bg-brand-500 p-4 active:bg-brand-600"
+                  testID="open-ai-check"
+                >
+                  <View className="h-11 w-11 items-center justify-center rounded-2xl bg-white/20">
+                    <Sparkles size={22} color="#fff" />
+                  </View>
+                  <View className="flex-1">
+                    <Text className="text-[15px] font-bold text-white">Chấm vở cùng AI</Text>
+                    <Text className="text-xs leading-[17px] text-white/85">Chụp vở luyện chữ hoặc vở toán, nhận gợi ý ngay</Text>
+                  </View>
+                  <ChevronRight size={20} color="#fff" />
+                </Pressable>
+
+                <ClassroomFlashFeed />
+
                 <WeeklySchedule student={student} />
+
+                <HabitStreakWidget key={student.id} studentId={student.id} studentName={student.fullName} courses={active.map((e) => e.courseCode)} />
 
                 {requests.length > 0 && (
                   <View className="gap-2 rounded-3xl bg-white p-4">

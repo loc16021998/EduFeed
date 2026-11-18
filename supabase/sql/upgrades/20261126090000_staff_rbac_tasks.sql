@@ -191,7 +191,8 @@ stable
 security definer
 set search_path = public
 as $$
-  select public.staff_kind() in ('ADMIN', 'MANAGER')
+  -- coalesce: for non-staff staff_kind() is null, and null must mean 'no', not 'unknown'.
+  select coalesce(public.staff_kind() in ('ADMIN', 'MANAGER'), false)
       or exists (select 1 from public.classes where id = p_class_id and teacher_id = auth.uid());
 $$;
 

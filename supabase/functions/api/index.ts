@@ -8,6 +8,9 @@
  *   POST /api/payment/invoices/:id/vnpay                     → { url }  signed VNPay checkout URL
  *   POST /api/parent/otp/request | /parent/otp/verify | /parent/signup   parent sign-in (Zalo ZNS OTP) — _shared/parentAuth.ts
  *
+ * Parent (Authorization: Bearer <parent JWT>):
+ *   POST /api/ai/notebook-check   { kind, image, mediaType } → NotebookCheckResponse (Claude vision; ANTHROPIC_API_KEY)
+ *
  * Payment gateways (verified here — VNPay HMAC-SHA512 signature / bank webhook API key):
  *   GET|POST /api/payment/ipn   VNPay IPN or SePay bank-transfer webhook → invoice PAID + receipt + Zalo message
  *
@@ -30,6 +33,17 @@
  * (SUPABASE_URL / SUPABASE_ANON_KEY / SUPABASE_SERVICE_ROLE_KEY are injected automatically.)
  */
 import { createClient, type SupabaseClient } from 'npm:@supabase/supabase-js@2.119.0';
+import Anthropic from 'npm:@anthropic-ai/sdk@1.10.0';
+import {
+  MAX_IMAGE_BASE64,
+  NOTEBOOK_MEDIA_TYPES,
+  NOTEBOOK_SCHEMA,
+  NOTEBOOK_SYSTEM,
+  normaliseNotebookResult,
+  notebookUserPrompt,
+  type NotebookCheckResponse,
+  type NotebookMediaType,
+} from '../_shared/notebookCheck.ts';
 
 import {
   COURSE_CODES,
@@ -808,6 +822,77 @@ async function handleParentAuth(req: Request, op: 'request' | 'verify' | 'signup
   return json(r.body, r.status, { 'Cache-Control': 'no-store' });
 }
 
+// ─── POST /api/ai/notebook-check (parent JWT) ───────────────────────────────
+// Body: { kind: 'HANDWRITING' | 'MATH', image: <base64>, mediaType: 'image/jpeg' | 'image/png' | 'image/webp' }
+// The photo is sent to Claude and discarded — never stored. Quota: 10 checks / parent / day (ai_check_begin).
+
+const ANTHROPIC_API_KEY = env('ANTHROPIC_API_KEY');
+const anthropic = ANTHROPIC_API_KEY ? new Anthropic({ apiKey: ANTHROPIC_API_KEY, maxRetries: 1, timeout: 90_000 }) : null;
+
+async function handleNotebookCheck(req: Request): Promise<Response> {
+  const token = bearerToken(req);
+  if (!token) return fail('UNAUTHORIZED', 'Vui lòng đăng nhập tài khoản phụ huynh', 401);
+  const { data, error } = await adminDb.auth.getUser(token);
+  if (error || !data.user) return fail('UNAUTHORIZED', 'Phiên đăng nhập không hợp lệ hoặc đã hết hạn', 401);
+  if ((data.user.app_metadata as { role?: string } | undefined)?.role !== 'parent') {
+    return fail('FORBIDDEN', 'Tính năng dành cho tài khoản phụ huynh', 403);
+  }
+  if (!anthropic) return fail('SERVICE_UNAVAILABLE', 'Tính năng chấm vở AI chưa được kích hoạt.', 503);
+
+  const body = await readJson(req);
+  const kind = body?.kind;
+  const mediaType = body?.mediaType;
+  const image = typeof body?.image === 'string' ? body.image.replace(/^data:[^,]*,/, '') : '';
+  if (kind !== 'HANDWRITING' && kind !== 'MATH') return fail('VALIDATION', 'Chọn loại vở cần chấm', 422, 'kind');
+  if (!NOTEBOOK_MEDIA_TYPES.includes(mediaType as NotebookMediaType)) return fail('VALIDATION', 'Ảnh phải là JPG, PNG hoặc WEBP', 422, 'image');
+  if (image.length < 1000 || image.length > MAX_IMAGE_BASE64 || !/^[A-Za-z0-9+/=]+$/.test(image)) {
+    return fail('VALIDATION', 'Ảnh không hợp lệ hoặc quá lớn (tối đa ~5 MB)', 422, 'image');
+  }
+
+  const begin = await adminDb.rpc('ai_check_begin', { p_auth_user_id: data.user.id, p_kind: kind });
+  if (begin.error) return failFromDb(begin.error) ?? fail('INTERNAL', 'Không bắt đầu được lượt chấm', 500);
+  const { id, remaining } = begin.data as { id: string; remaining: number };
+
+  const finish = (ok: boolean, result: unknown, err: string | null) =>
+    adminDb.rpc('ai_check_finish', { p_id: id, p_ok: ok, p_result: result, p_error: err });
+
+  try {
+    const msg = await anthropic.beta.messages.create({
+      model: 'claude-opus-5-5',
+      max_tokens: 4000,
+      betas: ['server-side-fallback-2026-07-01'],
+      fallbacks: 'default',
+      system: NOTEBOOK_SYSTEM,
+      output_config: { effort: 'low', format: { type: 'json_schema', schema: NOTEBOOK_SCHEMA as unknown as Record<string, unknown> } },
+      messages: [
+        {
+          role: 'user',
+          content: [
+            { type: 'image', source: { type: 'base64', media_type: mediaType as NotebookMediaType, data: image } },
+            { type: 'text', text: notebookUserPrompt(kind) },
+          ],
+        },
+      ],
+    });
+    if (msg.stop_reason === 'refusal') {
+      await finish(false, null, 'refusal');
+      return fail('VALIDATION', 'Ảnh này không chấm được. Hãy chụp đúng một trang vở của bé.', 422, 'image');
+    }
+    const text = msg.content.flatMap((b) => (b.type === 'text' ? [b.text] : [])).join('');
+    const result = normaliseNotebookResult(JSON.parse(text));
+    await finish(true, result, null);
+    const out: NotebookCheckResponse = { id, kind, result, remainingToday: remaining };
+    return json(out, 200, { 'Cache-Control': 'no-store' });
+  } catch (e) {
+    console.error('[ai/notebook-check]', e);
+    await finish(false, null, e instanceof Error ? e.message.slice(0, 300) : 'error');
+    if (e instanceof Anthropic.RateLimitError || e instanceof Anthropic.InternalServerError) {
+      return fail('SERVICE_UNAVAILABLE', 'Trợ lý AI đang bận, ba mẹ thử lại sau ít phút nhé.', 503);
+    }
+    return fail('INTERNAL', 'Chưa chấm được ảnh này, ba mẹ thử lại nhé.', 500);
+  }
+}
+
 // ─── Router ─────────────────────────────────────────────────────────────────
 
 const UUID = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
@@ -832,6 +917,7 @@ Deno.serve(async (req) => {
     if (path === '/payment/ipn') return await handlePaymentIpnRoute(req, url);
     if (path === '/parent/otp/request') return req.method === 'POST' ? await handleParentAuth(req, 'request') : postOnly();
     if (path === '/parent/otp/verify') return req.method === 'POST' ? await handleParentAuth(req, 'verify') : postOnly();
+    if (path === '/ai/notebook-check') return req.method === 'POST' ? await handleNotebookCheck(req) : postOnly();
     if (path === '/parent/signup') return req.method === 'POST' ? await handleParentAuth(req, 'signup') : postOnly();
     const inv = PAYMENT_INVOICE.exec(path);
     if (inv) {

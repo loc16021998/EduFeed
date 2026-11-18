@@ -1,6 +1,8 @@
 import type { ReactNode } from 'react';
 import { ActivityIndicator, Pressable, Text, type PressableProps } from 'react-native';
 
+import { haptics } from '@/utils/haptics';
+
 type Variant = 'primary' | 'accent' | 'outline' | 'ghost';
 type Size = 'sm' | 'md' | 'lg';
 
@@ -34,6 +36,7 @@ export default function Button({
   disabled,
   icon,
   className = '',
+  onPress,
   ...rest
 }: ButtonProps) {
   const v = VARIANT[variant];
@@ -46,6 +49,15 @@ export default function Button({
       accessibilityState={{ disabled: !!isDisabled, busy: loading }}
       disabled={isDisabled}
       className={`flex-row items-center justify-center gap-2 ${s.box} ${v.box} ${isDisabled ? 'opacity-50' : ''} ${className}`}
+      onPress={
+        onPress
+          ? (e) => {
+              // Light tap feedback on the main actions (primary / accent) only.
+              if (variant === 'primary' || variant === 'accent') haptics.light();
+              onPress(e);
+            }
+          : undefined
+      }
       {...rest}
     >
       {loading ? <ActivityIndicator color={v.spinner} /> : icon}

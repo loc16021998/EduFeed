@@ -23,6 +23,8 @@ import {
 } from '@/services/staffOps';
 import { useStaffStore } from '@/store';
 import type { PickedMedia } from '@/types';
+
+import FlashComposer from './components/FlashComposer';
 import { CAMPUS_LABELS, CATEGORY_COLORS, COLORS } from '@/utils/constants';
 
 const msg = (e: unknown) => (e instanceof Error ? e.message : 'Đã có lỗi xảy ra');
@@ -42,7 +44,7 @@ export default function TeacherDashboardScreen({ navigation }: RootStackScreenPr
   const [classes, setClasses] = useState<ClassInfo[]>([]);
   const [classId, setClassId] = useState<string | null>(null);
   const [roster, setRoster] = useState<RosterRow[]>([]);
-  const [tab, setTab] = useState<'attendance' | 'report'>('attendance');
+  const [tab, setTab] = useState<'attendance' | 'report' | 'flash'>('attendance');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -137,7 +139,8 @@ export default function TeacherDashboardScreen({ navigation }: RootStackScreenPr
               {(
                 [
                   ['attendance', 'Điểm danh'],
-                  ['report', 'Gửi sổ liên lạc'],
+                  ['report', 'Sổ liên lạc'],
+                  ['flash', 'Khoảnh khắc'],
                 ] as const
               ).map(([id, label]) => (
                 <Pressable key={id} onPress={() => setTab(id)} accessibilityRole="tab" aria-selected={tab === id} accessibilityState={{ selected: tab === id }} className={`h-10 flex-1 items-center justify-center rounded-xl ${tab === id ? 'bg-white' : ''}`}>
@@ -148,8 +151,10 @@ export default function TeacherDashboardScreen({ navigation }: RootStackScreenPr
 
             {tab === 'attendance' ? (
               <AttendancePanel cls={cls} roster={roster} onChanged={loadRoster} />
-            ) : (
+            ) : tab === 'report' ? (
               <BatchReportPanel cls={cls} roster={roster} onSent={loadRoster} />
+            ) : (
+              <FlashComposer key={cls.id} cls={cls} />
             )}
           </>
         )}

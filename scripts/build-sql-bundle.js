@@ -92,6 +92,7 @@ const REQUIRES = {
   ],
   '20261125090000_referral_rewards.sql': [['public.parent_student_links', '20261124090000_parent_portal.sql']],
   '20261126090000_staff_rbac_tasks.sql': [['public.referral_rewards', '20261125090000_referral_rewards.sql']],
+  '20261127090000_parent_engagement.sql': [['public.classes', '20261126090000_staff_rbac_tasks.sql']],
 };
 const guard = (f) =>
   (REQUIRES[f] ?? [])

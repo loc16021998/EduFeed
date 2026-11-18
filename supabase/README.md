@@ -379,6 +379,28 @@ Tasks are also created automatically:
 - **Approved make-up request:** a task for the teacher of the child's class.
 - **T+14 advisor call after a course:** a task for the advisor.
 
+## Parent engagement: AI notebook check, class moments, 21-day challenge
+
+Database: `migrations/20261127090000_parent_engagement.sql` (upgrade: run after `20261126090000_staff_rbac_tasks.sql`).
+
+**Chấm vở cùng AI** (`/con-toi/cham-vo`). The parent photographs one page (luyện chữ or toán); the app shrinks it to
+≤1600 px JPEG and sends it to `POST /api/ai/notebook-check` (parent JWT). The Edge Function asks Claude
+(`claude-opus-5-5`, vision, structured JSON output, `_shared/notebookCheck.ts`) for 1–5 estimates per criterion,
+checked exercises (toán), strengths, home-practice tips and a short encouragement signed "Trợ lý AI TH EDU".
+- The photo is **not stored**; `ai_checks` keeps only the kind, status and the JSON result.
+- Limit: 10 checks per parent per day (`ai_check_begin`, service role only).
+- Unreadable / non-notebook photos come back as "chụp lại"; scores are labelled "AI ước lượng" in the app.
+- Enable: `npx supabase secrets set ANTHROPIC_API_KEY=… --project-ref <ref>` then redeploy `api`. Without the
+  key the route answers 503 "chưa được kích hoạt". Demo mode (no Supabase) shows a fixed sample, labelled.
+
+**Khoảnh khắc lớp học.** Teachers (Lớp của tôi → tab "Khoảnh khắc") post one photo or a ≤5 s voice note (web
+MediaRecorder; the native app posts photos) into `class-reports/class/<class_id>/…`, then `flash_create`. Parents of
+that class see them for 7 days in "Con tôi" (`flash_feed`), react ❤️ "Thả tim" / 🌟 "Tự hào quá" (`flash_react`,
+toggle) and reply (`flash_reply`, ≤300 chars, 5 per moment). The teacher's tab lists counts and every reply.
+
+**Thử thách 21 ngày.** A small daily habit per child (chosen from the child's courses), ticked by the parent;
+streak + 21 dots + confetti. Stored on the device only (`useHabitStore`), nothing is sent to the centre.
+
 ## Zalo access token (automatic refresh)
 
 Zalo rotates tokens: each refresh returns a new access token **and** a new refresh token, and the old refresh token
