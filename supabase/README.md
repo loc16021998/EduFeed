@@ -401,6 +401,27 @@ toggle) and reply (`flash_reply`, ≤300 chars, 5 per moment). The teacher's tab
 **Thử thách 21 ngày.** A small daily habit per child (chosen from the child's courses), ticked by the parent;
 streak + 21 dots + confetti. Stored on the device only (`useHabitStore`), nothing is sent to the centre.
 
+## Voice feedback, review games, parent community
+
+Database: `migrations/20261128090000_voice_games_community.sql` (upgrade: run after `20261127090000_parent_engagement.sql`).
+
+**Lời nhắn thoại trong sổ liên lạc.** In "Lớp của tôi → Sổ liên lạc" the teacher can record a 15–30 s note (web
+microphone); it is uploaded to `class-reports/class/<class_id>/…` and attached to every selected child's entry for
+that session (`daily_report_set_voice`). Parents see a player with ❤️ "Thả tim" (= the existing thank-you) and
+👏 "Vỗ tay" (`parent_report_clap`).
+
+**Góc ôn tập thông minh** (`/con-toi/on-tap`). 60-second games: "Săn chữ cái" (look-alike letters) and "Tính nhanh"
+(+/− within 20, harder as the streak grows). `game_submit` stores each play; points = right answers (max 30) + 10 at
+≥ 80 % accuracy, only for the first 3 plays per child per day (it's practice, not a grind). Finishing a play ticks
+"Ôn tập 1 phút" in the 21-day challenge on the device.
+
+**Cộng đồng TH EDU** (`/cong-dong`). Members = staff + parents with a child who has an active / completed course.
+Posts (Mẹo hay, Hỏi đáp, Khoảnh khắc của con, Trao đổi sách; optional photo in the private bucket `community`),
+likes, comments. Staff comments carry the **Giáo viên TH EDU** badge and are pinned first; the post shows
+"Giáo viên TH EDU đã trả lời". Safety: 5 posts / day, 20 comments / hour, one report per member, **3 reports hide** a
+post / comment until an admin or manager (`community_moderate`) restores or keeps it hidden; authors can delete
+their own. No direct table access — everything goes through `community_*` functions.
+
 ## Zalo access token (automatic refresh)
 
 Zalo rotates tokens: each refresh returns a new access token **and** a new refresh token, and the old refresh token

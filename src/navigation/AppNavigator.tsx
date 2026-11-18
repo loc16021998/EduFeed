@@ -13,6 +13,8 @@ import ParentAuthScreen from '@/screens/Auth/ParentAuthScreen';
 import ParentPortalScreen from '@/screens/Parent/ParentPortalScreen';
 import ReferralScreen from '@/screens/Parent/ReferralScreen';
 import AIScannerScreen from '@/screens/Parent/AIScannerScreen';
+import MiniGamesScreen from '@/screens/Games/MiniGamesScreen';
+import ParentCommunityScreen from '@/screens/Community/ParentCommunityScreen';
 import TeacherDashboardScreen from '@/screens/Teacher/TeacherDashboardScreen';
 import AdvisorTaskScreen from '@/screens/Advisor/AdvisorTaskScreen';
 import ClassesScreen from '@/screens/Admin/ClassesScreen';
@@ -73,6 +75,8 @@ const linking: LinkingOptions<RootStackParamList> = {
       ParentAuth: 'con-toi/dang-nhap',
       Referral: 'con-toi/gioi-thieu',
       NotebookCheck: 'con-toi/cham-vo',
+      MiniGames: 'con-toi/on-tap',
+      Community: 'cong-dong',
       TeacherDashboard: 'quan-ly/lop-hoc',
       AdvisorTasks: 'quan-ly/cong-viec',
       Classes: 'quan-tri/lop-hoc',
@@ -149,6 +153,8 @@ export default function AppNavigator() {
         <Stack.Screen name="ParentPortal" component={ParentPortalScreen} options={{ headerShown: false }} />
         <Stack.Screen name="Referral" component={ReferralScreen} options={{ headerShown: false }} />
         <Stack.Screen name="NotebookCheck" component={AIScannerScreen} options={{ headerShown: false }} />
+        <Stack.Screen name="MiniGames" component={MiniGamesScreen} options={{ headerShown: false }} />
+        <Stack.Screen name="Community" component={ParentCommunityScreen} options={{ headerShown: false }} />
         <Stack.Screen name="TeacherDashboard" component={TeacherDashboardScreen} options={{ headerShown: false }} />
         <Stack.Screen name="AdvisorTasks" component={AdvisorTaskScreen} options={{ headerShown: false }} />
         <Stack.Screen name="Classes" component={ClassesScreen} options={{ headerShown: false }} />

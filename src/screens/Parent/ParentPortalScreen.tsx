@@ -6,10 +6,12 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button, HeaderIconButton, ScreenHeader, Skeleton } from '@/components';
 import ImageZoomModal from '@/components/ImageZoomModal';
+import VoiceFeedbackPlayer from '@/components/VoiceFeedbackPlayer';
 import { hasSupabase } from '@/config/env';
 import type { RootStackScreenProps } from '@/navigation/types';
 import {
   attendanceRate,
+  clapReport,
   fetchReports,
   photoUrls,
   reactToReport,
@@ -157,6 +159,19 @@ export default function ParentPortalScreen({ navigation }: RootStackScreenProps<
                   </View>
                   <ChevronRight size={20} color="#fff" />
                 </Pressable>
+
+                <View className="flex-row gap-2.5">
+                  <Pressable onPress={() => navigation.navigate('MiniGames')} accessibilityRole="button" className="flex-1 gap-1 rounded-3xl bg-white p-4 active:bg-slate-50" testID="open-games">
+                    <Text style={{ fontSize: 26 }}>🎮</Text>
+                    <Text className="text-[14px] font-bold text-ink">Góc ôn tập</Text>
+                    <Text className="text-xs leading-[17px] text-ink-muted">Trò chơi 1 phút, tích điểm chăm chỉ</Text>
+                  </Pressable>
+                  <Pressable onPress={() => navigation.navigate('Community')} accessibilityRole="button" className="flex-1 gap-1 rounded-3xl bg-white p-4 active:bg-slate-50" testID="open-community">
+                    <Text style={{ fontSize: 26 }}>💬</Text>
+                    <Text className="text-[14px] font-bold text-ink">Cộng đồng</Text>
+                    <Text className="text-xs leading-[17px] text-ink-muted">Hỏi đáp, mẹo hay cùng ba mẹ TH EDU</Text>
+                  </Pressable>
+                </View>
 
                 <ClassroomFlashFeed />
 
@@ -430,13 +445,27 @@ function ReportCard({ report, studentName, onChange }: { report: DailyReport; st
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const [voiceUrl, setVoiceUrl] = useState('');
+
   useEffect(() => {
     let alive = true;
     if (report.media.length) photoUrls(report.media).then((u) => alive && setUrls(u), () => {});
+    if (report.voicePath) photoUrls([report.voicePath]).then((u) => alive && setVoiceUrl(u[0] ?? ''), () => {});
     return () => {
       alive = false;
     };
-  }, [report.media]);
+  }, [report.media, report.voicePath]);
+
+  const toggleClap = async () => {
+    const next = { ...report, parentClapped: !report.parentClapped };
+    onChange(next);
+    try {
+      await clapReport(report.id, next.parentClapped);
+    } catch (e) {
+      onChange(report);
+      setError(msg(e));
+    }
+  };
 
   const toggleLike = async () => {
     const next = { ...report, parentLiked: !report.parentLiked };
@@ -489,6 +518,18 @@ function ReportCard({ report, studentName, onChange }: { report: DailyReport; st
         </View>
       )}
       {!!report.feedbackText && <Text className="text-[14px] leading-[21px] text-ink">{report.feedbackText}</Text>}
+      {report.voicePath !== null && (
+        <VoiceFeedbackPlayer
+          url={voiceUrl}
+          duration={report.voiceDuration}
+          seed={report.id}
+          teacherName={report.teacherName}
+          hearted={report.parentLiked}
+          clapped={report.parentClapped}
+          onHeart={toggleLike}
+          onClap={toggleClap}
+        />
+      )}
       {report.media.length > 0 && (
         // Space is reserved from the start (one tile per photo) so the page doesn't jump while signed links load.
         <View className="flex-row flex-wrap gap-2">

@@ -95,7 +95,12 @@ export interface DailyReport {
   /** Teacher's quick feedback chips. */
   tags: string[];
   parentLiked: boolean;
+  /** 👏 reaction. */
+  parentClapped: boolean;
   parentReply: string | null;
+  /** Teacher's 15–30 s voice note (storage path in class-reports, or a URL; '' in demo = no audio). */
+  voicePath: string | null;
+  voiceDuration: number | null;
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -107,6 +112,9 @@ function mapDbError(error: { message: string; hint?: string | null }): ApiError 
   if (hint === 'UNAUTHORIZED') return new ApiError(error.message, 'UNAUTHORIZED', 401);
   if (hint === 'CONFLICT') return new ApiError(error.message, 'CONFLICT', 409);
   if (hint === 'NOT_FOUND') return new ApiError(error.message, 'NOT_FOUND', 404);
+  if (/parent_report_clap/i.test(error.message)) {
+    return new ApiError('Cơ sở dữ liệu chưa có lời nhắn thoại. Chạy supabase/sql/upgrades/20261128090000_voice_games_community.sql.', 'INTERNAL');
+  }
   if (/parent_|admin_parent|daily_report|attendance_request|students/i.test(error.message)) {
     return new ApiError('Cơ sở dữ liệu chưa có Cổng phụ huynh. Chạy supabase/sql/upgrades/20261124090000_parent_portal.sql.', 'INTERNAL');
   }
@@ -160,6 +168,9 @@ const toReport = (r: any): DailyReport => ({
   media: Array.isArray(r.media_urls) ? r.media_urls : [],
   tags: Array.isArray(r.tags) ? r.tags : [],
   parentLiked: !!r.parent_liked,
+  parentClapped: !!r.parent_clapped,
+  voicePath: r.voice_path ?? null,
+  voiceDuration: r.voice_duration == null ? null : Number(r.voice_duration),
   parentReply: r.parent_reply ?? null,
 });
 /* eslint-enable @typescript-eslint/no-explicit-any */
@@ -288,6 +299,17 @@ export async function reactToReport(reportId: string, liked: boolean | null, rep
     return;
   }
   await rpc('parent_report_react', { p_report_id: reportId, p_liked: liked, p_reply: reply?.trim() || null });
+}
+
+/** 👏 "Vỗ tay" for the teacher (❤️ stays reactToReport's liked). */
+export async function clapReport(reportId: string, on: boolean): Promise<void> {
+  if (!supabase) {
+    await sleep(150);
+    const r = demoReports().find((x) => x.id === reportId);
+    if (r) r.parentClapped = on;
+    return;
+  }
+  await rpc('parent_report_clap', { p_report_id: reportId, p_on: on });
 }
 
 export async function sendAttendanceRequest(studentId: string, type: RequestType, date: string, reason: string): Promise<void> {
@@ -561,10 +583,10 @@ function demoReports() {
   if (demoReportList) return demoReportList;
   const pic = (seed: string) => `https://picsum.photos/seed/${seed}/900/1200`;
   demoReportList = [
-    { id: 'demo-r1', studentId: KHOI, courseCode: 'TOAN_TU_DUY', courseName: 'Toán tư duy', sessionDate: isoDay(-1), attendance: 'PRESENT', teacherName: 'Thầy Tú (mẫu)', feedbackText: 'Khôi tính nhẩm phép cộng có nhớ rất nhanh, chủ động giơ tay trả lời. Ba mẹ cho con luyện thêm 2 bài toán có lời văn mỗi tối nhé.', media: [pic('thedu-math-1'), pic('thedu-math-2')], parentLiked: false, parentReply: null, tags: ['Tính nhẩm nhanh', 'Tích cực phát biểu'] },
-    { id: 'demo-r2', studentId: KHOI, courseCode: 'TOAN_TU_DUY', courseName: 'Toán tư duy', sessionDate: isoDay(-5), attendance: 'PRESENT', teacherName: 'Thầy Tú (mẫu)', feedbackText: 'Con hoàn thành bài tập hình khối, cần cẩn thận hơn khi đếm cạnh.', media: [pic('thedu-math-3')], parentLiked: true, parentReply: 'Cảm ơn thầy, tối nay con sẽ luyện thêm ạ.', tags: [] },
-    { id: 'demo-r3', studentId: KHOI, courseCode: 'TOAN_TU_DUY', courseName: 'Toán tư duy', sessionDate: isoDay(-6), attendance: 'EXCUSED', teacherName: 'Thầy Tú (mẫu)', feedbackText: null, media: [], parentLiked: false, parentReply: null, tags: [] },
-    { id: 'demo-r4', studentId: ANH, courseCode: 'LUYEN_CHU_DEP', courseName: 'Luyện chữ đẹp', sessionDate: isoDay(-2), attendance: 'PRESENT', teacherName: 'Cô Hường (mẫu)', feedbackText: 'Minh Anh viết nét khuyết đều hơn tuần trước, ngồi đúng tư thế. Cô gửi ba mẹ ảnh bài viết của con.', media: [pic('thedu-chu-1')], parentLiked: false, parentReply: null, tags: ['Chữ đẹp hơn'] },
+    { id: 'demo-r1', studentId: KHOI, courseCode: 'TOAN_TU_DUY', courseName: 'Toán tư duy', sessionDate: isoDay(-1), attendance: 'PRESENT', teacherName: 'Thầy Tú (mẫu)', feedbackText: 'Khôi tính nhẩm phép cộng có nhớ rất nhanh, chủ động giơ tay trả lời. Ba mẹ cho con luyện thêm 2 bài toán có lời văn mỗi tối nhé.', media: [pic('thedu-math-1'), pic('thedu-math-2')], parentLiked: false, parentClapped: false, voicePath: '', voiceDuration: 24, parentReply: null, tags: ['Tính nhẩm nhanh', 'Tích cực phát biểu'] },
+    { id: 'demo-r2', studentId: KHOI, courseCode: 'TOAN_TU_DUY', courseName: 'Toán tư duy', sessionDate: isoDay(-5), attendance: 'PRESENT', teacherName: 'Thầy Tú (mẫu)', feedbackText: 'Con hoàn thành bài tập hình khối, cần cẩn thận hơn khi đếm cạnh.', media: [pic('thedu-math-3')], parentLiked: true, parentClapped: false, voicePath: null, voiceDuration: null, parentReply: 'Cảm ơn thầy, tối nay con sẽ luyện thêm ạ.', tags: [] },
+    { id: 'demo-r3', studentId: KHOI, courseCode: 'TOAN_TU_DUY', courseName: 'Toán tư duy', sessionDate: isoDay(-6), attendance: 'EXCUSED', teacherName: 'Thầy Tú (mẫu)', feedbackText: null, media: [], parentLiked: false, parentClapped: false, voicePath: null, voiceDuration: null, parentReply: null, tags: [] },
+    { id: 'demo-r4', studentId: ANH, courseCode: 'LUYEN_CHU_DEP', courseName: 'Luyện chữ đẹp', sessionDate: isoDay(-2), attendance: 'PRESENT', teacherName: 'Cô Hường (mẫu)', feedbackText: 'Minh Anh viết nét khuyết đều hơn tuần trước, ngồi đúng tư thế. Cô gửi ba mẹ ảnh bài viết của con.', media: [pic('thedu-chu-1')], parentLiked: false, parentClapped: false, voicePath: null, voiceDuration: null, parentReply: null, tags: ['Chữ đẹp hơn'] },
   ];
   return demoReportList;
 }

@@ -25,6 +25,7 @@ import { useStaffStore } from '@/store';
 import type { PickedMedia } from '@/types';
 
 import FlashComposer from './components/FlashComposer';
+import VoiceNoteField from './components/VoiceNoteField';
 import { CAMPUS_LABELS, CATEGORY_COLORS, COLORS } from '@/utils/constants';
 
 const msg = (e: unknown) => (e instanceof Error ? e.message : 'Đã có lỗi xảy ra');
@@ -257,6 +258,7 @@ function BatchReportPanel({ cls, roster, onSent }: { cls: ClassInfo; roster: Ros
   const [tags, setTags] = useState<string[]>([]);
   const [feedback, setFeedback] = useState('');
   const [photos, setPhotos] = useState<PickedMedia[]>([]);
+  const [voice, setVoice] = useState<PickedMedia | null>(null);
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -285,11 +287,12 @@ function BatchReportPanel({ cls, roster, onSent }: { cls: ClassInfo; roster: Ros
     if (!feedback.trim() && tags.length === 0) return setError('Chọn nhận xét nhanh hoặc viết vài dòng cho phụ huynh');
     setBusy(true);
     try {
-      const r = await sendBatchReport({ classId: cls.id, studentIds: selected, feedback, tags, photos, onProgress: setProgress });
+      const r = await sendBatchReport({ classId: cls.id, studentIds: selected, feedback, tags, photos, voice, onProgress: setProgress });
       setNotice(`Đã gửi sổ liên lạc cho ${r.created} học viên${r.skipped ? ` · ${r.skipped} bé đã có nhận xét buổi này` : ''}.`);
       setFeedback('');
       setTags([]);
       setPhotos([]);
+      setVoice(null);
       onSent();
     } catch (e) {
       setError(msg(e));
@@ -362,6 +365,7 @@ function BatchReportPanel({ cls, roster, onSent }: { cls: ClassInfo; roster: Ros
             </Pressable>
           )}
         </View>
+        <VoiceNoteField value={voice} onChange={setVoice} disabled={busy} />
         <Text className="text-[11px] leading-4 text-ink-subtle">Ảnh lớp chỉ phụ huynh của các bé trong lớp này xem được. Bé "Có mặt / Muộn" được trừ 1 buổi.</Text>
       </View>
 

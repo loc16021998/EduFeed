@@ -83,6 +83,9 @@ function mapDbError(error: { message: string; hint?: string | null }): ApiError 
   if (hint === 'FORBIDDEN') return new ApiError(error.message, 'FORBIDDEN', 403);
   if (hint === 'CONFLICT') return new ApiError(error.message, 'CONFLICT', 409);
   if (hint === 'NOT_FOUND') return new ApiError(error.message, 'NOT_FOUND', 404);
+  if (/daily_report_set_voice/i.test(error.message)) {
+    return new ApiError('Cơ sở dữ liệu chưa có lời nhắn thoại. Chạy supabase/sql/upgrades/20261128090000_voice_games_community.sql.', 'INTERNAL');
+  }
   if (/staff_|class_|attendance_|daily_report_batch/i.test(error.message)) {
     return new ApiError('Cơ sở dữ liệu chưa có phân quyền & công việc. Chạy supabase/sql/upgrades/20261126090000_staff_rbac_tasks.sql.', 'INTERNAL');
   }
@@ -209,11 +212,14 @@ export async function sendBatchReport(input: {
   feedback: string;
   tags: string[];
   photos: PickedMedia[];
+  /** Optional 15–30 s voice note, shared by every selected child's entry. */
+  voice?: PickedMedia | null;
   date?: string;
   onProgress?: (f: number) => void;
 }): Promise<{ created: number; skipped: number }> {
   if (input.studentIds.length === 0) throw new ApiError('Chọn ít nhất 1 học viên', 'VALIDATION', 422, 'students');
   if (input.photos.length > 6) throw new ApiError('Tối đa 6 ảnh', 'VALIDATION', 422, 'media');
+  if (input.voice && ((input.voice.durationSec ?? 0) < 1 || (input.voice.durationSec ?? 0) > 31)) throw new ApiError('Lời nhắn thoại dài 1–30 giây', 'VALIDATION', 422, 'voice');
   if (!supabase) {
     await sleep(400);
     let created = 0;
@@ -235,9 +241,22 @@ export async function sendBatchReport(input: {
     await uploadMedia(path, p, (f) => input.onProgress?.((i + f) / input.photos.length), 'class-reports');
     paths.push(path);
   }
-  return rpc<{ created: number; skipped: number }>('daily_report_batch', {
+  let voicePath: string | null = null;
+  if (input.voice) {
+    const t = input.voice.type;
+    const ext = /mp4|m4a|aac/.test(t) ? 'm4a' : /ogg/.test(t) ? 'ogg' : /mpeg/.test(t) ? 'mp3' : 'webm';
+    voicePath = `class/${input.classId}/${date}-voice-${uuidv4().slice(0, 8)}.${ext}`;
+    await uploadMedia(voicePath, input.voice, undefined, 'class-reports');
+  }
+  const r = await rpc<{ created: number; skipped: number }>('daily_report_batch', {
     p_class_id: input.classId, p_session_date: date, p_student_ids: input.studentIds, p_feedback: input.feedback.trim() || null, p_tags: input.tags, p_media: paths,
   });
+  if (voicePath) {
+    await rpc('daily_report_set_voice', {
+      p_class_id: input.classId, p_session_date: date, p_student_ids: input.studentIds, p_path: voicePath, p_duration: Math.min(30, input.voice!.durationSec ?? 1),
+    });
+  }
+  return r;
 }
 
 // ─── Tasks ──────────────────────────────────────────────────────────────────

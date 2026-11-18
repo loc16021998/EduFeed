@@ -1,4 +1,4 @@
-import { CalendarClock, ChevronLeft, ChevronRight, GraduationCap, ImagePlus, LogOut, Plus, ShieldCheck, ListChecks, QrCode } from 'lucide-react-native';
+import { CalendarClock, ChevronLeft, ChevronRight, GraduationCap, ImagePlus, LogOut, Plus, ShieldCheck, ListChecks, QrCode, MessagesSquare } from 'lucide-react-native';
 import { useCallback, useEffect } from 'react';
 import { ActivityIndicator, FlatList, Pressable, RefreshControl, Text, View } from 'react-native';
 
@@ -100,6 +100,19 @@ export default function StaffVideosScreen({ navigation }: RootStackScreenProps<'
                 <Text className="text-xs text-white/75">Gọi phụ huynh, học bù, chấm bài</Text>
               </Pressable>
             </View>
+            <Pressable
+              onPress={() => navigation.navigate('Community')}
+              accessibilityRole="button"
+              className="flex-row items-center gap-3 rounded-2xl border border-emerald-100 bg-emerald-50 p-3.5 active:opacity-90"
+              testID="go-community"
+            >
+              <MessagesSquare size={22} color="#059669" />
+              <View className="flex-1">
+                <Text className="text-[15px] font-bold text-ink">Cộng đồng phụ huynh</Text>
+                <Text className="text-xs text-ink-muted">Trả lời câu hỏi (có dấu “Giáo viên TH EDU”), kiểm duyệt bài</Text>
+              </View>
+              <ChevronRight size={18} color={COLORS.muted} />
+            </Pressable>
             <Pressable
               onPress={() => navigation.navigate('StaffTrials')}
               accessibilityRole="button"

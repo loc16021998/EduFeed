@@ -52,6 +52,8 @@ export type RootStackParamList = {
   /** Parents: referral code, rewards, vouchers, invited friends. */
   Referral: undefined;
   NotebookCheck: undefined;
+  MiniGames: undefined;
+  Community: undefined;
   /** Teachers: my classes, QR / manual attendance, batch contact book. */
   TeacherDashboard: undefined;
   /** Advisors / teachers: assigned tasks (call, Zalo, done). */

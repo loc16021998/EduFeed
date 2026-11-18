@@ -20,6 +20,8 @@ export const HABIT_CHALLENGES: HabitChallenge[] = [
   { key: 'MENTAL_MATH', emoji: '🧮', title: 'Tính nhẩm 10 phép', daily: 'Cùng ba mẹ tính nhẩm 10 phép cộng trừ', course: 'TOAN_TU_DUY' },
   { key: 'READ_ALOUD', emoji: '📖', title: 'Đọc to 5 phút', daily: 'Đọc to một đoạn truyện cho ba mẹ nghe', course: 'TIEN_TIEU_HOC' },
   { key: 'TIDY_DESK', emoji: '🎒', title: 'Tự soạn cặp sách', daily: 'Tự xếp sách vở, bút thước cho buổi học mai', course: null },
+  /** Ticked automatically when the child finishes a game in "Góc ôn tập thông minh". */
+  { key: 'MINI_GAME', emoji: '🎮', title: 'Ôn tập 1 phút', daily: 'Chơi 1 lượt trong Góc ôn tập thông minh (tự đánh dấu)', course: null },
 ];
 
 /** Challenges matching the child's courses first, then the general ones. */
