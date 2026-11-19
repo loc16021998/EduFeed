@@ -1,3 +1,4 @@
+import { LIST_PERF } from '@/utils/listPerf';
 import { EmptyState } from '@/components/ux';
 import { CalendarClock, ChevronLeft, ChevronRight, GraduationCap, ImagePlus, LogOut, Plus, ShieldCheck, ListChecks, QrCode, MessagesSquare } from 'lucide-react-native';
 import { useCallback, useEffect } from 'react';
@@ -26,6 +27,7 @@ export default function StaffVideosScreen({ navigation }: RootStackScreenProps<'
     if (isStaff) load();
   }, [isStaff, load]);
 
+  const onEdit = useCallback((v: AdminVideo) => navigation.navigate('VideoEditor', { id: v.id }), [navigation]);
   const onShare = useCallback((v: AdminVideo) => {
     const url = buildShareUrl(v.shareSlug);
     if (url) shareText(shareMessage(v.title, url));
@@ -163,10 +165,11 @@ export default function StaffVideosScreen({ navigation }: RootStackScreenProps<'
             {!!error && <Text className="rounded-xl bg-red-50 p-2.5 text-xs text-red-600">{error}</Text>}
           </View>
         }
+        {...LIST_PERF}
         renderItem={({ item }) => (
           <AdminVideoRow
             video={item}
-            onEdit={(v) => navigation.navigate('VideoEditor', { id: v.id })}
+            onEdit={onEdit}
             onShare={onShare}
             onTogglePublished={togglePublished}
             onDelete={onDelete}

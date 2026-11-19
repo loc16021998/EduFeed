@@ -22,6 +22,8 @@ export interface FeedItem {
   id: string;
   title: string;
   videoUrl: string;
+  /** Optional lighter stream (e.g. 480p) used on slow / metered connections. */
+  videoUrlLow?: string;
   thumbnailUrl: string;
   category: CourseCategory;
   teacherName: string;

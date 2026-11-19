@@ -1,3 +1,4 @@
+import { LIST_PERF } from '@/utils/listPerf';
 import { KeyRound, ShieldCheck, UserMinus, UserPlus, UserRound } from 'lucide-react-native';
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { ActivityIndicator, FlatList, Modal, Pressable, RefreshControl, Text, View } from 'react-native';
@@ -89,6 +90,7 @@ export default function StaffAccountsScreen({ navigation }: RootStackScreenProps
     <View className="flex-1 bg-surface">
       <ScreenHeader title="Tài khoản nhân viên" onBack={goBack} />
       <FlatList
+        {...LIST_PERF}
         data={accounts}
         keyExtractor={(a) => a.id}
         contentContainerClassName="gap-3 px-4 pb-10"

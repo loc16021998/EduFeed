@@ -1,16 +1,20 @@
 import './global.css';
 import '@/lib/nativewindInterop';
 
+import { useEffect } from 'react';
 import { StatusBar, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import AppNavigator from '@/navigation/AppNavigator';
 import { useUiStore } from '@/store';
+import { startNetworkMonitor } from '@/store/networkStore';
 import { isWeb, MAX_APP_WIDTH, MAX_WIDE_WIDTH } from '@/utils/platform';
 
 export default function App() {
   const wide = useUiStore((s) => s.wideLayout);
+  // Wi-Fi vs mobile data → Data Saver policy (autoplay, preloading, upload size).
+  useEffect(() => startNetworkMonitor(), []);
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>

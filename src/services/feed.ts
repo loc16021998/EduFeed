@@ -20,6 +20,8 @@ const toFeedItem = (r: Tables<'videos'>): FeedItem => ({
   id: r.id,
   title: r.title,
   videoUrl: r.video_url,
+  // Read only if the column exists (optional upgrade); otherwise the main stream is used everywhere.
+  videoUrlLow: (r as { video_url_low?: string | null }).video_url_low ?? undefined,
   thumbnailUrl: r.thumbnail_url,
   category: r.category_code as CourseCategory,
   teacherName: r.teacher_name,

@@ -7,13 +7,21 @@ import Gradient from '@/components/media/Gradient';
 import type { FeedItem } from '@/types';
 import { CATEGORY_COLORS, CATEGORY_LABELS } from '@/utils/constants';
 
+import OptimizedVideoFeedItem from '@/components/OptimizedVideoFeedItem';
+import { pickStreamUrl } from '@/utils/networkPolicy';
+
 import CtaBar from './CtaBar';
-import FeedVideo from './FeedVideo';
 
 interface FeedVideoCardProps {
   item: FeedItem;
   height: number;
   active: boolean;
+  /** Next card on a fast unmetered link: buffer its video in the background. */
+  warm?: boolean;
+  /** false = Data Saver (tap to play). */
+  autoplay?: boolean;
+  /** Use the low-resolution stream when the video has one. */
+  preferLowRes?: boolean;
   muted: boolean;
   liked: boolean;
   following: boolean;
@@ -31,6 +39,9 @@ function FeedVideoCard({
   item,
   height,
   active,
+  warm = false,
+  autoplay = true,
+  preferLowRes = false,
   muted,
   liked,
   following,
@@ -43,7 +54,14 @@ function FeedVideoCard({
 }: FeedVideoCardProps) {
   return (
     <View style={{ height }} className="mx-4 mb-4 overflow-hidden rounded-3xl bg-slate-900">
-      <FeedVideo uri={item.videoUrl} posterUri={item.thumbnailUrl} active={active} muted={muted} />
+      <OptimizedVideoFeedItem
+        uri={pickStreamUrl(item, { preferLowRes })}
+        posterUri={item.thumbnailUrl}
+        mode={active ? 'active' : warm ? 'warm' : 'idle'}
+        muted={muted}
+        autoplay={autoplay}
+        testID={active ? 'feed-video-active' : undefined}
+      />
 
       {/* Scrims keep white text legible on any frame; they never block taps. */}
       <Gradient

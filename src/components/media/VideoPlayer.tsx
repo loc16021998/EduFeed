@@ -2,6 +2,8 @@
 import { forwardRef, useImperativeHandle, useRef } from 'react';
 import Video, { ResizeMode, type VideoRef } from 'react-native-video';
 
+import { useAppActive } from '@/hooks/useAppActive';
+
 import type { VideoPlayerHandle, VideoPlayerProps } from './types';
 
 const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(function VideoPlayer({
@@ -18,6 +20,10 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(function Vid
   volume = 1,
   onProgress,
 }, ref) {
+  // Every player (feed, full screen, voice notes) stops when the app is backgrounded / the tab is hidden:
+  // no audio from a locked phone, no video downloading in the background.
+  const appActive = useAppActive();
+  const isPaused = paused || !appActive;
   const video = useRef<VideoRef>(null);
   useImperativeHandle(ref, () => ({
     seek: (s) => video.current?.seek(s),
@@ -33,7 +39,7 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(function Vid
       onProgress={onProgress ? (p) => onProgress(p.currentTime, p.seekableDuration || p.playableDuration) : undefined}
       poster={poster}
       posterResizeMode={mode}
-      paused={paused}
+      paused={isPaused}
       muted={muted}
       repeat={loop}
       controls={controls}

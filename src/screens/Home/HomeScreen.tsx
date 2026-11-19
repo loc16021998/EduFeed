@@ -1,6 +1,8 @@
 import { useIsFocused, useNavigation } from '@react-navigation/native';
 import { BookmarkCheck, Plus } from 'lucide-react-native';
+import { WifiOff } from 'lucide-react-native';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import {
   ActivityIndicator,
   FlatList,
@@ -25,6 +27,9 @@ import type { Category, FeedItem } from '@/types';
 import { COLORS, FEED_FILTERS } from '@/utils/constants';
 import { normalizeVN } from '@/utils/helpers';
 import { BADGES, VIDEO_WATCH_MS } from '@/utils/parentClub';
+import { useAppActive } from '@/hooks/useAppActive';
+import { useMediaPolicy } from '@/store/networkStore';
+import { prefetchImages } from '@/utils/mediaCache';
 import { shareText, useAppWidth } from '@/utils/platform';
 
 import FeedVideoCard from './components/FeedVideoCard';
@@ -42,10 +47,21 @@ export default function HomeScreen(_: TabScreenProps<'Home'>) {
   const ideal = Math.round((width - 32) * 1.25);
   const cardHeight = feedHeight > 0 ? Math.max(360, Math.min(ideal, feedHeight - CARD_GAP - 8)) : ideal;
 
+  // Shallow selector: the feed re-renders only when these fields change (not on unrelated store updates).
   const {
     items, status, selectedCategory, likedIds, followedTeachers, loadingMore,
     load, loadMore, setCategory, toggleLike, toggleFollow,
-  } = useFeedStore();
+  } = useFeedStore(
+    useShallow((s) => ({
+      items: s.items, status: s.status, selectedCategory: s.selectedCategory, likedIds: s.likedIds, followedTeachers: s.followedTeachers,
+      loadingMore: s.loadingMore, load: s.load, loadMore: s.loadMore, setCategory: s.setCategory, toggleLike: s.toggleLike, toggleFollow: s.toggleFollow,
+    })),
+  );
+  const policy = useMediaPolicy();
+  // Locked phone / other app / hidden tab → nothing plays or buffers.
+  const appActive = useAppActive();
+  const likedSet = useMemo(() => new Set(likedIds), [likedIds]);
+  const followedSet = useMemo(() => new Set(followedTeachers), [followedTeachers]);
   const onCta = useCtaHandler();
   const navigation = useNavigation();
   const isStaff = useStaffStore((s) => s.isStaff);
@@ -86,10 +102,22 @@ export default function HomeScreen(_: TabScreenProps<'Home'>) {
     });
   }, [items, selectedCategory, query]);
 
-  // Autoplay whichever card is most on-screen. Must be a stable ref for FlatList.
+  // Autoplay whichever card is most on-screen. Must be a stable ref for FlatList; the state update is a
+  // single cheap setState (no work in the scroll path — prefetching happens in an effect below).
   const onViewableItemsChanged = useRef(({ viewableItems }: { viewableItems: ViewToken[] }) => {
-    setActiveId(viewableItems[0]?.key ?? null);
+    const first = viewableItems.find((v) => v.isViewable)?.key ?? null;
+    setActiveId((cur) => (cur === first ? cur : first));
   }).current;
+
+  // The card after the active one (warmed on fast Wi-Fi) + poster prefetch ahead of the scroll.
+  const activeIndex = useMemo(() => visible.findIndex((v) => v.id === activeId), [visible, activeId]);
+  const nextId = activeIndex >= 0 ? visible[activeIndex + 1]?.id ?? null : null;
+  useEffect(() => {
+    if (!policy.posterLookahead) return;
+    const from = Math.max(0, activeIndex);
+    const ahead = visible.slice(from, from + 1 + policy.posterLookahead);
+    prefetchImages(ahead.flatMap((v) => [v.thumbnailUrl, v.teacherAvatar]));
+  }, [visible, activeIndex, policy.posterLookahead]);
 
   // Dashboard funnel: a video counts as "viewed" after 3 s on screen (once per session; staff excluded).
   useEffect(() => {
@@ -151,10 +179,13 @@ export default function HomeScreen(_: TabScreenProps<'Home'>) {
       <FeedVideoCard
         item={item}
         height={cardHeight}
-        active={isFocused && activeId === item.id}
+        active={isFocused && appActive && activeId === item.id}
+        warm={isFocused && appActive && policy.warmNextVideo && nextId === item.id}
+        autoplay={policy.autoplay}
+        preferLowRes={policy.preferLowRes}
         muted={muted}
-        liked={likedIds.includes(item.id)}
-        following={followedTeachers.includes(item.teacherName)}
+        liked={likedSet.has(item.id)}
+        following={followedSet.has(item.teacherName)}
         onToggleMute={toggleMute}
         onLike={toggleLike}
         onFollow={toggleFollow}
@@ -163,7 +194,7 @@ export default function HomeScreen(_: TabScreenProps<'Home'>) {
         onExpand={setPlaying}
       />
     ),
-    [cardHeight, isFocused, activeId, muted, likedIds, followedTeachers, toggleMute, toggleLike, toggleFollow, onCta, onShare],
+    [cardHeight, isFocused, appActive, activeId, nextId, policy.warmNextVideo, policy.autoplay, policy.preferLowRes, muted, likedSet, followedSet, toggleMute, toggleLike, toggleFollow, onCta, onShare],
   );
 
   return (
@@ -183,7 +214,21 @@ export default function HomeScreen(_: TabScreenProps<'Home'>) {
       <View>
         <CategoryChips options={FEED_FILTERS} value={selectedCategory} onChange={onChangeCategory} />
         {/* Real, anonymised recent bookings — renders nothing if there are none. */}
-        <TrustTicker active={isFocused} />
+        <TrustTicker active={isFocused && appActive} />
+        {policy.dataSaver && (
+          <Pressable
+            onPress={() => navigation.navigate('DataSettings')}
+            accessibilityRole="button"
+            testID="data-saver-banner"
+            className="mx-4 mb-2 min-h-11 flex-row items-center gap-2 rounded-2xl bg-white px-3.5 active:bg-slate-50"
+          >
+            <WifiOff size={16} color={COLORS.brand} />
+            <Text className="flex-1 text-[13px] text-ink">
+              <Text className="font-bold">{policy.label}</Text> · chạm video để xem
+            </Text>
+            <Text className="text-xs font-semibold text-brand-600">Cài đặt ›</Text>
+          </Pressable>
+        )}
       </View>
 
       {status === 'loading' && items.length === 0 ? (
@@ -199,7 +244,7 @@ export default function HomeScreen(_: TabScreenProps<'Home'>) {
           data={visible}
           keyExtractor={(i) => i.id}
           renderItem={renderItem}
-          extraData={activeId}
+          extraData={renderItem}
           ListHeaderComponent={
             showSpark || savedCount > 0 ? (
               <View onLayout={(e) => setSparkHeight(Math.round(e.nativeEvent.layout.height))}>

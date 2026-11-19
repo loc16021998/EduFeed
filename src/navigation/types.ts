@@ -54,6 +54,7 @@ export type RootStackParamList = {
   NotebookCheck: undefined;
   MiniGames: undefined;
   Community: undefined;
+  DataSettings: undefined;
   /** Teachers: my classes, QR / manual attendance, batch contact book. */
   TeacherDashboard: undefined;
   /** Advisors / teachers: assigned tasks (call, Zalo, done). */

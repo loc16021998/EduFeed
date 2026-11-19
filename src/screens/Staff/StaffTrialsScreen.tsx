@@ -1,3 +1,4 @@
+import { LIST_PERF } from '@/utils/listPerf';
 import { EmptyState } from '@/components/ux';
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
@@ -88,6 +89,7 @@ export default function StaffTrialsScreen({ navigation }: RootStackScreenProps<'
       </View>
 
       <FlatList
+        {...LIST_PERF}
         data={leads}
         keyExtractor={(l) => l.id}
         contentContainerClassName="gap-3 px-4 pb-10"

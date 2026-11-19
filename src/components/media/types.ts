@@ -8,6 +8,8 @@ export interface VideoPlayerProps {
   paused?: boolean;
   muted?: boolean;
   loop?: boolean;
+  /** Web: how much to buffer before play ('auto' warms the next feed clip). Native buffers when mounted. */
+  preload?: 'auto' | 'metadata' | 'none';
   /** Show the platform's playback controls. */
   controls?: boolean;
   resizeMode?: 'cover' | 'contain';

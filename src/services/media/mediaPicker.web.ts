@@ -1,5 +1,7 @@
 // Web media picker — browser file input. Native: mediaPicker.ts.
+import { getMediaPolicy } from '@/store/networkStore';
 import type { PickedMedia } from '@/types';
+import { fitWithin } from '@/utils/networkPolicy';
 
 /** The browser can draw a video frame onto a canvas → automatic cover image. */
 export const canCaptureFrame = true;
@@ -49,7 +51,42 @@ export async function pickVideo(): Promise<PickedMedia | null> {
 
 export async function pickImage(): Promise<PickedMedia | null> {
   const file = await chooseFile('image/jpeg,image/png,image/webp');
-  return file ? fromFile(file) : null;
+  if (!file) return null;
+  return fromFile(await compressImageFile(file, getMediaPolicy().upload));
+}
+
+/** Files already this small (and within the size target) are sent as-is — re-encoding would only lose quality. */
+const SMALL_ENOUGH = 350 * 1024;
+
+/**
+ * Resize + re-encode a photo before upload (phone photos are 3–8 MB; this usually gives 200–600 KB).
+ * Trade-off: JPEG at 0.7–0.8 is visually lossless on a phone screen and keeps handwriting legible;
+ * PNG/transparent images become JPEG on white. Falls back to the original file on any error, and
+ * keeps the original if the result is not actually smaller.
+ */
+export async function compressImageFile(file: File, target: { maxSide: number; quality: number }): Promise<File> {
+  try {
+    const bitmap = await createImageBitmap(file); // respects EXIF orientation in current browsers
+    const size = fitWithin(bitmap.width, bitmap.height, target.maxSide);
+    if (!size.scaled && file.size <= SMALL_ENOUGH) {
+      bitmap.close();
+      return file;
+    }
+    const canvas = document.createElement('canvas');
+    canvas.width = size.width;
+    canvas.height = size.height;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return file;
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0, 0, size.width, size.height);
+    ctx.drawImage(bitmap, 0, 0, size.width, size.height);
+    bitmap.close();
+    const blob = await new Promise<Blob | null>((r) => canvas.toBlob(r, 'image/jpeg', target.quality));
+    if (!blob || blob.size >= file.size) return file;
+    return new File([blob], file.name.replace(/\.[a-z0-9]+$/i, '') + '.jpg', { type: 'image/jpeg' });
+  } catch {
+    return file;
+  }
 }
 
 /** Grab a frame ~1s in (or a third of the way for short clips) as a JPEG cover. */

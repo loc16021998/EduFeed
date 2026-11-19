@@ -1,5 +1,6 @@
+import { LIST_PERF } from '@/utils/listPerf';
 import { BadgeCheck, EyeOff, Flag, Heart, MessageCircle, PenLine, ShieldCheck } from 'lucide-react-native';
-import { memo, useCallback, useEffect, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, FlatList, Image, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -138,6 +139,22 @@ export default function ParentCommunityScreen({ navigation }: RootStackScreenPro
     </View>
   );
 
+  // Handlers read the latest closures through a ref, so the object passed to every card is stable and
+  // a like / new comment re-renders only the card whose `post` changed.
+  const latest = useRef({ like, report, hide, setOpenId, setZoom });
+  latest.current = { like, report, hide, setOpenId, setZoom };
+  const handlers = useMemo<PostHandlers>(
+    () => ({
+      like: (p) => latest.current.like(p),
+      report: (p) => latest.current.report(p),
+      hide: (p, h) => latest.current.hide(p, h),
+      open: (id) => latest.current.setOpenId(id),
+      zoom: (url) => latest.current.setZoom(url),
+    }),
+    [],
+  );
+  const renderPost = useCallback(({ item }: { item: CommunityPost }) => <PostCard post={item} moderator={moderator} h={handlers} />, [moderator, handlers]);
+
   return (
     <View className="flex-1 bg-surface">
       <ScreenHeader title="Cộng đồng TH EDU" onBack={() => (navigation.canGoBack() ? navigation.goBack() : isParent ? navigation.navigate('ParentPortal') : navigation.navigate('MainTabs', { screen: 'Home' }))} />
@@ -146,13 +163,11 @@ export default function ParentCommunityScreen({ navigation }: RootStackScreenPro
         keyExtractor={(p) => p.id}
         ListHeaderComponent={header}
         contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: insets.bottom + 96, gap: 12 }}
-        renderItem={({ item }) => (
-          <PostCard post={item} moderator={moderator} onLike={() => like(item)} onOpen={() => setOpenId(item.id)} onZoom={() => setZoom(item.photoUrl)} onReport={() => report(item)} onHide={(h) => hide(item, h)} />
-        )}
+        renderItem={renderPost}
         ListFooterComponent={more ? <Button title="Xem thêm" variant="ghost" size="sm" loading={loading} onPress={() => items?.length && load(items[items.length - 1].createdAt)} /> : null}
         refreshControl={<RefreshControl refreshing={loading && !!items?.length} onRefresh={() => load()} tintColor={COLORS.brand} />}
-        initialNumToRender={6}
-        windowSize={7}
+        {...LIST_PERF}
+        initialNumToRender={5}
         testID="community-feed"
       />
       <Pressable
@@ -203,9 +218,20 @@ function Chip({ label, on, onPress, small }: { label: string; on: boolean; onPre
   );
 }
 
-const PostCard = memo(function PostCard({
-  post, moderator, onLike, onOpen, onZoom, onReport, onHide,
-}: { post: CommunityPost; moderator: boolean; onLike: () => void; onOpen: () => void; onZoom: () => void; onReport: () => void; onHide: (hidden: boolean) => void }) {
+interface PostHandlers {
+  like: (p: CommunityPost) => void;
+  report: (p: CommunityPost) => void;
+  hide: (p: CommunityPost, hidden: boolean) => void;
+  open: (id: string) => void;
+  zoom: (url: string | null) => void;
+}
+
+const PostCard = memo(function PostCard({ post, moderator, h }: { post: CommunityPost; moderator: boolean; h: PostHandlers }) {
+  const onLike = () => h.like(post);
+  const onOpen = () => h.open(post.id);
+  const onZoom = () => h.zoom(post.photoUrl);
+  const onReport = () => h.report(post);
+  const onHide = (hidden: boolean) => h.hide(post, hidden);
   const k = kindInfo(post.kind);
   const hidden = post.status === 'HIDDEN';
   return (

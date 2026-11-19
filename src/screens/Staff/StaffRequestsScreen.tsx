@@ -1,3 +1,4 @@
+import { LIST_PERF } from '@/utils/listPerf';
 import { EmptyState } from '@/components/ux';
 import { CircleAlert, Phone } from 'lucide-react-native';
 import { useCallback, useEffect, useState } from 'react';
@@ -98,6 +99,7 @@ export default function StaffRequestsScreen({ navigation }: RootStackScreenProps
         })}
       </View>
       <FlatList
+        {...LIST_PERF}
         data={items}
         keyExtractor={(r) => r.userId}
         contentContainerClassName="gap-3 px-4 pb-10"

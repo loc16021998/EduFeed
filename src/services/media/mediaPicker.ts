@@ -1,6 +1,7 @@
 // Native (Android / iOS) media picker — react-native-image-picker. Web: mediaPicker.web.ts.
 import { launchCamera, launchImageLibrary, type Asset, type ImageLibraryOptions } from 'react-native-image-picker';
 
+import { getMediaPolicy } from '@/store/networkStore';
 import type { PickedMedia } from '@/types';
 
 /** Native can't grab a frame from a local video without another library; staff pick a cover image. */
@@ -23,7 +24,9 @@ export async function pickVideo(): Promise<PickedMedia | null> {
 }
 
 export async function pickImage(): Promise<PickedMedia | null> {
-  const res = await launchImageLibrary({ mediaType: 'photo', selectionLimit: 1, maxWidth: 1080, maxHeight: 1920, quality: 0.8 });
+  // The picker resizes + re-encodes natively (no extra library): 1600 px @ 0.8, or 1280 px @ 0.7 with Data Saver.
+  const { maxSide, quality } = getMediaPolicy().upload;
+  const res = await launchImageLibrary({ mediaType: 'photo', selectionLimit: 1, maxWidth: maxSide, maxHeight: maxSide, quality: quality as ImageLibraryOptions['quality'] });
   if (res.didCancel) return null;
   if (res.errorCode) throw new Error(res.errorMessage ?? 'Không mở được thư viện ảnh');
   const asset = res.assets?.[0];

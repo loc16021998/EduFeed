@@ -1,3 +1,4 @@
+import { LIST_PERF } from '@/utils/listPerf';
 import { EmptyState } from '@/components/ux';
 import { useFocusEffect } from '@react-navigation/native';
 import { Award, BookOpenCheck, CheckCircle2, CircleAlert, CircleDashed, ImagePlus, MinusCircle, Phone, PhoneCall, Receipt, Send, Wallet, X, XCircle } from 'lucide-react-native';
@@ -157,6 +158,7 @@ export default function StaffEnrollmentsScreen({ navigation }: RootStackScreenPr
         </ScrollView>
       </View>
       <FlatList
+        {...LIST_PERF}
         data={items}
         keyExtractor={(e) => e.id}
         contentContainerClassName="gap-3 px-4 pb-10"

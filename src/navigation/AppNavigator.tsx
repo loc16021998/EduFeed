@@ -15,6 +15,7 @@ import ReferralScreen from '@/screens/Parent/ReferralScreen';
 import AIScannerScreen from '@/screens/Parent/AIScannerScreen';
 import MiniGamesScreen from '@/screens/Games/MiniGamesScreen';
 import ParentCommunityScreen from '@/screens/Community/ParentCommunityScreen';
+import DataSettingsScreen from '@/screens/Settings/DataSettingsScreen';
 import TeacherDashboardScreen from '@/screens/Teacher/TeacherDashboardScreen';
 import AdvisorTaskScreen from '@/screens/Advisor/AdvisorTaskScreen';
 import ClassesScreen from '@/screens/Admin/ClassesScreen';
@@ -77,6 +78,7 @@ const linking: LinkingOptions<RootStackParamList> = {
       NotebookCheck: 'con-toi/cham-vo',
       MiniGames: 'con-toi/on-tap',
       Community: 'cong-dong',
+      DataSettings: 'cai-dat/du-lieu',
       TeacherDashboard: 'quan-ly/lop-hoc',
       AdvisorTasks: 'quan-ly/cong-viec',
       Classes: 'quan-tri/lop-hoc',
@@ -155,6 +157,7 @@ export default function AppNavigator() {
         <Stack.Screen name="NotebookCheck" component={AIScannerScreen} options={{ headerShown: false }} />
         <Stack.Screen name="MiniGames" component={MiniGamesScreen} options={{ headerShown: false }} />
         <Stack.Screen name="Community" component={ParentCommunityScreen} options={{ headerShown: false }} />
+        <Stack.Screen name="DataSettings" component={DataSettingsScreen} options={{ headerShown: false }} />
         <Stack.Screen name="TeacherDashboard" component={TeacherDashboardScreen} options={{ headerShown: false }} />
         <Stack.Screen name="AdvisorTasks" component={AdvisorTaskScreen} options={{ headerShown: false }} />
         <Stack.Screen name="Classes" component={ClassesScreen} options={{ headerShown: false }} />

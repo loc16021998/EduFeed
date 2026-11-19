@@ -1,4 +1,4 @@
-import { AlertTriangle, CalendarDays, CalendarOff, CheckCircle2, ChevronRight, Copy, Gift, Heart, LogOut, MessageCircle, Send, Sparkles, Wallet, QrCode } from 'lucide-react-native';
+import { AlertTriangle, CalendarDays, CalendarOff, CheckCircle2, ChevronRight, Copy, Gift, Heart, LogOut, MessageCircle, Send, Sparkles, Wallet, QrCode, HardDrive } from 'lucide-react-native';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Image, KeyboardAvoidingView, Modal, Platform, Pressable, RefreshControl, ScrollView, Text, TextInput, View } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
@@ -198,6 +198,16 @@ export default function ParentPortalScreen({ navigation }: RootStackScreenProps<
             )}
 
             <ReferralCard code={portal.parent.referralCode} onOpen={() => navigation.navigate('Referral')} />
+            <Pressable
+              onPress={() => navigation.navigate('DataSettings')}
+              accessibilityRole="button"
+              className="min-h-12 flex-row items-center gap-3 rounded-2xl bg-white px-4 active:bg-slate-50"
+              testID="open-data-settings"
+            >
+              <HardDrive size={18} color={COLORS.ink} />
+              <Text className="flex-1 text-[14px] font-semibold text-ink">Dữ liệu & bộ nhớ</Text>
+              <Text className="text-xs text-ink-subtle">Tiết kiệm 4G, xoá bộ nhớ đệm ›</Text>
+            </Pressable>
           </>
         )}
       </ScrollView>

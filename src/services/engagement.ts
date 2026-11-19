@@ -6,6 +6,7 @@
  * Flashes    teacher uploads a photo / ≤5 s voice clip to class-reports/class/<class_id>/… then flash_create;
  *            parents of that class read them via flash_feed (7 days), react ❤️ / 🌟 and reply.
  */
+import { registerMediaCache } from '@/utils/mediaCache';
 import { supabase } from '@/lib/supabase';
 import type { PickedMedia } from '@/types';
 import { sleep, uuidv4 } from '@/utils/helpers';
@@ -118,6 +119,7 @@ async function withUrls(rows: unknown[]): Promise<ClassFlash[]> {
  * on every revisit instead of downloading the same photo again under a fresh signature.
  */
 const signed = new Map<string, { url: string; until: number }>();
+registerMediaCache({ id: 'class-moments', label: 'Ảnh lớp học & chấm vở (liên kết tạm)', size: () => signed.size, clear: () => signed.clear() });
 async function signAll(paths: string[]): Promise<Map<string, string>> {
   const now = Date.now();
   const out = new Map<string, string>();

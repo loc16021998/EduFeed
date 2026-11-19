@@ -4,6 +4,7 @@
  * `community` under <auth uid>/…. Staff comments are "Giáo viên giải đáp"; 3 reports hide a post until an admin /
  * manager reviews it. Demo mode (no Supabase) runs on labelled sample posts in memory.
  */
+import { registerMediaCache } from '@/utils/mediaCache';
 import { supabase } from '@/lib/supabase';
 import type { CampusLocation, PickedMedia } from '@/types';
 import { sleep, uuidv4 } from '@/utils/helpers';
@@ -71,6 +72,7 @@ async function rpc<T>(fn: string, args: Record<string, unknown> = {}): Promise<T
 }
 
 const signed = new Map<string, { url: string; until: number }>();
+registerMediaCache({ id: 'community-photos', label: 'Ảnh cộng đồng (liên kết tạm)', size: () => signed.size, clear: () => signed.clear() });
 async function signPhotos(paths: string[]): Promise<Map<string, string>> {
   const now = Date.now();
   const out = new Map<string, string>();
