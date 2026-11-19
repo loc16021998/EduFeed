@@ -22,6 +22,7 @@ import {
   type Relationship,
 } from '../../supabase/functions/_shared/parentAuth';
 import { ApiError, callApi } from './apiClient';
+import { isExpectedError, trackFailure } from './observability';
 import { uploadMedia } from './media/storageUpload';
 
 export type { Relationship };
@@ -185,7 +186,7 @@ let demoSignedIn = false;
 let demoPendingPhone: string | null = null;
 export const isDemoParentSignedIn = () => demoSignedIn;
 
-export async function requestParentOtp(phoneRaw: string): Promise<OtpRequestResponse> {
+async function requestParentOtpUntracked(phoneRaw: string): Promise<OtpRequestResponse> {
   const phone = normalizeVnMobile(phoneRaw);
   if (!phone) throw new ApiError('Số điện thoại không hợp lệ (VD: 0912 345 678)', 'VALIDATION', 422, 'phone');
   if (!supabase) {
@@ -207,7 +208,7 @@ async function applySession(res: OtpVerifyResponse): Promise<OtpVerifyResponse> 
 /** Demo phones: 0912 000 111 = account created by the centre (2 children); any other number = new account. */
 export const DEMO_EXISTING_PHONE = '0912000111';
 
-export async function verifyParentOtp(phoneRaw: string, code: string): Promise<OtpVerifyResponse> {
+async function verifyParentOtpUntracked(phoneRaw: string, code: string): Promise<OtpVerifyResponse> {
   const phone = normalizeVnMobile(phoneRaw);
   if (!phone) throw new ApiError('Số điện thoại không hợp lệ', 'VALIDATION', 422, 'phone');
   if (!/^\d{4}$/.test(code)) throw new ApiError('Mã OTP gồm 4 chữ số', 'VALIDATION', 422, 'code');
@@ -610,4 +611,14 @@ function demoAdmin(): AdminParentRow[] {
     { id: 'demo-parent-3', phone: '0903111222', fullName: 'Chị Lan (mẫu)', isActive: true, status: 'GUEST', selfRegistered: true, lastLoginAt: new Date().toISOString(), pendingRequests: 0, students: [{ id: 'demo-st-4', fullName: 'Bảo Ngọc (mẫu)', birthYear: 2020, campus: 'NGO_THI_NHAM', enrollments: [] }] },
   ];
   return demoAdminList;
+}
+
+/** requestParentOtp + error reporting (unexpected failures only). */
+export async function requestParentOtp(phoneRaw: string): Promise<OtpRequestResponse> {
+  return trackFailure('zns', () => requestParentOtpUntracked(phoneRaw), { isExpected: isExpectedError, tags: { step: 'otp_request' } });
+}
+
+/** verifyParentOtp + error reporting (unexpected failures only). */
+export async function verifyParentOtp(phoneRaw: string, code: string): Promise<OtpVerifyResponse> {
+  return trackFailure('auth', () => verifyParentOtpUntracked(phoneRaw, code), { isExpected: isExpectedError, tags: { step: 'otp_verify' } });
 }

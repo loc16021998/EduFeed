@@ -6,10 +6,15 @@ import { StatusBar, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import ErrorBoundary, { DevCrashProbe } from '@/components/ErrorBoundary';
 import AppNavigator from '@/navigation/AppNavigator';
+import { initObservability } from '@/services/observability';
 import { useUiStore } from '@/store';
 import { startNetworkMonitor } from '@/store/networkStore';
 import { isWeb, MAX_APP_WIDTH, MAX_WIDE_WIDTH } from '@/utils/platform';
+
+// Before the first render: uncaught errors, unhandled rejections and config problems get reported.
+initObservability();
 
 export default function App() {
   const wide = useUiStore((s) => s.wideLayout);
@@ -34,11 +39,16 @@ export default function App() {
                 shadowRadius: 24,
               }}
             >
-              <AppNavigator />
+              <ErrorBoundary>
+                {__DEV__ && <DevCrashProbe />}
+                <AppNavigator />
+              </ErrorBoundary>
             </View>
           </View>
         ) : (
-          <AppNavigator />
+          <ErrorBoundary>
+            <AppNavigator />
+          </ErrorBoundary>
         )}
         <StatusBar barStyle="dark-content" backgroundColor="#F3F8F5" />
       </SafeAreaProvider>

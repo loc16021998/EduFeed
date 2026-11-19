@@ -35,7 +35,8 @@ import VideoEditorScreen from '@/screens/Staff/VideoEditorScreen';
 import ChecklistScreen from '@/screens/Trust/ChecklistScreen';
 import TestimonialsScreen from '@/screens/Trust/TestimonialsScreen';
 import { getAttribution, trackEvent } from '@/services/analytics';
-import { useParentClubStore, useParentStore, useStaffStore } from '@/store';
+import { setContextProvider, setCurrentRoute, type Campus, type UserRole } from '@/services/observability';
+import { useParentClubStore, useParentStore, useStaffStore, useUserStore } from '@/store';
 import { COLORS } from '@/utils/constants';
 
 import TabNavigator from './TabNavigator';
@@ -106,8 +107,21 @@ const navigationRef = createNavigationContainerRef<RootStackParamList>();
 const STAFF_ROUTES = new Set(['StaffLogin', 'StaffVideos', 'StaffTrials', 'VideoEditor', 'AdminHome', 'AdminLogin', 'AdminDashboard', 'StaffAccounts', 'StaffRegister', 'StaffRequests', 'TeacherUpload', 'StaffEnrollments', 'AccountManagement', 'TeacherDashboard', 'AdvisorTasks', 'Classes']);
 
 /** Count one anonymous "app open" per session for the dashboard funnel (parents only). */
+// Error reports carry who / where in coarse, non-identifying terms: role + campus + screen name.
+setContextProvider(() => {
+  const staff = useStaffStore.getState();
+  const parent = useParentStore.getState();
+  const role: UserRole = staff.isStaff ? (staff.isAdmin ? 'ADMIN' : 'STAFF') : parent.status === 'signedIn' ? 'PARENT' : 'GUEST';
+  const student = parent.portal?.students.find((s) => s.id === parent.selectedStudentId) ?? parent.portal?.students[0];
+  const campus: Campus | null = (role === 'PARENT' ? student?.campus : null) ?? useUserStore.getState().preferredCampus ?? null;
+  return { role, campus };
+});
+
+const onNavigationStateChange = () => setCurrentRoute(navigationRef.getCurrentRoute()?.name);
+
 function onNavigationReady() {
   const route = navigationRef.getCurrentRoute()?.name;
+  setCurrentRoute(route);
   if (route && !STAFF_ROUTES.has(route) && !useStaffStore.getState().isStaff) trackEvent('APP_OPEN');
 }
 
@@ -122,7 +136,7 @@ export default function AppNavigator() {
   }, []);
 
   return (
-    <NavigationContainer ref={navigationRef} theme={theme} linking={linking} onReady={onNavigationReady}>
+    <NavigationContainer ref={navigationRef} theme={theme} linking={linking} onReady={onNavigationReady} onStateChange={onNavigationStateChange}>
       <Stack.Navigator
         screenOptions={{
           headerShadowVisible: false,

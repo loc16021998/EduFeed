@@ -69,6 +69,22 @@ def enableProguardInReleaseBuilds = false
  */
 def jscFlavor = 'org.webkit:android-jsc:+'
 
+// ── Release profile (set by eas.json "env", or by hand: APP_ENV=preview ./gradlew assembleRelease) ──
+//  development / preview: installable side by side with the store app (".dev" / ".preview" id suffix,
+//  "(Thử)" in the launcher name) so teachers at Xa La / Ngô Thì Nhậm can test without uninstalling.
+def appEnv = (System.getenv("APP_ENV") ?: System.getenv("PUBLIC_APP_ENV") ?: "production").trim()
+def appIdSuffix = appEnv == "production" ? "" : (appEnv == "preview" ? ".preview" : ".dev")
+def appLabel = appEnv == "production" ? "TH EDU Companion" : (appEnv == "preview" ? "TH EDU (Thử)" : "TH EDU (Dev)")
+// Marketing version comes from package.json (single source of truth). versionCode is set by EAS
+// (appVersionSource: remote, autoIncrement) — the value below is only used for local builds.
+def appVersionName = new groovy.json.JsonSlurper().parse(file("../../package.json")).version
+
+// Upload key for Play Store builds made outside EAS: put these in ~/.gradle/gradle.properties (never in git):
+//   THEDU_UPLOAD_STORE_FILE=/path/to/thedu-upload.keystore
+//   THEDU_UPLOAD_STORE_PASSWORD=…   THEDU_UPLOAD_KEY_ALIAS=…   THEDU_UPLOAD_KEY_PASSWORD=…
+// EAS Build injects its own managed signing config, so nothing is needed there.
+def hasUploadKey = project.hasProperty("THEDU_UPLOAD_STORE_FILE")
+
 android {
     ndkVersion rootProject.ext.ndkVersion
     buildToolsVersion rootProject.ext.buildToolsVersion
@@ -80,7 +96,9 @@ android {
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
-        versionName "1.0"
+        versionName appVersionName
+        applicationIdSuffix appIdSuffix
+        manifestPlaceholders = [appLabel: appLabel]
     }
     signingConfigs {
         debug {
@@ -89,15 +107,23 @@ android {
             keyAlias 'androiddebugkey'
             keyPassword 'android'
         }
+        if (hasUploadKey) {
+            release {
+                storeFile file(THEDU_UPLOAD_STORE_FILE)
+                storePassword THEDU_UPLOAD_STORE_PASSWORD
+                keyAlias THEDU_UPLOAD_KEY_ALIAS
+                keyPassword THEDU_UPLOAD_KEY_PASSWORD
+            }
+        }
     }
     buildTypes {
         debug {
             signingConfig signingConfigs.debug
         }
         release {
-            // Caution! In production, you need to generate your own keystore file.
-            // see https://reactnative.dev/docs/signed-apk-android.
-            signingConfig signingConfigs.debug
+            // Real upload key when configured; otherwise the debug key (fine for a local test APK, never
+            // accepted by Google Play — the release checklist catches this).
+            signingConfig hasUploadKey ? signingConfigs.release : signingConfigs.debug
             minifyEnabled enableProguardInReleaseBuilds
             proguardFiles getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro"
         }

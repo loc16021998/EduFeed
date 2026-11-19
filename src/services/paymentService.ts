@@ -27,6 +27,7 @@ import {
   type PaymentMethod,
   type PublicInvoiceRow,
 } from '../../supabase/functions/_shared/payments';
+import { isExpectedError, trackFailure } from './observability';
 import { ApiError, callApi } from './apiClient';
 
 export type { InvoiceStatus, PaymentInvoiceDTO, PaymentInvoiceResponse, PaymentMethod };
@@ -77,7 +78,7 @@ export async function fetchInvoiceStatus(id: string): Promise<PaymentInvoiceDTO 
   return data ? toInvoiceDTO(data as unknown as PublicInvoiceRow) : null;
 }
 
-export async function startVnpayCheckout(id: string): Promise<string> {
+async function startVnpayCheckoutUntracked(id: string): Promise<string> {
   if (!supabase) throw new ApiError('Dữ liệu mẫu: chưa kết nối cổng VNPay.', 'NOT_CONFIGURED');
   const { url } = await callApi<{ url: string }>(`payment/invoices/${id}/vnpay`, { method: 'POST', body: {} });
   // Only ever send the parent to VNPay itself.
@@ -222,7 +223,7 @@ export function invoiceInputProblem(i: CreateInvoiceInput): { field: string; mes
   return null;
 }
 
-export async function createInvoice(i: CreateInvoiceInput): Promise<{ id: string; ref: string; amountVnd: number }> {
+async function createInvoiceUntracked(i: CreateInvoiceInput): Promise<{ id: string; ref: string; amountVnd: number }> {
   const p = invoiceInputProblem(i);
   if (p) throw new ApiError(p.message, 'VALIDATION', 422, p.field);
   if (!supabase) return demoCreate(i);
@@ -244,7 +245,7 @@ export async function cancelInvoice(id: string): Promise<void> {
   if (error) throw mapDbError(error);
 }
 
-export async function confirmInvoiceManually(id: string, note: string): Promise<void> {
+async function confirmInvoiceManuallyUntracked(id: string, note: string): Promise<void> {
   if (note.trim().length < 5 || note.trim().length > 200) {
     throw new ApiError('Ghi rõ cách nhận tiền (5–200 ký tự), ví dụ "Tiền mặt tại quầy"', 'VALIDATION', 422, 'note');
   }
@@ -365,4 +366,19 @@ export function demoInvoiceFor(enrollmentId: string): PaymentInvoiceDTO | null {
   if (supabase) return null;
   const list = [...demoInvoices().values()].filter((v) => v.enrollmentId === enrollmentId).map((v) => v.dto);
   return list.sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0] ?? null;
+}
+
+/** startVnpayCheckout + error reporting (unexpected failures only). */
+export async function startVnpayCheckout(id: string): Promise<string> {
+  return trackFailure('payment', () => startVnpayCheckoutUntracked(id), { isExpected: isExpectedError, tags: { step: 'vnpay_checkout' } });
+}
+
+/** createInvoice + error reporting (unexpected failures only). */
+export async function createInvoice(i: CreateInvoiceInput): Promise<{ id: string; ref: string; amountVnd: number }> {
+  return trackFailure('payment', () => createInvoiceUntracked(i), { isExpected: isExpectedError, tags: { step: 'create_invoice' } });
+}
+
+/** confirmInvoiceManually + error reporting (unexpected failures only). */
+export async function confirmInvoiceManually(id: string, note: string): Promise<void> {
+  return trackFailure('payment', () => confirmInvoiceManuallyUntracked(id, note), { isExpected: isExpectedError, tags: { step: 'confirm_manual' } });
 }

@@ -14,6 +14,7 @@ import { formatDateLong } from '@/utils/schedule';
 import type { LeadSubmitRequest, LeadSubmitResponse } from '../../supabase/functions/_shared/contracts';
 import { getAttribution } from './analytics';
 import { ApiError, callApi } from './apiClient';
+import { isExpectedError, trackFailure } from './observability';
 import { bookingCode } from './zalo';
 
 export { ApiError as LeadSubmitError };
@@ -67,7 +68,7 @@ export function toSubmitRequest(r: BookingRecord): LeadSubmitRequest {
  * Submit a lead. Pass the same `idempotencyKey` when retrying after a network error so a
  * request that actually reached the server isn't recorded twice.
  */
-export async function submitLead(payload: BookingPayload, idempotencyKey?: string): Promise<BookingRecord> {
+async function submitLeadUntracked(payload: BookingPayload, idempotencyKey?: string): Promise<BookingRecord> {
   const record = buildLeadRecord(payload, idempotencyKey);
 
   if (!supabase) {
@@ -140,4 +141,9 @@ async function submitLeadViaRpc(r: LeadSubmitRequest): Promise<LeadSubmitRespons
     id: d.id, code: d.code, createdAt: d.created_at, duplicate: d.duplicate, confirmation: 'NONE',
     ...(d.referral ? { referral: { applied: d.referral.applied, reason: d.referral.reason as never, discountVnd: d.referral.discount_vnd } } : {}),
   };
+}
+
+/** submitLead + error reporting (unexpected failures only). */
+export async function submitLead(payload: BookingPayload, idempotencyKey?: string): Promise<BookingRecord> {
+  return trackFailure('booking', () => submitLeadUntracked(payload, idempotencyKey), { isExpected: isExpectedError });
 }

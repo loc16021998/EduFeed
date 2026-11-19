@@ -4,6 +4,7 @@
  */
 import { ENV } from '@/config/env';
 import { supabase } from '@/lib/supabase';
+import { reportError } from '@/services/observability';
 import type { PickedMedia } from '@/types';
 
 export const MEDIA_BUCKET = 'feed-media';
@@ -56,7 +57,10 @@ export async function uploadMedia(path: string, media: PickedMedia, onProgress?:
         onProgress?.(1);
         resolve();
       } else {
-        reject(new Error(friendlyError(`${xhr.status} ${xhr.responseText}`)));
+        const err = new Error(friendlyError(`${xhr.status} ${xhr.responseText}`));
+        // Size / type problems are explained to the user; auth, RLS and 5xx are real incidents.
+        if (xhr.status !== 413 && xhr.status !== 415) reportError(new Error(`Upload ${xhr.status}: ${xhr.responseText.slice(0, 200)}`), { area: 'upload', tags: { bucket, status: xhr.status, kind: media.type.split('/')[0] } });
+        reject(err);
       }
     };
     xhr.onerror = () => reject(new Error('Mất kết nối khi tải file. Kiểm tra mạng rồi thử lại.'));

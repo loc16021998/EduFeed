@@ -8,5 +8,9 @@ declare const process: {
     PUBLIC_ZALO_OA_ID?: string;
     PUBLIC_WEB_URL?: string;
     PUBLIC_HOTLINE?: string;
+    PUBLIC_APP_ENV?: string;
+    PUBLIC_APP_VERSION?: string;
+    PUBLIC_SENTRY_DSN?: string;
+    PUBLIC_TELEMETRY_URL?: string;
   };
 };

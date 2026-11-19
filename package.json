@@ -14,7 +14,12 @@
     "pods": "cd ios && bundle install && bundle exec pod install",
     "typecheck": "tsc --noEmit",
     "bundle:check": "react-native bundle --platform android --dev false --entry-file index.js --bundle-output .tmp/android.bundle && react-native bundle --platform ios --dev false --entry-file index.js --bundle-output .tmp/ios.bundle",
-    "sql:bundle": "node scripts/build-sql-bundle.js"
+    "sql:bundle": "node scripts/build-sql-bundle.js",
+    "env:check": "node scripts/check-env.js",
+    "release:check": "npm run typecheck && node scripts/check-env.js --profile production && npm run bundle:check",
+    "build:preview": "eas build --profile preview --platform all",
+    "build:production": "eas build --profile production --platform all",
+    "submit:production": "eas submit --profile production --platform all"
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "1.23.1",
