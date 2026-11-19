@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, View } from 'react-native';
 
 import { Button, ScreenHeader } from '@/components';
+import { formatPhoneInput } from '@/components/ux';
 import { hasSupabase } from '@/config/env';
 import type { RootStackScreenProps } from '@/navigation/types';
 import FormField from '@/screens/Booking/components/FormField';
@@ -86,7 +87,7 @@ export default function StaffRegisterScreen({ navigation, route }: RootStackScre
               )}
               <FormField label="Họ và tên" value={form.displayName} onChangeText={set('displayName')} error={errors.displayName} placeholder="VD: Nguyễn Thị Lan" autoComplete="name" maxLength={60} />
               <FormField label="Email" value={form.email} onChangeText={set('email')} error={errors.email} placeholder="ten@gmail.com" keyboardType="email-address" autoCapitalize="none" autoComplete="email" />
-              <FormField label="Số điện thoại" value={form.phone} onChangeText={set('phone')} error={errors.phone} placeholder="0912 345 678" keyboardType="phone-pad" autoComplete="tel" />
+              <FormField label="Số điện thoại" value={form.phone} onChangeText={(v) => set('phone')(formatPhoneInput(v))} error={errors.phone} placeholder="0912 345 678" keyboardType="phone-pad" autoComplete="tel" />
               <FormField label="Mật khẩu" value={form.password} onChangeText={set('password')} error={errors.password} placeholder="Ít nhất 8 ký tự, có chữ và số" secureTextEntry autoCapitalize="none" autoComplete="new-password" />
               <FormField label="Nhập lại mật khẩu" value={form.confirmPassword} onChangeText={set('confirmPassword')} error={errors.confirmPassword} secureTextEntry autoCapitalize="none" autoComplete="new-password" />
               <FormField label="Vị trí / ghi chú cho quản trị viên (không bắt buộc)" value={form.note} onChangeText={set('note')} error={errors.note} placeholder="VD: Giáo viên Luyện chữ, cơ sở Xa La" maxLength={300} />

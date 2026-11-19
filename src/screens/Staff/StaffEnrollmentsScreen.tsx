@@ -1,3 +1,4 @@
+import { EmptyState } from '@/components/ux';
 import { useFocusEffect } from '@react-navigation/native';
 import { Award, BookOpenCheck, CheckCircle2, CircleAlert, CircleDashed, ImagePlus, MinusCircle, Phone, PhoneCall, Receipt, Send, Wallet, X, XCircle } from 'lucide-react-native';
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
@@ -191,7 +192,7 @@ export default function StaffEnrollmentsScreen({ navigation }: RootStackScreenPr
           />
         )}
         ListEmptyComponent={
-          loading ? <ActivityIndicator className="mt-10" color={COLORS.brand} /> : !error ? <Text className="mt-10 px-8 text-center text-ink-muted">{FILTERS.find((f) => f.id === filter)!.empty}</Text> : null
+          loading ? <ActivityIndicator className="mt-10" color={COLORS.brand} /> : !error ? <View className="mt-6"><EmptyState compact emoji="🎒" title={FILTERS.find((f) => f.id === filter)!.empty} /></View> : null
         }
       />
       <ReportModal

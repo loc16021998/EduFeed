@@ -12,8 +12,9 @@ import { useBookingStore, useMyBookingsStore } from '@/store';
 import type { BookingRecord, LeadStatus } from '@/types';
 import { CATEGORY_COLORS, CATEGORY_LABELS, COLORS, CONTACT } from '@/utils/constants';
 import { TIME_SLOTS } from '@/utils/mockData';
-import { confirmAsync } from '@/utils/platform';
 import { formatDateLong } from '@/utils/schedule';
+
+import { EmptyState, StatusBanner, UndoSnackbar, useUndoAction } from '@/components/ux';
 
 import SchedulePicker from './components/SchedulePicker';
 
@@ -46,6 +47,10 @@ export default function ManageBookingsScreen({ navigation }: RootStackScreenProp
   const { states, refreshing, error, busyId, refresh, reschedule, cancel } = useMyBookingsStore();
   const [editing, setEditing] = useState<Item | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  // Cancellations waiting out the 5-second "Hoàn tác" window (shown as cancelled right away).
+  const [cancelling, setCancelling] = useState<string[]>([]);
+  const undo = useUndoAction();
+  const insets = useSafeAreaInsets();
 
   useFocusEffect(
     useCallback(() => {
@@ -60,23 +65,29 @@ export default function ManageBookingsScreen({ navigation }: RootStackScreenProp
       const date = st?.preferredDate ?? b.preferredDate;
       const slotId = st?.preferredSlotId ?? b.preferredSlotId;
       const at = appointmentDate(date, slotId);
-      const status = st?.status ?? 'NEW';
+      const status: LeadStatus = cancelling.includes(b.id) ? 'CANCELLED' : st?.status ?? 'NEW';
       const upcoming = !!at && at.getTime() > now && !['CANCELLED', 'COMPLETED_TRIAL', 'ENROLLED'].includes(status);
       return { booking: b, state: st, date, slotId, at, status, upcoming };
     });
-  }, [history, states]);
+  }, [history, states, cancelling]);
   const upcoming = items.filter((i) => i.upcoming).sort((a, b) => (a.at?.getTime() ?? 0) - (b.at?.getTime() ?? 0));
   const past = items.filter((i) => !i.upcoming);
 
-  const onCancel = async (i: Item) => {
-    const ok = await confirmAsync(
-      'Hủy lịch học thử?',
-      `Lịch học thử của bé ${i.booking.studentName} (${slotLabel(i.slotId)} · ${formatDateLong(i.date)}) sẽ bị hủy và trung tâm sẽ không nhắc lịch nữa.`,
-      'Hủy lịch',
-      'Giữ lịch',
+  // Cancel = shown at once, sent after 5 s unless the parent taps "Hoàn tác" (also sent when leaving the screen).
+  const onCancel = (i: Item) => {
+    const id = i.booking.id;
+    setActionError(null);
+    setCancelling((cur) => [...cur, id]);
+    const done = () => setCancelling((cur) => cur.filter((x) => x !== id));
+    undo.schedule(
+      `Đã hủy lịch học thử của bé ${i.booking.studentName.replace(/^Bé\s+/i, '')}`,
+      async () => {
+        const err = await cancel(i.booking);
+        if (err) setActionError(err);
+        done();
+      },
+      { onUndo: done, onError: done },
     );
-    if (!ok) return;
-    setActionError(await cancel(i.booking));
   };
 
   const goBack = () => (navigation.canGoBack() ? navigation.goBack() : navigation.navigate('MainTabs', { screen: 'Booking' }));
@@ -85,24 +96,32 @@ export default function ManageBookingsScreen({ navigation }: RootStackScreenProp
     <View className="flex-1 bg-surface">
       <ScreenHeader title="Lịch hẹn của tôi" onBack={goBack} />
       <ScrollView
-        contentContainerClassName="gap-4 px-4 pb-10"
+        contentContainerClassName="gap-4 px-4 pb-24"
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => refresh(true)} tintColor={COLORS.brand} />}
       >
-        {!!(error || actionError) && <Text className="rounded-xl bg-red-50 p-2.5 text-xs leading-[18px] text-red-700">{actionError ?? error}</Text>}
+        {!!(error || actionError) && <StatusBanner tone="error" text={(actionError ?? error)!} action={{ label: 'Thử lại', onPress: () => refresh(true) }} />}
 
         {history.length === 0 ? (
-          <View className="mt-10 items-center gap-3 px-6">
-            <CalendarClock size={40} color={COLORS.subtle} />
-            <Text className="text-center text-[15px] font-semibold text-ink">Chưa có lịch học thử nào trên máy này</Text>
-            <Text className="text-center text-[13px] leading-5 text-ink-muted">
-              Lịch hẹn ba mẹ đặt trong app sẽ hiện ở đây để đổi lịch hoặc hủy khi cần.
-            </Text>
-            <Button title="Đặt lịch học thử miễn phí" variant="accent" onPress={() => navigation.navigate('MainTabs', { screen: 'Booking' })} />
+          <View className="mt-6">
+            <EmptyState
+              emoji="📅"
+              title="Chưa có lịch học thử nào"
+              message="Lịch hẹn ba mẹ đặt trong app sẽ hiện ở đây để đổi lịch hoặc hủy khi cần."
+              action={{ label: 'Đặt lịch học thử ngay', variant: 'accent', onPress: () => navigation.navigate('MainTabs', { screen: 'Booking' }), testID: 'empty-bookings-cta' }}
+              testID="empty-bookings"
+            />
           </View>
         ) : (
           <>
             <Section title={`Sắp tới (${upcoming.length})`} />
-            {upcoming.length === 0 && <Text className="text-[13px] text-ink-muted">Không có lịch học thử sắp tới.</Text>}
+            {upcoming.length === 0 && (
+              <EmptyState
+                compact
+                emoji="🗓️"
+                title="Không có lịch học thử sắp tới"
+                action={{ label: 'Đặt thêm lịch học thử', variant: 'outline', onPress: () => navigation.navigate('MainTabs', { screen: 'Booking' }) }}
+              />
+            )}
             {upcoming.map((i) => (
               <BookingCard
                 key={i.booking.id}
@@ -123,6 +142,8 @@ export default function ManageBookingsScreen({ navigation }: RootStackScreenProp
           </>
         )}
       </ScrollView>
+
+      <UndoSnackbar pending={undo.pending} onUndo={undo.undo} bottom={Math.max(insets.bottom, 12) + 8} />
 
       <RescheduleSheet
         item={editing}
@@ -185,7 +206,7 @@ function BookingCard({ item, busy, onReschedule, onCancel }: { item: Item; busy:
               <Pressable
                 onPress={() => Linking.openURL(`tel:${CONTACT.hotline}`).catch(() => {})}
                 accessibilityRole="button"
-                className="flex-1 flex-row items-center justify-center gap-1.5 rounded-xl bg-slate-50 py-2.5 active:bg-slate-100"
+                className="min-h-12 flex-1 flex-row items-center justify-center gap-1.5 rounded-xl bg-slate-50 active:bg-slate-100"
               >
                 <Phone size={14} color={COLORS.ink} />
                 <Text className="text-[13px] font-semibold text-ink">Gọi hotline</Text>
@@ -195,7 +216,7 @@ function BookingCard({ item, busy, onReschedule, onCancel }: { item: Item; busy:
               <Pressable
                 onPress={() => Linking.openURL(b.display.mapsUrl).catch(() => {})}
                 accessibilityRole="link"
-                className="flex-1 flex-row items-center justify-center gap-1.5 rounded-xl bg-slate-50 py-2.5 active:bg-slate-100"
+                className="min-h-12 flex-1 flex-row items-center justify-center gap-1.5 rounded-xl bg-slate-50 active:bg-slate-100"
               >
                 <Navigation size={14} color={COLORS.ink} />
                 <Text className="text-[13px] font-semibold text-ink">Chỉ đường</Text>

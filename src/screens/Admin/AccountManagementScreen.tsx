@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, FlatList, KeyboardAvoidingView, Modal, Platform, Pressable, RefreshControl, ScrollView, Switch, Text, View } from 'react-native';
 
 import { Button, HeaderIconButton, ScreenHeader, Select } from '@/components';
+import { formatPhoneInput } from '@/components/ux';
 import SearchField from '@/components/SearchField';
 import { hasSupabase } from '@/config/env';
 import type { RootStackScreenProps } from '@/navigation/types';
@@ -410,7 +411,7 @@ function CreateParentModal({ initial, onClose, onDone }: { initial: { phone: str
           </Text>
           {!existing && (
             <>
-              <FormField label="Số điện thoại (đăng nhập bằng OTP Zalo)" value={phone} onChangeText={(t) => { setPhone(t); setError(null); }} placeholder="VD: 0912 345 678" keyboardType="phone-pad" maxLength={16} />
+              <FormField label="Số điện thoại (đăng nhập bằng OTP Zalo)" value={phone} onChangeText={(t) => { setPhone(formatPhoneInput(t)); setError(null); }} placeholder="VD: 0912 345 678" keyboardType="phone-pad" maxLength={16} />
               <FormField label="Tên phụ huynh" value={fullName} onChangeText={(t) => { setFullName(t); setError(null); }} placeholder="VD: Nguyễn Thu Trang" maxLength={60} />
               <View className="flex-row gap-2">
                 {(

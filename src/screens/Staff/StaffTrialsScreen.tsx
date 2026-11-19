@@ -1,3 +1,4 @@
+import { EmptyState } from '@/components/ux';
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
 
@@ -115,7 +116,7 @@ export default function StaffTrialsScreen({ navigation }: RootStackScreenProps<'
           status === 'loading' ? (
             <ActivityIndicator className="mt-10" color={COLORS.brand} />
           ) : (
-            <Text className="mt-10 px-8 text-center text-ink-muted">{current.empty}</Text>
+            <View className="mt-6"><EmptyState compact emoji="📅" title={current.empty} /></View>
           )
         }
       />

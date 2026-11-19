@@ -1,3 +1,4 @@
+import { EmptyState, StatusBanner } from '@/components/ux';
 import { CheckCircle2, Clock, MessageCircleMore, Phone, Play, Plus } from 'lucide-react-native';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, KeyboardAvoidingView, Linking, Modal, Platform, Pressable, RefreshControl, ScrollView, Text, TextInput, View } from 'react-native';
@@ -149,11 +150,13 @@ export default function AdvisorTaskScreen({ navigation }: RootStackScreenProps<'
         testID="task-list"
       >
         {(demo || !hasSupabase) && <Text className="rounded-xl bg-amber-50 p-2.5 text-xs leading-[18px] text-amber-800">Dữ liệu mẫu: công việc chỉ để minh họa.</Text>}
-        {!!notice && <Text className="rounded-xl bg-emerald-50 p-2.5 text-xs leading-[18px] text-emerald-800">{notice}</Text>}
-        {!!error && <Text className="rounded-xl bg-red-50 p-2.5 text-xs leading-[18px] text-red-700">{error}</Text>}
+        {!!notice && <StatusBanner tone="success" text={notice} />}
+        {!!error && <StatusBanner tone="error" text={error} />}
         {loading && tasks.length === 0 && <ActivityIndicator className="mt-8" color={COLORS.brand} />}
         {!loading && tasks.length === 0 && !error && (
-          <Text className="mt-8 px-6 text-center text-[14px] text-ink-muted">{status === 'OPEN' ? 'Không còn việc nào. Tuyệt vời! 🎉' : 'Chưa có việc hoàn thành gần đây.'}</Text>
+          <View className="mt-4">
+            <EmptyState emoji={status === 'OPEN' ? '🎉' : '🗂️'} title={status === 'OPEN' ? 'Không còn việc nào. Tuyệt vời!' : 'Chưa có việc hoàn thành gần đây'} />
+          </View>
         )}
         {groups.map((g) => (
           <View key={g.title} className="gap-2.5">

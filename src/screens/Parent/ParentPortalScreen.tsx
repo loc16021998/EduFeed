@@ -27,6 +27,8 @@ import { fetchStudentQr } from '@/services/staffOps';
 import { useParentStore } from '@/store';
 import { CATEGORY_COLORS, COLORS } from '@/utils/constants';
 import { confirmAsync, shareText } from '@/utils/platform';
+import { Coachmarks, EmptyState, QuickChips, StatusBanner, ThumbBar, type CoachStep } from '@/components/ux';
+import { useOnboardingStore } from '@/store/useOnboardingStore';
 
 import ClassroomFlashFeed from './components/ClassroomFlashFeed';
 import HabitStreakWidget from './components/HabitStreakWidget';
@@ -53,11 +55,19 @@ const REQ_STATUS: Record<AttendanceRequest['status'], { label: string; cls: stri
 };
 
 /** Parents: the electronic contact book — children, sessions, schedule, teacher reports, leave requests, fees, referral. */
+const PARENT_TOUR: CoachStep[] = [
+  { emoji: '📒', title: 'Nhận xét sau mỗi buổi học', body: 'Kéo xuống phần "Nhận xét sau mỗi buổi học" để xem lời thầy cô dặn, ảnh bài làm và lời nhắn thoại của bé.' },
+  { emoji: '✅', title: 'Điểm danh nhanh bằng mã QR', body: 'Bấm "Mã QR điểm danh của bé" trên thẻ của con, đưa thầy cô quét khi tới lớp — không cần ký sổ.' },
+  { emoji: '📅', title: 'Báo nghỉ & đặt lịch học thử', body: 'Nút "Báo nghỉ học" và "Đóng học phí" luôn ở cuối màn hình. Muốn cho bé học thử môn mới, vào tab "Đăng ký" ở trang chủ.' },
+];
+
 export default function ParentPortalScreen({ navigation }: RootStackScreenProps<'ParentPortal'>) {
   const insets = useSafeAreaInsets();
   const { status, portal, loading, error, selectedStudentId, load, selectStudent, signOut } = useParentStore();
   const [leaveOpen, setLeaveOpen] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  // While the first-time guide floats over the bottom, leave room so the last cards can still scroll above it.
+  const tourOpen = !useOnboardingStore((s) => !!s.seen['parent-portal-v1']);
 
   useEffect(() => {
     if (status === 'signedOut') navigation.replace('ParentAuth');
@@ -90,18 +100,13 @@ export default function ParentPortalScreen({ navigation }: RootStackScreenProps<
       />
       <ScrollView
         contentContainerClassName="gap-3 px-4 pt-1"
-        contentContainerStyle={{ paddingBottom: insets.bottom + 32 }}
+        contentContainerStyle={{ paddingBottom: student ? (tourOpen ? 320 : 24) : insets.bottom + 32 }}
         refreshControl={<RefreshControl refreshing={loading && !!portal} onRefresh={load} tintColor={COLORS.brand} />}
         testID="parent-portal"
       >
         {!hasSupabase && <Text className="rounded-xl bg-amber-50 p-2.5 text-xs leading-[18px] text-amber-800">Dữ liệu mẫu: thông tin, nhận xét và ảnh bên dưới chỉ để minh họa.</Text>}
-        {!!notice && <Text className="rounded-xl bg-emerald-50 p-2.5 text-xs leading-[18px] text-emerald-800">{notice}</Text>}
-        {!!error && (
-          <View className="gap-2">
-            <Text className="rounded-xl bg-red-50 p-2.5 text-xs leading-[18px] text-red-700">{error}</Text>
-            <Button title="Thử lại" variant="outline" size="sm" onPress={load} />
-          </View>
-        )}
+        {!!notice && <StatusBanner tone="success" text={notice} onDismiss={() => setNotice(null)} testID="portal-notice" />}
+        {!!error && <StatusBanner tone="error" text={error} action={{ label: 'Thử lại', onPress: load }} />}
 
         {!portal && loading && (
           <View className="gap-3">
@@ -118,10 +123,12 @@ export default function ParentPortalScreen({ navigation }: RootStackScreenProps<
             </Text>
 
             {portal.students.length === 0 ? (
-              <View className="items-center gap-2 rounded-3xl bg-white p-6">
-                <Text className="text-center text-[15px] font-bold text-ink">Chưa có hồ sơ học viên</Text>
-                <Text className="text-center text-[13px] leading-5 text-ink-muted">Trung tâm sẽ liên kết hồ sơ của bé với số điện thoại này khi bé nhập học.</Text>
-              </View>
+              <EmptyState
+                emoji="🎒"
+                title="Chưa có hồ sơ học viên"
+                message="Trung tâm sẽ liên kết hồ sơ của bé với số điện thoại này khi bé nhập học. Ba mẹ có thể cho bé học thử miễn phí trước."
+                action={{ label: 'Đặt lịch học thử ngay', variant: 'accent', onPress: () => navigation.navigate('MainTabs', { screen: 'Booking' }), testID: 'empty-book-trial' }}
+              />
             ) : (
               <ChildSwitcher students={portal.students} activeId={student!.id} onSelect={selectStudent} />
             )}
@@ -130,19 +137,6 @@ export default function ParentPortalScreen({ navigation }: RootStackScreenProps<
               <>
                 <Overview student={student} />
 
-                <View className="flex-row gap-2.5">
-                  <Button className="flex-1" title="Báo nghỉ phép" variant="outline" icon={<CalendarOff size={16} color={COLORS.brand} />} onPress={() => setLeaveOpen(true)} disabled={active.length === 0} />
-                  <Button
-                    className="flex-1"
-                    title="Đóng học phí"
-                    variant={openInvoice ? 'accent' : 'outline'}
-                    icon={<Wallet size={16} color={openInvoice ? '#fff' : COLORS.brand} />}
-                    disabled={!openInvoice}
-                    onPress={() => openInvoice && navigation.navigate('Payment', { id: openInvoice })}
-                    testID="pay-tuition"
-                  />
-                </View>
-                {!openInvoice && active.length > 0 && <Text className="-mt-1 px-1 text-[11px] text-ink-subtle">Chưa có hóa đơn học phí cần thanh toán.</Text>}
 
                 <Pressable
                   onPress={() => navigation.navigate('NotebookCheck')}
@@ -199,7 +193,7 @@ export default function ParentPortalScreen({ navigation }: RootStackScreenProps<
                   </View>
                 )}
 
-                <ReportFeed key={student.id} studentId={student.id} studentName={student.fullName} />
+                <ReportFeed key={student.id} studentId={student.id} studentName={student.fullName} onEmptyAction={() => navigation.navigate('MiniGames')} />
               </>
             )}
 
@@ -207,6 +201,26 @@ export default function ParentPortalScreen({ navigation }: RootStackScreenProps<
           </>
         )}
       </ScrollView>
+
+      {student && (
+        <ThumbBar testID="portal-actions">
+          <View className="flex-row gap-2.5">
+            <Button className="flex-1" title="Báo nghỉ học" variant="outline" icon={<CalendarOff size={18} color={COLORS.brand} />} onPress={() => setLeaveOpen(true)} disabled={active.length === 0} testID="open-leave" />
+            <Button
+              className="flex-1"
+              title="Đóng học phí"
+              variant={openInvoice ? 'accent' : 'outline'}
+              icon={<Wallet size={18} color={openInvoice ? '#fff' : COLORS.brand} />}
+              disabled={!openInvoice}
+              onPress={() => openInvoice && navigation.navigate('Payment', { id: openInvoice })}
+              testID="pay-tuition"
+            />
+          </View>
+          {!openInvoice && active.length > 0 && <Text className="text-center text-xs text-ink-subtle">Chưa có hóa đơn học phí cần thanh toán.</Text>}
+        </ThumbBar>
+      )}
+
+      <Coachmarks tour="parent-portal-v1" steps={PARENT_TOUR} enabled={!!student && !leaveOpen} bottom={(openInvoice || active.length === 0 ? 84 : 104) + Math.max(insets.bottom, 12)} />
 
       {student && (
         <LeaveModal
@@ -286,9 +300,9 @@ function Overview({ student }: { student: PortalStudent }) {
           <Text className="text-[11px] text-ink-subtle">chuyên cần</Text>
         </View>
       </View>
-      <Pressable onPress={openQr} accessibilityRole="button" testID="open-checkin-qr" className="h-11 flex-row items-center justify-center gap-2 rounded-2xl bg-slate-900 active:opacity-90">
+      <Pressable onPress={openQr} accessibilityRole="button" testID="open-checkin-qr" className="min-h-12 flex-row items-center justify-center gap-2 rounded-2xl bg-slate-900 active:opacity-90">
         <QrCode size={18} color="#fff" />
-        <Text className="text-[14px] font-bold text-white">Mã điểm danh của bé</Text>
+        <Text className="text-[15px] font-bold text-white">Mã QR điểm danh của bé</Text>
       </Pressable>
       <Modal visible={qrOpen} transparent animationType="fade" onRequestClose={() => setQrOpen(false)}>
         <Pressable className="flex-1 items-center justify-center bg-black/60 p-6" onPress={() => setQrOpen(false)} accessibilityLabel="Đóng mã điểm danh">
@@ -394,7 +408,7 @@ function WeeklySchedule({ student }: { student: PortalStudent }) {
   );
 }
 
-function ReportFeed({ studentId, studentName }: { studentId: string; studentName: string }) {
+function ReportFeed({ studentId, studentName, onEmptyAction }: { studentId: string; studentName: string; onEmptyAction: () => void }) {
   const [items, setItems] = useState<DailyReport[]>([]);
   const [loading, setLoading] = useState(true);
   const [more, setMore] = useState(true);
@@ -425,9 +439,16 @@ function ReportFeed({ studentId, studentName }: { studentId: string; studentName
       <Text className="px-1 text-[16px] font-extrabold text-ink" accessibilityRole="header">
         Nhận xét sau mỗi buổi học
       </Text>
-      {!!error && <Text className="rounded-xl bg-red-50 p-2.5 text-xs text-red-700">{error}</Text>}
+      {!!error && <StatusBanner tone="error" text={error} action={{ label: 'Thử lại', onPress: () => loadPage() }} />}
       {!loading && items.length === 0 && !error && (
-        <Text className="rounded-3xl bg-white p-5 text-center text-[13px] leading-5 text-ink-muted">Chưa có nhận xét. Sau mỗi buổi học, thầy cô sẽ ghi nhận xét và ảnh bài làm của {studentName} tại đây.</Text>
+        <EmptyState
+          compact
+          emoji="📝"
+          title="Chưa có nhận xét nào"
+          message={`Sau mỗi buổi học, thầy cô sẽ ghi nhận xét và ảnh bài làm của ${studentName} tại đây. Trong lúc chờ, ba mẹ cùng con ôn bài 1 phút nhé.`}
+          action={{ label: 'Ôn tập 1 phút cùng con', variant: 'outline', onPress: onEmptyAction, testID: 'empty-reports-games' }}
+          testID="empty-reports"
+        />
       )}
       {items.map((r) => (
         <ReportCard key={r.id} report={r} studentName={studentName} onChange={(next) => setItems((cur) => cur.map((x) => (x.id === next.id ? next : x)))} />
@@ -635,6 +656,9 @@ function ReferralCard({ code, onOpen }: { code: string; onOpen: () => void }) {
   );
 }
 
+const LEAVE_REASONS = ['Bé bị ốm', 'Việc gia đình', 'Về quê / đi xa', 'Bé mệt, xin nghỉ'] as const;
+const MAKEUP_REASONS = ['Xin học bù buổi đã nghỉ', 'Xin học bù vào cuối tuần'] as const;
+
 function LeaveModal({ visible, student, onClose, onSent }: { visible: boolean; student: PortalStudent; onClose: () => void; onSent: (notice: string) => void }) {
   const [type, setType] = useState<RequestType>('LEAVE');
   const [date, setDate] = useState<string | null>(null);
@@ -680,7 +704,7 @@ function LeaveModal({ visible, student, onClose, onSent }: { visible: boolean; s
           </Text>
           <View className="flex-row rounded-2xl bg-slate-100 p-1">
             {(['LEAVE', 'MAKEUP'] as RequestType[]).map((t) => (
-              <Pressable key={t} onPress={() => setType(t)} accessibilityRole="radio" aria-checked={type === t} accessibilityState={{ checked: type === t }} className={`flex-1 items-center rounded-xl py-2.5 ${type === t ? 'bg-white' : ''}`}>
+              <Pressable key={t} onPress={() => setType(t)} accessibilityRole="radio" aria-checked={type === t} accessibilityState={{ checked: type === t }} className={`min-h-12 flex-1 items-center justify-center rounded-xl ${type === t ? 'bg-white' : ''}`}>
                 <Text className={`text-[14px] font-bold ${type === t ? 'text-brand-700' : 'text-ink-muted'}`}>{t === 'LEAVE' ? 'Báo nghỉ phép' : 'Xin học bù'}</Text>
               </Pressable>
             ))}
@@ -700,8 +724,17 @@ function LeaveModal({ visible, student, onClose, onSent }: { visible: boolean; s
               );
             })}
           </ScrollView>
+          <QuickChips
+            label="Chọn nhanh lý do"
+            options={type === 'LEAVE' ? LEAVE_REASONS : MAKEUP_REASONS}
+            value={reason}
+            onPick={(r) => {
+              setReason(r);
+              setError(null);
+            }}
+          />
           <View className="gap-1.5">
-            <Text className="text-[13px] font-semibold text-ink-muted">Lý do</Text>
+            <Text className="text-[13px] font-semibold text-ink-muted">Lý do (có thể sửa)</Text>
             <TextInput
               value={reason}
               onChangeText={(t) => { setReason(t); setError(null); }}
@@ -714,10 +747,10 @@ function LeaveModal({ visible, student, onClose, onSent }: { visible: boolean; s
               style={{ textAlignVertical: 'top' }}
             />
           </View>
-          {!!error && <Text className="rounded-xl bg-red-50 p-2.5 text-xs leading-[18px] text-red-700">{error}</Text>}
+          {!!error && <StatusBanner tone="error" text={error} />}
           <View className="flex-row gap-2.5">
-            <Button className="flex-1" title="Để sau" variant="outline" onPress={onClose} disabled={busy} />
-            <Button className="flex-[2]" title="Gửi trung tâm" loading={busy} onPress={submit} />
+            <Button className="flex-1" title="Đóng" variant="outline" onPress={onClose} disabled={busy} />
+            <Button className="flex-[2]" title={busy ? 'Đang gửi…' : type === 'LEAVE' ? 'Xác nhận nghỉ học' : 'Gửi yêu cầu học bù'} loading={busy} onPress={submit} testID="leave-submit" />
           </View>
         </ScrollView>
       </KeyboardAvoidingView>

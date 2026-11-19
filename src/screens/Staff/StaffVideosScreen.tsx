@@ -1,3 +1,4 @@
+import { EmptyState } from '@/components/ux';
 import { CalendarClock, ChevronLeft, ChevronRight, GraduationCap, ImagePlus, LogOut, Plus, ShieldCheck, ListChecks, QrCode, MessagesSquare } from 'lucide-react-native';
 import { useCallback, useEffect } from 'react';
 import { ActivityIndicator, FlatList, Pressable, RefreshControl, Text, View } from 'react-native';
@@ -175,7 +176,9 @@ export default function StaffVideosScreen({ navigation }: RootStackScreenProps<'
           status === 'loading' ? (
             <ActivityIndicator className="mt-8" color={COLORS.brand} />
           ) : (
-            <Text className="mt-8 text-center text-ink-muted">Chưa có video nào. Bấm "Đăng video mới" để bắt đầu.</Text>
+            <View className="mt-6">
+              <EmptyState emoji="🎬" title="Chưa có video nào" message="Video bài học giúp phụ huynh thấy con học thế nào ở lớp." action={{ label: 'Đăng video đầu tiên', onPress: () => navigation.navigate('VideoEditor') }} />
+            </View>
           )
         }
       />

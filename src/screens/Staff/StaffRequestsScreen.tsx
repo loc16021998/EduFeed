@@ -1,3 +1,4 @@
+import { EmptyState } from '@/components/ux';
 import { CircleAlert, Phone } from 'lucide-react-native';
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, FlatList, KeyboardAvoidingView, Linking, Modal, Platform, Pressable, RefreshControl, Text, TextInput, View } from 'react-native';
@@ -152,7 +153,7 @@ export default function StaffRequestsScreen({ navigation }: RootStackScreenProps
           loading ? (
             <ActivityIndicator className="mt-10" color={COLORS.brand} />
           ) : !error ? (
-            <Text className="mt-10 px-8 text-center text-ink-muted">{tab === 'PENDING' ? 'Không có yêu cầu nào chờ duyệt. 👏' : 'Chưa có yêu cầu đăng ký nào.'}</Text>
+            <View className="mt-6"><EmptyState compact emoji={tab === 'PENDING' ? '👏' : '📭'} title={tab === 'PENDING' ? 'Không có yêu cầu nào chờ duyệt' : 'Chưa có yêu cầu đăng ký nào'} /></View>
           ) : null
         }
       />

@@ -1,5 +1,5 @@
 import { useIsFocused } from '@react-navigation/native';
-import { AlertCircle, CalendarClock, Gift, Sparkles } from 'lucide-react-native';
+import { CalendarClock, Gift, Sparkles } from 'lucide-react-native';
 import { useEffect, useRef, useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -26,6 +26,7 @@ import ZaloTrustNote from './components/ZaloTrustNote';
 import ReferralCodeField, { shortVnd } from './components/ReferralCodeField';
 import { getAttribution } from '@/services/analytics';
 import { useExitIntent } from './hooks/useExitIntent';
+import { Disclosure, StatusBanner, formatPhoneInput } from '@/components/ux';
 
 const COURSE_OPTIONS: SelectOption<CourseCategory>[] = COURSE_CATEGORIES.map((c) => {
   const course = COURSES.find((x) => x.id === c);
@@ -98,7 +99,7 @@ export default function BookingScreen({ route, navigation }: TabScreenProps<'Boo
   useEffect(() => {
     prefill({
       parentName: profile.parentName,
-      phone: profile.phone,
+      phone: formatPhoneInput(profile.phone),
       childName: profile.childName,
       childAge: profile.childAge,
       campus: profile.preferredCampus ?? undefined,
@@ -217,7 +218,11 @@ export default function BookingScreen({ route, navigation }: TabScreenProps<'Boo
           <CampusRadio
             course={form.course}
             value={form.campus}
-            onChange={(c) => edit('campus', c)}
+            onChange={(c) => {
+              edit('campus', c);
+              // Remember the campus right away: next time (and other screens) start from it.
+              profile.setProfile({ preferredCampus: c });
+            }}
             error={errors.campus}
           />
         </FormSection>
@@ -247,7 +252,7 @@ export default function BookingScreen({ route, navigation }: TabScreenProps<'Boo
             <ZaloQuickFillButton
               onProfile={(p) => {
                 setInteracted(true);
-                prefill({ parentName: p.name, phone: p.phone }, { overwrite: true });
+                prefill({ parentName: p.name, phone: p.phone ? formatPhoneInput(p.phone) : p.phone }, { overwrite: true });
                 setZaloUserId(p.id);
               }}
             />
@@ -272,7 +277,7 @@ export default function BookingScreen({ route, navigation }: TabScreenProps<'Boo
             label="Số điện thoại / Zalo"
             placeholder="VD: 0912 345 678"
             value={form.phone}
-            onChangeText={(v) => edit('phone', v)}
+            onChangeText={(v) => edit('phone', formatPhoneInput(v))}
             onBlur={() => touch('phone')}
             error={errors.phone}
             keyboardType="phone-pad"
@@ -309,13 +314,16 @@ export default function BookingScreen({ route, navigation }: TabScreenProps<'Boo
         </FormSection>
 
         <View className="px-1">
-          <ReferralCodeField
-            initial={referralInitial}
-            onValidCode={(code, discount) => {
-              setReferralCode(code);
-              setReferralDiscount(discount ?? 0);
-            }}
-          />
+          {/* Optional → folded away unless a friend's link already brought a code. */}
+          <Disclosure key={referralInitial ? 'ref-open' : 'ref-closed'} title="Có mã giới thiệu của bạn bè?" hint="Không bắt buộc" defaultOpen={!!referralInitial || !!referralCode} testID="referral-disclosure">
+            <ReferralCodeField
+              initial={referralInitial}
+              onValidCode={(code, discount) => {
+                setReferralCode(code);
+                setReferralDiscount(discount ?? 0);
+              }}
+            />
+          </Disclosure>
         </View>
 
         <Text className="px-2 text-center text-[11px] leading-4 text-ink-subtle">
@@ -326,12 +334,7 @@ export default function BookingScreen({ route, navigation }: TabScreenProps<'Boo
 
       {/* Sticky submit */}
       <View className="gap-2 border-t border-slate-200 bg-white px-4 pt-3" style={{ paddingBottom: Math.max(insets.bottom, 12) }}>
-        {!!submitError && (
-          <View className="flex-row items-center gap-2 rounded-xl bg-red-50 p-2.5" accessibilityLiveRegion="assertive">
-            <AlertCircle size={16} color="#EF4444" />
-            <Text className="flex-1 text-xs text-red-600">{submitError}</Text>
-          </View>
-        )}
+        {!!submitError && <StatusBanner tone="error" text={submitError} action={{ label: 'Gửi lại', onPress: onSubmit }} />}
         {!!promoCode && (
           <View className="flex-row items-center gap-2 rounded-xl bg-emerald-50 p-2.5" testID="booking-promo">
             <Gift size={16} color="#059669" />
@@ -349,7 +352,7 @@ export default function BookingScreen({ route, navigation }: TabScreenProps<'Boo
           </View>
         )}
         <Button
-          title={status === 'loading' ? 'Đang gửi đăng ký…' : '🎁 Đăng ký học thử miễn phí'}
+          title={status === 'loading' ? 'Đang gửi đăng ký…' : '🎁 Đặt lịch học thử miễn phí'}
           variant="accent"
           size="lg"
           loading={status === 'loading'}

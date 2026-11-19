@@ -4,12 +4,13 @@ import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput,
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button, ScreenHeader } from '@/components';
+import { formatPhoneInput } from '@/components/ux';
 import { hasSupabase } from '@/config/env';
 import type { RootStackScreenProps } from '@/navigation/types';
 import FormField from '@/screens/Booking/components/FormField';
 import { ApiError } from '@/services/apiClient';
 import { DEMO_EXISTING_PHONE, DEMO_OTP, requestParentOtp, signupParent, verifyParentOtp, type Relationship } from '@/services/parentPortal';
-import { useParentStore } from '@/store';
+import { useParentStore, useUserStore } from '@/store';
 import type { CampusLocation } from '@/types';
 import { CAMPUS_LABELS, COLORS } from '@/utils/constants';
 import { formatPhone } from '@/utils/helpers';
@@ -29,7 +30,8 @@ export default function ParentAuthScreen({ navigation }: RootStackScreenProps<'P
   const insets = useSafeAreaInsets();
   const onSignedIn = useParentStore((s) => s.onSignedIn);
   const [step, setStep] = useState<Step>('phone');
-  const [phone, setPhone] = useState('');
+  // Smart default: the number this device already used (booking / last sign-in).
+  const [phone, setPhone] = useState(() => formatPhoneInput(useUserStore.getState().phone));
   const [code, setCode] = useState('');
   const [error, setError] = useState<{ field?: string; message: string } | null>(null);
   const [busy, setBusy] = useState(false);
@@ -138,7 +140,7 @@ export default function ParentAuthScreen({ navigation }: RootStackScreenProps<'P
               label="Số điện thoại của ba mẹ"
               value={phone}
               onChangeText={(t) => {
-                setPhone(t.replace(/[^\d+ .]/g, ''));
+                setPhone(formatPhoneInput(t));
                 setError(null);
               }}
               placeholder="VD: 0912 345 678"

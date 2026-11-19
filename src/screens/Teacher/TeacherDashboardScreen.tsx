@@ -1,4 +1,4 @@
-import { CheckCircle2, CircleAlert, ImagePlus, QrCode, Send, X } from 'lucide-react-native';
+import { CheckCheck, CheckCircle2, ImagePlus, QrCode, Send, X } from 'lucide-react-native';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Image, Pressable, RefreshControl, ScrollView, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -24,6 +24,8 @@ import {
 import { useStaffStore } from '@/store';
 import type { PickedMedia } from '@/types';
 
+import { Coachmarks, EmptyState, StatusBanner, UndoSnackbar, useUndoAction, type CoachStep } from '@/components/ux';
+
 import FlashComposer from './components/FlashComposer';
 import VoiceNoteField from './components/VoiceNoteField';
 import { CAMPUS_LABELS, CATEGORY_COLORS, COLORS } from '@/utils/constants';
@@ -38,6 +40,12 @@ const STATUS: { id: AttendanceStatus; label: string; on: string }[] = [
 const STATUS_LABEL: Record<AttendanceStatus, string> = { PRESENT: 'Có mặt', LATE: 'Đi muộn', ABSENT: 'Vắng', EXCUSED: 'Nghỉ phép' };
 const dayLabel = (d: number) => (d === 8 ? 'CN' : `T${d}`);
 
+const TEACHER_TOUR: CoachStep[] = [
+  { emoji: '✅', title: 'Điểm danh nhanh', body: 'Bấm "Quét QR điểm danh" rồi đưa camera vào mã của bé, hoặc bấm "Tất cả có mặt" — sai thì bấm Hoàn tác trong 5 giây.' },
+  { emoji: '📒', title: 'Sổ liên lạc hằng ngày', body: 'Tab "Sổ liên lạc": chọn nhận xét nhanh, chụp ảnh vở, ghi lời nhắn thoại — gửi một lần cho cả lớp.' },
+  { emoji: '📅', title: 'Lịch học thử', body: 'Ở trang chủ nhân viên, mục "Lịch học thử" có danh sách bé sắp học thử và nút gọi phụ huynh.' },
+];
+
 /** Teachers: my classes → QR / manual attendance → one contact-book entry for the whole class. Route /quan-ly/lop-hoc. */
 export default function TeacherDashboardScreen({ navigation }: RootStackScreenProps<'TeacherDashboard'>) {
   const insets = useSafeAreaInsets();
@@ -46,6 +54,7 @@ export default function TeacherDashboardScreen({ navigation }: RootStackScreenPr
   const [classId, setClassId] = useState<string | null>(null);
   const [roster, setRoster] = useState<RosterRow[]>([]);
   const [tab, setTab] = useState<'attendance' | 'report' | 'flash'>('attendance');
+  const undo = useUndoAction();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -97,13 +106,15 @@ export default function TeacherDashboardScreen({ navigation }: RootStackScreenPr
         testID="teacher-dashboard"
       >
         {(demo || !hasSupabase) && <Text className="rounded-xl bg-amber-50 p-2.5 text-xs leading-[18px] text-amber-800">Dữ liệu mẫu: lớp và học viên chỉ để minh họa.</Text>}
-        {!!error && <Text className="rounded-xl bg-red-50 p-2.5 text-xs leading-[18px] text-red-700">{error}</Text>}
+        {!!error && <StatusBanner tone="error" text={error} action={{ label: 'Thử lại', onPress: loadClasses }} />}
         {loading && classes.length === 0 && <ActivityIndicator className="mt-8" color={COLORS.brand} />}
         {!loading && classes.length === 0 && !error && (
-          <View className="items-center gap-2 rounded-3xl bg-white p-6">
-            <Text className="text-center text-[15px] font-bold text-ink">Bạn chưa được phân lớp</Text>
-            <Text className="text-center text-[13px] leading-5 text-ink-muted">Quản trị viên phân lớp ở Quản trị → Lớp học & phân công.</Text>
-          </View>
+          <EmptyState
+            emoji="🏫"
+            title="Bạn chưa được phân lớp"
+            message="Quản trị viên phân lớp ở Quản trị → Lớp học & phân công. Khi có lớp, danh sách học viên sẽ hiện ở đây."
+            action={{ label: 'Tải lại', variant: 'outline', onPress: loadClasses }}
+          />
         )}
 
         {classes.length > 0 && (
@@ -144,14 +155,14 @@ export default function TeacherDashboardScreen({ navigation }: RootStackScreenPr
                   ['flash', 'Khoảnh khắc'],
                 ] as const
               ).map(([id, label]) => (
-                <Pressable key={id} onPress={() => setTab(id)} accessibilityRole="tab" aria-selected={tab === id} accessibilityState={{ selected: tab === id }} className={`h-10 flex-1 items-center justify-center rounded-xl ${tab === id ? 'bg-white' : ''}`}>
+                <Pressable key={id} onPress={() => setTab(id)} accessibilityRole="tab" aria-selected={tab === id} accessibilityState={{ selected: tab === id }} className={`h-12 flex-1 items-center justify-center rounded-xl ${tab === id ? 'bg-white' : ''}`}>
                   <Text className={`text-[14px] font-bold ${tab === id ? 'text-brand-700' : 'text-ink-muted'}`}>{label}</Text>
                 </Pressable>
               ))}
             </View>
 
             {tab === 'attendance' ? (
-              <AttendancePanel cls={cls} roster={roster} onChanged={loadRoster} />
+              <AttendancePanel cls={cls} roster={roster} onChanged={loadRoster} undo={undo} />
             ) : tab === 'report' ? (
               <BatchReportPanel cls={cls} roster={roster} onSent={loadRoster} />
             ) : (
@@ -160,17 +171,45 @@ export default function TeacherDashboardScreen({ navigation }: RootStackScreenPr
           </>
         )}
       </ScrollView>
+      <UndoSnackbar pending={undo.pending} onUndo={undo.undo} bottom={Math.max(insets.bottom, 12) + 8} />
+      <Coachmarks tour="teacher-dashboard-v1" steps={TEACHER_TOUR} enabled={!!cls && tab === 'attendance' && !undo.pending} bottom={Math.max(insets.bottom, 12) + 8} />
     </View>
   );
 }
 
 // ─── Attendance ─────────────────────────────────────────────────────────────
 
-function AttendancePanel({ cls, roster, onChanged }: { cls: ClassInfo; roster: RosterRow[]; onChanged: () => void }) {
+function AttendancePanel({ cls, roster, onChanged, undo }: { cls: ClassInfo; roster: RosterRow[]; onChanged: () => void; undo: ReturnType<typeof useUndoAction> }) {
   const [scanning, setScanning] = useState(false);
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<{ ok: boolean; text: string } | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Statuses shown immediately while the 5-second "Hoàn tác" window runs.
+  const [pendingAll, setPendingAll] = useState<Record<string, AttendanceStatus>>({});
+  const statusOf = (r: RosterRow) => (r.studentId ? pendingAll[r.studentId] : undefined) ?? r.attendance?.status;
+  const unmarked = roster.filter((r) => r.linked && r.studentId && !r.attendance && !pendingAll[r.studentId]);
+
+  const markAllPresent = () => {
+    const ids = unmarked.map((r) => r.studentId!);
+    if (ids.length === 0) return;
+    setPendingAll((cur) => ({ ...cur, ...Object.fromEntries(ids.map((id) => [id, 'PRESENT' as const])) }));
+    const clear = () => setPendingAll((cur) => Object.fromEntries(Object.entries(cur).filter(([id]) => !ids.includes(id))));
+    undo.schedule(
+      `Đã điểm danh có mặt ${ids.length} bé`,
+      async () => {
+        try {
+          for (const id of ids) await markAttendance(cls.id, id, 'PRESENT');
+        } catch (e) {
+          show({ ok: false, text: msg(e) });
+        } finally {
+          onChanged();
+          // Keep the optimistic marks until the refreshed roster arrives.
+          setTimeout(clear, 600);
+        }
+      },
+      { onUndo: clear },
+    );
+  };
 
   const show = (r: { ok: boolean; text: string }) => {
     setResult(r);
@@ -213,14 +252,19 @@ function AttendancePanel({ cls, roster, onChanged }: { cls: ClassInfo; roster: R
         testID="toggle-scanner"
       />
       {scanning && <QrScanner onCode={onCode} paused={busy} />}
-      {!!result && (
-        <View className={`flex-row items-center gap-2 rounded-2xl p-3 ${result.ok ? 'bg-emerald-50' : 'bg-red-50'}`} accessibilityLiveRegion="polite" testID="scan-result">
-          {result.ok ? <CheckCircle2 size={18} color="#059669" /> : <CircleAlert size={18} color="#DC2626" />}
-          <Text className={`flex-1 text-[14px] font-semibold ${result.ok ? 'text-emerald-800' : 'text-red-700'}`}>{result.text}</Text>
-        </View>
+      {!!result && <StatusBanner tone={result.ok ? 'success' : 'error'} text={result.text} testID="scan-result" />}
+
+      {unmarked.length > 1 && (
+        <Button
+          title={`Tất cả có mặt (${unmarked.length} bé chưa điểm danh)`}
+          variant="outline"
+          icon={<CheckCheck size={18} color={COLORS.brand} />}
+          onPress={markAllPresent}
+          testID="mark-all-present"
+        />
       )}
 
-      {roster.length === 0 && <Text className="rounded-3xl bg-white p-5 text-center text-[13px] text-ink-muted">Lớp chưa có học viên.</Text>}
+      {roster.length === 0 && <EmptyState compact emoji="👧" title="Lớp chưa có học viên" message="Học viên được thêm khi quản trị viên xếp lớp cho bé." />}
       {roster.map((r) => (
         <View key={r.enrollmentId} className="gap-2 rounded-3xl bg-white p-3.5" testID="roster-row">
           <View className="flex-row items-center justify-between gap-2">
@@ -233,9 +277,9 @@ function AttendancePanel({ cls, roster, onChanged }: { cls: ClassInfo; roster: R
           {r.linked ? (
             <View className="flex-row gap-1.5">
               {STATUS.map((s) => {
-                const on = r.attendance?.status === s.id;
+                const on = statusOf(r) === s.id;
                 return (
-                  <Pressable key={s.id} onPress={() => mark(r, s.id)} accessibilityRole="radio" aria-checked={on} accessibilityState={{ checked: on }} accessibilityLabel={`${s.label} – ${r.studentName}`} className={`h-10 flex-1 items-center justify-center rounded-xl border ${on ? s.on : 'border-slate-200 bg-white'}`}>
+                  <Pressable key={s.id} onPress={() => mark(r, s.id)} accessibilityRole="radio" aria-checked={on} accessibilityState={{ checked: on }} accessibilityLabel={`${s.label} – ${r.studentName}`} className={`h-12 flex-1 items-center justify-center rounded-xl border ${on ? s.on : 'border-slate-200 bg-white'}`}>
                     <Text className={`text-[13px] font-bold ${on ? '' : 'text-ink-muted'}`}>{s.label}</Text>
                   </Pressable>
                 );

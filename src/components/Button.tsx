@@ -23,7 +23,8 @@ const VARIANT: Record<Variant, { box: string; text: string; spinner: string }> =
 };
 
 const SIZE: Record<Size, { box: string; text: string }> = {
-  sm: { box: 'h-9 px-3 rounded-xl', text: 'text-sm' },
+  // Small buttons stay 44dp tall; with hitSlop the touch area reaches 48dp+.
+  sm: { box: 'min-h-11 px-3.5 rounded-xl', text: 'text-sm' },
   md: { box: 'h-12 px-5 rounded-2xl', text: 'text-base' },
   lg: { box: 'h-14 px-6 rounded-2xl', text: 'text-lg' },
 };
@@ -48,6 +49,7 @@ export default function Button({
       accessibilityRole="button"
       accessibilityState={{ disabled: !!isDisabled, busy: loading }}
       disabled={isDisabled}
+      hitSlop={size === 'sm' ? 6 : 4}
       className={`flex-row items-center justify-center gap-2 ${s.box} ${v.box} ${isDisabled ? 'opacity-50' : ''} ${className}`}
       onPress={
         onPress

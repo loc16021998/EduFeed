@@ -14,3 +14,4 @@ export { useNotificationStore } from './useNotificationStore';
 export { useBookmarkStore } from './useBookmarkStore';
 export { useMyBookingsStore } from './useMyBookingsStore';
 export { useParentStore } from './useParentStore';
+export { useOnboardingStore } from './useOnboardingStore';
