@@ -4,6 +4,7 @@ import { Pressable, ScrollView, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button, ScreenHeader } from '@/components';
+import AppVersionFooter from '@/components/AppVersionFooter';
 import { StatusBanner } from '@/components/ux';
 import type { RootStackScreenProps } from '@/navigation/types';
 import { useMediaPolicy, useNetworkStore } from '@/store/networkStore';
@@ -53,7 +54,7 @@ export default function DataSettingsScreen({ navigation }: RootStackScreenProps<
 
   return (
     <View className="flex-1 bg-surface">
-      <ScreenHeader title="Dữ liệu & bộ nhớ" onBack={() => (navigation.canGoBack() ? navigation.goBack() : navigation.navigate('MainTabs', { screen: 'Home' }))} />
+      <ScreenHeader title="Cài đặt & phiên bản" onBack={() => (navigation.canGoBack() ? navigation.goBack() : navigation.navigate('MainTabs', { screen: 'Home' }))} />
       <ScrollView contentContainerClassName="gap-4 px-4 pt-1" contentContainerStyle={{ paddingBottom: insets.bottom + 32 }} testID="data-settings">
         <View className="flex-row items-center gap-3 rounded-3xl bg-white p-4" testID="net-status">
           <View className="h-12 w-12 items-center justify-center rounded-2xl bg-brand-50">
@@ -127,6 +128,8 @@ export default function DataSettingsScreen({ navigation }: RootStackScreenProps<
           <Button title="Xoá bộ nhớ đệm" variant="outline" loading={busy} onPress={onClear} testID="clear-cache" />
           <Text className="text-xs leading-[17px] text-ink-subtle">Không ảnh hưởng đăng nhập, lịch hẹn hay sổ liên lạc. Video không được lưu lại trên máy.</Text>
         </View>
+
+        <AppVersionFooter />
       </ScrollView>
     </View>
   );

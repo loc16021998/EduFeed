@@ -23,7 +23,8 @@
       },
       "ios": {
         "buildConfiguration": "Debug"
-      }
+      },
+      "channel": "development"
     },
     "preview": {
       "extends": "base",
@@ -38,7 +39,8 @@
       },
       "ios": {
         "buildConfiguration": "Release"
-      }
+      },
+      "channel": "preview"
     },
     "production": {
       "extends": "base",
@@ -54,7 +56,8 @@
       },
       "ios": {
         "buildConfiguration": "Release"
-      }
+      },
+      "channel": "production"
     }
   },
   "submit": {

@@ -17,6 +17,31 @@ loadEnv();
 const root = path.dirname(fileURLToPath(import.meta.url)).replace(/^[a-z]:/, (d) => d.toUpperCase());
 
 /**
+ * Web OTA: every build writes /version.json with its build id. Open apps compare it with the id they were
+ * built with (src/services/updateService.ts) and offer "Cập nhật ngay" (reload) when a new deploy is live.
+ *   UPDATE_CRITICAL=1  → the running app asks to reload right away (hotfix)
+ *   UPDATE_NOTES_VI=…  → one line shown in the banner
+ * Served with Cache-Control: no-store (vercel.json).
+ */
+const versionManifest = {
+  name: 'thedu-version-manifest',
+  apply: 'build',
+  generateBundle() {
+    this.emitFile({
+      type: 'asset',
+      fileName: 'version.json',
+      source: JSON.stringify({
+        buildId: process.env.PUBLIC_BUILD_ID,
+        version: process.env.PUBLIC_APP_VERSION,
+        critical: process.env.UPDATE_CRITICAL === '1' || process.env.UPDATE_CRITICAL === 'true',
+        notes: (process.env.UPDATE_NOTES_VI || '').slice(0, 200),
+        builtAt: new Date().toISOString(),
+      }),
+    });
+  },
+};
+
+/**
  * Some RN libraries publish JSX in plain .js files (e.g. react-native-qrcode-svg, and NativeWind's
  * doctor.js, which uses a hyphenated tag). Compile it for the production build.
  */
@@ -39,6 +64,7 @@ export default defineConfig(({ mode }) => {
     root,
     plugins: [
       jsxInNodeModules,
+      versionManifest,
       react({
         jsxImportSource: 'react-native-css-interop',
         babel: {

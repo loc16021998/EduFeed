@@ -27,12 +27,27 @@ const BASE_ID = 'vn.thedu.companion';
 const SUFFIX: Record<AppEnv, string> = { development: '.dev', preview: '.preview', production: '' };
 const NAME: Record<AppEnv, string> = { development: 'TH EDU (Dev)', preview: 'TH EDU (Thử)', production: 'TH EDU Companion' };
 
+const PROJECT_ID = process.env.EAS_PROJECT_ID;
+
 export default () => ({
   name: NAME[APP_ENV],
   slug: 'thedu-companion',
   version: pkg.version,
   orientation: 'portrait',
   scheme: 'thedu',
+  // ── OTA (EAS Update) — takes effect once expo-updates is installed (docs/RELEASE.md → "Cập nhật OTA").
+  // runtimeVersion = app version: an OTA bundle is only delivered to binaries with the SAME version, so
+  // a JS update that needs new native code can never reach an older binary (no startup crash). Bump
+  // package.json "version" for every store release that changes native code or native libraries.
+  // Bare projects: EAS writes this into Expo.plist / AndroidManifest at build time.
+  runtimeVersion: { policy: 'appVersion' },
+  updates: {
+    url: PROJECT_ID ? `https://u.expo.dev/${PROJECT_ID}` : undefined,
+    // The app decides when to check (launch + foreground, src/services/updateService.ts), never blocks
+    // start-up waiting for the network.
+    checkAutomatically: 'ON_ERROR_RECOVERY',
+    fallbackToCacheTimeout: 0,
+  },
   ios: {
     // iOS keeps one bundle id for every profile (internal builds are ad-hoc signed to registered phones).
     bundleIdentifier: BASE_ID,
@@ -49,6 +64,6 @@ export default () => ({
   extra: {
     appEnv: APP_ENV,
     // Filled by `eas init` (or set EAS_PROJECT_ID in the shell / EAS environment).
-    eas: { projectId: process.env.EAS_PROJECT_ID },
+    eas: { projectId: PROJECT_ID },
   },
 });

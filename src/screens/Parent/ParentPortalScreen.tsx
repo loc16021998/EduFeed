@@ -205,8 +205,8 @@ export default function ParentPortalScreen({ navigation }: RootStackScreenProps<
               testID="open-data-settings"
             >
               <HardDrive size={18} color={COLORS.ink} />
-              <Text className="flex-1 text-[14px] font-semibold text-ink">Dữ liệu & bộ nhớ</Text>
-              <Text className="text-xs text-ink-subtle">Tiết kiệm 4G, xoá bộ nhớ đệm ›</Text>
+              <Text className="flex-1 text-[14px] font-semibold text-ink">Cài đặt</Text>
+              <Text className="text-xs text-ink-subtle">Tiết kiệm 4G · bộ nhớ · phiên bản ›</Text>
             </Pressable>
           </>
         )}

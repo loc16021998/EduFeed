@@ -25,6 +25,8 @@ export interface EnvIssue {
 export interface PublicEnv {
   appEnv: AppEnv;
   appVersion: string;
+  /** Unique per build (web OTA compares it with /version.json). */
+  buildId: string;
   supabaseUrl: string;
   supabaseAnonKey: string;
   /** Zalo Official Account ID — used for the QR code / "Mở Zalo" link. */
@@ -42,6 +44,7 @@ export interface PublicEnv {
 export type RawEnv = Partial<Record<
   | 'PUBLIC_APP_ENV'
   | 'PUBLIC_APP_VERSION'
+  | 'PUBLIC_BUILD_ID'
   | 'PUBLIC_SUPABASE_URL'
   | 'PUBLIC_SUPABASE_ANON_KEY'
   | 'PUBLIC_ZALO_OA_ID'
@@ -142,7 +145,7 @@ export function parseEnv(raw: RawEnv, isDev: boolean): { env: PublicEnv; issues:
   }
 
   return {
-    env: { appEnv, appVersion: s('PUBLIC_APP_VERSION') || '0.0.0', supabaseUrl, supabaseAnonKey, zaloOAId, webUrl, hotline, sentryDsn, telemetryUrl },
+    env: { appEnv, appVersion: s('PUBLIC_APP_VERSION') || '0.0.0', buildId: s('PUBLIC_BUILD_ID') || 'dev', supabaseUrl, supabaseAnonKey, zaloOAId, webUrl, hotline, sentryDsn, telemetryUrl },
     issues,
   };
 }
@@ -152,6 +155,7 @@ const parsed = parseEnv(
   {
     PUBLIC_APP_ENV: process.env.PUBLIC_APP_ENV,
     PUBLIC_APP_VERSION: process.env.PUBLIC_APP_VERSION,
+    PUBLIC_BUILD_ID: process.env.PUBLIC_BUILD_ID,
     PUBLIC_SUPABASE_URL: process.env.PUBLIC_SUPABASE_URL,
     PUBLIC_SUPABASE_ANON_KEY: process.env.PUBLIC_SUPABASE_ANON_KEY,
     PUBLIC_ZALO_OA_ID: process.env.PUBLIC_ZALO_OA_ID,

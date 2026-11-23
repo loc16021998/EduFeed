@@ -4,11 +4,11 @@
 -- HOW TO RUN: Supabase Dashboard → project → SQL Editor → New query → paste this whole file → Run.
 -- Run ONCE on a fresh project. It is wrapped in a transaction: if anything fails, nothing is applied.
 --
--- Includes migrations: 20261111090000_core_schema.sql, 20261111090100_rls_policies.sql, 20261111090200_functions.sql, 20261112090000_trust.sql, 20261113090000_video_publishing.sql, 20261114090000_crm_automation.sql, 20261115090000_zalo_tokens.sql, 20261116090000_dashboard_analytics.sql, 20261117090000_admin_accounts.sql, 20261118090000_admin_only_business.sql, 20261119090000_staff_signup_requests.sql, 20261120090000_parent_club_promo.sql, 20261121090000_parent_booking_actions.sql, 20261122090000_lifecycle_upsell.sql, 20261123090000_tuition_payments.sql, 20261124090000_parent_portal.sql, 20261125090000_referral_rewards.sql, 20261126090000_staff_rbac_tasks.sql, 20261127090000_parent_engagement.sql, 20261128090000_voice_games_community.sql
+-- Includes migrations: 20261111090000_core_schema.sql, 20261111090100_rls_policies.sql, 20261111090200_functions.sql, 20261112090000_trust.sql, 20261113090000_video_publishing.sql, 20261114090000_crm_automation.sql, 20261115090000_zalo_tokens.sql, 20261116090000_dashboard_analytics.sql, 20261117090000_admin_accounts.sql, 20261118090000_admin_only_business.sql, 20261119090000_staff_signup_requests.sql, 20261120090000_parent_club_promo.sql, 20261121090000_parent_booking_actions.sql, 20261122090000_lifecycle_upsell.sql, 20261123090000_tuition_payments.sql, 20261124090000_parent_portal.sql, 20261125090000_referral_rewards.sql, 20261126090000_staff_rbac_tasks.sql, 20261127090000_parent_engagement.sql, 20261128090000_voice_games_community.sql, 20261129090000_app_release_config.sql
 -- plus required reference data (course categories, branches).
 --
 -- If you later switch to the Supabase CLI (supabase db push), first mark these as applied:
---   npx supabase migration repair --status applied 20261111090000 20261111090100 20261111090200 20261112090000 20261113090000 20261114090000 20261115090000 20261116090000 20261117090000 20261118090000 20261119090000 20261120090000 20261121090000 20261122090000 20261123090000 20261124090000 20261125090000 20261126090000 20261127090000 20261128090000
+--   npx supabase migration repair --status applied 20261111090000 20261111090100 20261111090200 20261112090000 20261113090000 20261114090000 20261115090000 20261116090000 20261117090000 20261118090000 20261119090000 20261120090000 20261121090000 20261122090000 20261123090000 20261124090000 20261125090000 20261126090000 20261127090000 20261128090000 20261129090000
 -- ═══════════════════════════════════════════════════════════════════════════
 
 begin;
@@ -6148,6 +6148,60 @@ begin
     execute format('grant execute on function %s to authenticated', f);
   end loop;
 end $$;
+
+-- ───────────────── 20261129090000_app_release_config.sql ─────────────────
+-- ═══════════════════════════════════════════════════════════════════════════
+-- App release config: store version gate (soft "nên cập nhật" / force "bắt buộc cập nhật").
+-- One row per platform. Read by everyone (anon included — the check runs before sign-in),
+-- edited only by admins in the Supabase Table Editor (or SQL).
+--
+--   min_supported_version : installed version BELOW this → blocking "Bắt buộc cập nhật" screen
+--   latest_version        : installed version below this → dismissible "Đã có phiên bản mới" card
+--   is_force_update       : true → treat ANY version below latest_version as forced (hotfix)
+--   store_url             : Google Play / App Store link opened by the buttons
+--   release_notes_vi      : short Vietnamese highlights shown to parents / teachers
+--
+-- Safe defaults: min 0.0.0 (never blocks), latest = current version. Empty store_url → the
+-- prompts are not shown (nothing to open).
+-- ═══════════════════════════════════════════════════════════════════════════
+
+create table if not exists public.app_release_config (
+  platform text primary key check (platform in ('android', 'ios')),
+  min_supported_version text not null default '0.0.0' check (min_supported_version ~ '^\d{1,6}(\.\d{1,6}){0,2}$'),
+  latest_version text not null default '0.0.0' check (latest_version ~ '^\d{1,6}(\.\d{1,6}){0,2}$'),
+  store_url text not null default '' check (store_url = '' or store_url ~* '^https://'),
+  release_notes_vi text not null default '' check (char_length(release_notes_vi) <= 600),
+  is_force_update boolean not null default false,
+  updated_at timestamptz not null default now()
+);
+
+comment on table public.app_release_config is 'Store version gate for the mobile apps (soft / force update). Public read, admin write.';
+
+create or replace function public.app_release_config_touch() returns trigger
+language plpgsql as $$
+begin
+  new.updated_at := now();
+  return new;
+end $$;
+
+drop trigger if exists app_release_config_touch on public.app_release_config;
+create trigger app_release_config_touch before update on public.app_release_config
+  for each row execute function public.app_release_config_touch();
+
+alter table public.app_release_config enable row level security;
+
+drop policy if exists app_release_config_read on public.app_release_config;
+create policy app_release_config_read on public.app_release_config for select to anon, authenticated using (true);
+
+-- No insert / update / delete policies: only the dashboard (service role) or SQL can change it.
+revoke insert, update, delete on public.app_release_config from anon, authenticated;
+grant select on public.app_release_config to anon, authenticated;
+
+insert into public.app_release_config (platform, min_supported_version, latest_version, store_url, release_notes_vi)
+values
+  ('android', '0.0.0', '0.1.0', '', ''),
+  ('ios', '0.0.0', '0.1.0', '', '')
+on conflict (platform) do nothing;
 
 -- ───────────────── Reference data (required) ─────────────────
 insert into public.categories (code, name, icon, color, sort_order) values

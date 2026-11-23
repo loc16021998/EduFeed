@@ -10,6 +10,7 @@ declare const process: {
     PUBLIC_HOTLINE?: string;
     PUBLIC_APP_ENV?: string;
     PUBLIC_APP_VERSION?: string;
+    PUBLIC_BUILD_ID?: string;
     PUBLIC_SENTRY_DSN?: string;
     PUBLIC_TELEMETRY_URL?: string;
   };

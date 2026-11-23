@@ -6,6 +6,7 @@ import { StatusBar, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import AppUpdates from '@/components/AppUpdates';
 import ErrorBoundary, { DevCrashProbe } from '@/components/ErrorBoundary';
 import AppNavigator from '@/navigation/AppNavigator';
 import { initObservability } from '@/services/observability';
@@ -42,12 +43,14 @@ export default function App() {
               <ErrorBoundary>
                 {__DEV__ && <DevCrashProbe />}
                 <AppNavigator />
+                <AppUpdates />
               </ErrorBoundary>
             </View>
           </View>
         ) : (
           <ErrorBoundary>
             <AppNavigator />
+            <AppUpdates />
           </ErrorBoundary>
         )}
         <StatusBar barStyle="dark-content" backgroundColor="#F3F8F5" />

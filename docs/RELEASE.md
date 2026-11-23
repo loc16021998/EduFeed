@@ -78,7 +78,45 @@ npm run submit:production                       # Android: track "internal" (b�
 
 Sau khi duyệt nội bộ: Play Console → chuyển bản từ Internal sang Production; App Store Connect → gửi duyệt.
 
-## 5. Sau phát hành (24–48 giờ)
+## 5. Nhắc / bắt buộc cập nhật app (Supabase `app_release_config`)
+
+Chạy một lần: `supabase/sql/upgrades/20261129090000_app_release_config.sql` (SQL Editor). Sau đó sửa trong
+**Table Editor → app_release_config** (mỗi dòng một nền tảng `android` / `ios`):
+
+| Cột | Ý nghĩa |
+|---|---|
+| `latest_version` | bản mới nhất trên store → máy cũ hơn thấy thẻ **"Đã có phiên bản mới"** (có "Để sau") |
+| `min_supported_version` | máy **dưới** số này thấy màn hình **"Cần cập nhật ứng dụng"** (không đóng được) |
+| `is_force_update` | `true` = mọi máy dưới `latest_version` đều bị bắt buộc (bản sửa lỗi nghiêm trọng) |
+| `store_url` | link Google Play / App Store — **để trống thì không hiện nhắc nhở** |
+| `release_notes_vi` | 1–2 câu "Có gì mới", VD "Cải thiện tốc độ tải video EduFeed và sổ liên lạc" |
+
+Thứ tự an toàn: đưa bản mới lên store và chờ duyệt xong **rồi mới** tăng `latest_version`; chỉ tăng
+`min_supported_version` khi bản cũ thật sự không dùng được (VD máy chủ đã đổi). Mất mạng / chưa chạy SQL → không chặn ai.
+Xem trước giao diện (bản web development): thêm `?update=soft` hoặc `?update=force` vào địa chỉ.
+
+## 6. Cập nhật nóng (OTA)
+
+**Web (đang chạy):** mỗi lần Vercel deploy, file `/version.json` đổi. App đang mở sẽ phát hiện khi khởi động / quay lại
+tab (tối đa 15 phút một lần, hoặc bấm "Kiểm tra cập nhật" trong Cài đặt) và hiện **"Bản cập nhật mới đã sẵn sàng —
+Khởi động lại để áp dụng"**. Bản sửa lỗi khẩn: đặt biến `UPDATE_CRITICAL=1` (và `UPDATE_NOTES_VI=...`) cho lần
+deploy đó trên Vercel → app hỏi tải lại ngay (cho phép "Nhắc lại sau 5 phút" để phụ huynh lưu việc đang làm).
+
+**Android / iOS (chưa bật):** cần thêm `expo-updates` vào phần native — làm trên máy build được (Android Studio / Xcode):
+
+```bash
+npx install-expo-modules@latest     # thêm Expo modules vào android/ & ios/ (RN 0.74 ↔ Expo SDK 51)
+npx expo install expo-updates
+eas update:configure                # ghi updates.url / runtimeVersion vào native
+npm run build:preview               # build thử, cài, mở app → phải chạy bình thường
+```
+
+Sau đó thay `nativeOta` trong `src/services/updateService.ts` bằng `Updates.checkForUpdateAsync()` →
+`fetchUpdateAsync()` (tải ngầm) → `reloadAsync()` (nút "Cập nhật ngay") — giao diện banner / hộp thoại dùng lại nguyên.
+Phát hành: `eas update --channel production --message "..."`. `runtimeVersion` theo `version` trong package.json nên
+bản OTA chỉ đến đúng các máy cùng phiên bản native — **mỗi lần đổi thư viện native phải tăng `version` và lên store**.
+
+## 7. Sau phát hành (24–48 giờ)
 
 - Sentry: số lỗi mới theo `release`; lỗi `area:payment` / `area:zns` / `area:upload` cần xem ngay.
 - Supabase → Logs → Edge Functions: lỗi 5xx.
