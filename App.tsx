@@ -10,6 +10,7 @@ import AppUpdates from '@/components/AppUpdates';
 import ErrorBoundary, { DevCrashProbe } from '@/components/ErrorBoundary';
 import AppNavigator from '@/navigation/AppNavigator';
 import OnboardingGate from '@/screens/Onboarding/OnboardingGate';
+import PushNotificationsHost from '@/hooks/usePushNotifications';
 import { initObservability } from '@/services/observability';
 import { useUiStore } from '@/store';
 import { startNetworkMonitor } from '@/store/networkStore';
@@ -46,6 +47,7 @@ export default function App() {
                 <AppNavigator />
                 <AppUpdates />
                 <OnboardingGate />
+                <PushNotificationsHost />
               </ErrorBoundary>
             </View>
           </View>
@@ -54,6 +56,7 @@ export default function App() {
             <AppNavigator />
             <AppUpdates />
             <OnboardingGate />
+            <PushNotificationsHost />
           </ErrorBoundary>
         )}
         <StatusBar barStyle="dark-content" backgroundColor="#F3F8F5" />

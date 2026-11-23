@@ -101,7 +101,8 @@ const linking: LinkingOptions<RootStackParamList> = {
   },
 };
 
-const navigationRef = createNavigationContainerRef<RootStackParamList>();
+/** Exported for navigation from outside screens (push notification taps). */
+export const navigationRef = createNavigationContainerRef<RootStackParamList>();
 
 /** Staff screens are not part of the parent funnel. */
 const STAFF_ROUTES = new Set(['StaffLogin', 'StaffVideos', 'StaffTrials', 'VideoEditor', 'AdminHome', 'AdminLogin', 'AdminDashboard', 'StaffAccounts', 'StaffRegister', 'StaffRequests', 'TeacherUpload', 'StaffEnrollments', 'AccountManagement', 'TeacherDashboard', 'AdvisorTasks', 'Classes']);

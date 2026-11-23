@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button, ScreenHeader } from '@/components';
 import AppVersionFooter from '@/components/AppVersionFooter';
 import ReplayGuideCard from '@/screens/Onboarding/ReplayGuideCard';
+import NotificationSettingsCard from './NotificationSettingsCard';
 import { StatusBanner } from '@/components/ux';
 import type { RootStackScreenProps } from '@/navigation/types';
 import { useMediaPolicy, useNetworkStore } from '@/store/networkStore';
@@ -57,6 +58,8 @@ export default function DataSettingsScreen({ navigation }: RootStackScreenProps<
     <View className="flex-1 bg-surface">
       <ScreenHeader title="Cài đặt & phiên bản" onBack={() => (navigation.canGoBack() ? navigation.goBack() : navigation.navigate('MainTabs', { screen: 'Home' }))} />
       <ScrollView contentContainerClassName="gap-4 px-4 pt-1" contentContainerStyle={{ paddingBottom: insets.bottom + 32 }} testID="data-settings">
+        <NotificationSettingsCard />
+
         <View className="flex-row items-center gap-3 rounded-3xl bg-white p-4" testID="net-status">
           <View className="h-12 w-12 items-center justify-center rounded-2xl bg-brand-50">
             <NetIcon size={22} color={COLORS.brand} />

@@ -26,6 +26,8 @@
  *
  * Scheduler (pg_cron every 15 min, header x-cron-secret: CRON_SECRET):
  *   POST /api/cron/reminders                                  → TickSummary
+ * Scheduler (pg_cron every minute, same header):
+ *   POST /api/cron/push                                       → PushTickSummary (Expo push outbox)
  *
  * Deployed URL: https://<project-ref>.supabase.co/functions/v1/api/…
  * Deploy:       supabase functions deploy api --no-verify-jwt   (auth is checked here, per route)
@@ -83,6 +85,7 @@ import {
 import { handlePaymentIpn, type PaymentIpnConfig } from '../_shared/paymentWebhook.ts';
 import { randomToken, requestOtp, signupParent, verifyOtp, type ParentAuthConfig, type ParentAuthDeps, type ParentSession } from '../_shared/parentAuth.ts';
 import { runReminderTick, sendCrmMessage, type CrmDeps } from '../_shared/reminderCron.ts';
+import { runPushTick } from '../_shared/pushDispatcher.ts';
 import { toZaloPhone } from '../_shared/zaloPayloads.ts';
 import { bearerToken, verifyCronSecret } from '../_shared/security.ts';
 import { getAccessToken } from '../_shared/zaloToken.ts';
@@ -389,6 +392,17 @@ async function handleCronReminders(req: Request): Promise<Response> {
   const live = await liveConfig();
   const summary = await runReminderTick(live.deps, live.messaging);
   console.log('[cron] reminders', JSON.stringify(summary));
+  return json(summary);
+}
+
+// ─── POST /api/cron/push ────────────────────────────────────────────────────
+
+async function handleCronPush(req: Request): Promise<Response> {
+  if (!CRON_SECRET) return fail('SERVICE_UNAVAILABLE', 'CRON_SECRET chưa được cấu hình', 503);
+  if (!(await verifyCronSecret(req, CRON_SECRET))) return fail('UNAUTHORIZED', 'Sai cron secret', 401);
+  // EXPO_ACCESS_TOKEN is optional: only needed when enhanced push security is on in the Expo dashboard.
+  const summary = await runPushTick({ rpc, fetch, now: () => new Date(), expoAccessToken: env('EXPO_ACCESS_TOKEN') || undefined });
+  if (summary.claimed) console.log('[cron] push', JSON.stringify(summary));
   return json(summary);
 }
 
@@ -926,6 +940,7 @@ Deno.serve(async (req) => {
     }
     if (path === '/cron/reminders') return req.method === 'POST' ? await handleCronReminders(req) : postOnly();
     if (path === '/cron/lifecycle') return req.method === 'POST' ? await handleCronLifecycle(req) : postOnly();
+    if (path === '/cron/push') return req.method === 'POST' ? await handleCronPush(req) : postOnly();
     const enr = ENROLLMENT_COMPLETE.exec(path);
     if (enr) return req.method === 'POST' ? await handleCompleteEnrollment(req, enr[1]) : postOnly();
 

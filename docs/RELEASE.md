@@ -116,7 +116,44 @@ Sau đó thay `nativeOta` trong `src/services/updateService.ts` bằng `Updates.
 Phát hành: `eas update --channel production --message "..."`. `runtimeVersion` theo `version` trong package.json nên
 bản OTA chỉ đến đúng các máy cùng phiên bản native — **mỗi lần đổi thư viện native phải tăng `version` và lên store**.
 
-## 7. Sau phát hành (24–48 giờ)
+## 7. Thông báo đẩy (Expo Push)
+
+**Phía máy chủ (làm được ngay):**
+
+1. Chạy `supabase/sql/upgrades/20261130090000_push_notifications.sql` (sau các bản trước).
+2. `npx supabase functions deploy api --no-verify-jwt`
+3. Chạy `supabase/sql/schedule_push_cron.sql` (mỗi phút gọi `/api/cron/push`; dùng lại secret của cron nhắc lịch).
+4. Kiểm tra: `select status, count(*) from public.push_outbox group by status;`
+
+Sự kiện → ai nhận (tự động, không cần ai bấm gửi):
+
+| Sự kiện | Người nhận | Mở màn hình |
+|---|---|---|
+| Giáo viên gửi sổ liên lạc | phụ huynh của bé | Sổ liên lạc |
+| Bé được điểm danh có mặt / muộn | phụ huynh của bé | Sổ liên lạc |
+| Chủ nhật 19:00 — thử thách 21 ngày | phụ huynh có con đang học | Sổ liên lạc |
+| 15–45 phút trước giờ dạy | giáo viên của lớp | Lớp của tôi |
+| Phụ huynh báo nghỉ / xin học bù | giáo viên các lớp của bé | Lớp của tôi |
+| Khách đăng ký học thử | tư vấn viên cơ sở đó + quản lý | Công việc |
+| Lịch học thử trong 24 giờ chưa xác nhận | tư vấn viên cơ sở đó + quản lý | Lịch học thử |
+
+Mỗi người chọn loại muốn nhận trong **Cài đặt → Cài đặt thông báo**. Tin ưu đãi không gửi 21:00–07:00 (chờ đến
+sáng); tin về bé và nhắc lịch luôn gửi ngay. Số điện thoại khách trên màn hình khoá được che (`0912 *** 678`).
+Thiết bị gỡ app tự bị xoá khỏi danh sách khi Expo báo `DeviceNotRegistered`.
+
+**Trên điện thoại (chưa bật):** cần `expo-notifications` trong phần native — làm cùng lúc với `expo-updates` (mục 6):
+
+```bash
+npx install-expo-modules@latest
+npx expo install expo-notifications expo-constants
+# Android: thêm google-services.json (Firebase) và tải FCM key lên Expo (eas credentials)
+```
+
+Sau đó thay `nativeProvider` trong `src/services/pushNotificationService.ts` theo ghi chú trong file
+(xin quyền → `getExpoPushTokenAsync` → tạo 3 kênh Android → nghe sự kiện bấm thông báo). Đăng ký thiết bị với máy chủ,
+điều hướng khi bấm và màn hình cài đặt đã sẵn sàng. Thử: `npm run build:preview`, đăng nhập, gửi một sổ liên lạc.
+
+## 8. Sau phát hành (24–48 giờ)
 
 - Sentry: số lỗi mới theo `release`; lỗi `area:payment` / `area:zns` / `area:upload` cần xem ngay.
 - Supabase → Logs → Edge Functions: lỗi 5xx.

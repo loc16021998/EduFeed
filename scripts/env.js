@@ -29,6 +29,7 @@ const SERVER_ONLY_KEYS = [
   'ZALO_APP_SECRET',
   'ZALO_OA_ACCESS_TOKEN',
   'SENTRY_AUTH_TOKEN',
+  'EXPO_ACCESS_TOKEN',
 ];
 
 let loaded = false;

@@ -4,11 +4,11 @@
 -- HOW TO RUN: Supabase Dashboard → project → SQL Editor → New query → paste this whole file → Run.
 -- Run ONCE on a fresh project. It is wrapped in a transaction: if anything fails, nothing is applied.
 --
--- Includes migrations: 20261111090000_core_schema.sql, 20261111090100_rls_policies.sql, 20261111090200_functions.sql, 20261112090000_trust.sql, 20261113090000_video_publishing.sql, 20261114090000_crm_automation.sql, 20261115090000_zalo_tokens.sql, 20261116090000_dashboard_analytics.sql, 20261117090000_admin_accounts.sql, 20261118090000_admin_only_business.sql, 20261119090000_staff_signup_requests.sql, 20261120090000_parent_club_promo.sql, 20261121090000_parent_booking_actions.sql, 20261122090000_lifecycle_upsell.sql, 20261123090000_tuition_payments.sql, 20261124090000_parent_portal.sql, 20261125090000_referral_rewards.sql, 20261126090000_staff_rbac_tasks.sql, 20261127090000_parent_engagement.sql, 20261128090000_voice_games_community.sql, 20261129090000_app_release_config.sql
+-- Includes migrations: 20261111090000_core_schema.sql, 20261111090100_rls_policies.sql, 20261111090200_functions.sql, 20261112090000_trust.sql, 20261113090000_video_publishing.sql, 20261114090000_crm_automation.sql, 20261115090000_zalo_tokens.sql, 20261116090000_dashboard_analytics.sql, 20261117090000_admin_accounts.sql, 20261118090000_admin_only_business.sql, 20261119090000_staff_signup_requests.sql, 20261120090000_parent_club_promo.sql, 20261121090000_parent_booking_actions.sql, 20261122090000_lifecycle_upsell.sql, 20261123090000_tuition_payments.sql, 20261124090000_parent_portal.sql, 20261125090000_referral_rewards.sql, 20261126090000_staff_rbac_tasks.sql, 20261127090000_parent_engagement.sql, 20261128090000_voice_games_community.sql, 20261129090000_app_release_config.sql, 20261130090000_push_notifications.sql
 -- plus required reference data (course categories, branches).
 --
 -- If you later switch to the Supabase CLI (supabase db push), first mark these as applied:
---   npx supabase migration repair --status applied 20261111090000 20261111090100 20261111090200 20261112090000 20261113090000 20261114090000 20261115090000 20261116090000 20261117090000 20261118090000 20261119090000 20261120090000 20261121090000 20261122090000 20261123090000 20261124090000 20261125090000 20261126090000 20261127090000 20261128090000 20261129090000
+--   npx supabase migration repair --status applied 20261111090000 20261111090100 20261111090200 20261112090000 20261113090000 20261114090000 20261115090000 20261116090000 20261117090000 20261118090000 20261119090000 20261120090000 20261121090000 20261122090000 20261123090000 20261124090000 20261125090000 20261126090000 20261127090000 20261128090000 20261129090000 20261130090000
 -- ═══════════════════════════════════════════════════════════════════════════
 
 begin;
@@ -6202,6 +6202,507 @@ values
   ('android', '0.0.0', '0.1.0', '', ''),
   ('ios', '0.0.0', '0.1.0', '', '')
 on conflict (platform) do nothing;
+
+-- ───────────────── 20261130090000_push_notifications.sql ─────────────────
+-- ═══════════════════════════════════════════════════════════════════════════
+-- Push notifications (Expo Push): device tokens, per-user preferences, and an outbox.
+--
+--   device_push_tokens        one row per device (Expo push token), linked to the signed-in account
+--   notification_preferences  the 4 switches in "Cài đặt thông báo"
+--   push_outbox               events waiting to be pushed; filled by triggers (sổ liên lạc, điểm danh,
+--                             báo nghỉ, khách đăng ký) and by push_enqueue_scheduled (giờ dạy, lịch học thử,
+--                             thử thách 21 ngày); drained every minute by the Edge Function
+--                             POST /api/cron/push (supabase/functions/_shared/pushDispatcher.ts)
+--
+-- Identity: parents AND staff are Supabase Auth users, so rows key on auth.users.id (parents' public.users
+-- row is reached through users.auth_user_id). Guests (not signed in) may register a device as GUEST.
+--
+-- Safety: every trigger swallows its own errors — saving a report / attendance / lead never fails because
+-- of notifications. All tables are RLS-locked; access is only through the functions below.
+-- ═══════════════════════════════════════════════════════════════════════════
+
+create table if not exists public.device_push_tokens (
+  id               uuid primary key default gen_random_uuid(),
+  user_id          uuid references auth.users (id) on delete cascade,
+  role             text not null check (role in ('PARENT', 'TEACHER', 'ADVISOR', 'MANAGER', 'GUEST')),
+  expo_push_token  text not null unique check (expo_push_token ~ '^Expo(nent)?PushToken\[[A-Za-z0-9_-]{10,}\]$'),
+  platform         text not null check (platform in ('ios', 'android')),
+  campus_location  text not null default 'ALL' check (campus_location in ('XA_LA', 'NGO_THI_NHAM', 'ALL')),
+  is_enabled       boolean not null default true,
+  created_at       timestamptz not null default now(),
+  updated_at       timestamptz not null default now()
+);
+create index if not exists device_push_tokens_user_idx on public.device_push_tokens (user_id) where is_enabled;
+create index if not exists device_push_tokens_role_idx on public.device_push_tokens (role, campus_location) where is_enabled;
+
+create table if not exists public.notification_preferences (
+  user_id                       uuid primary key references auth.users (id) on delete cascade,
+  allow_class_updates           boolean not null default true,
+  allow_reminders_and_billing   boolean not null default true,
+  allow_promotions_and_streaks  boolean not null default true,
+  quiet_hours_enabled           boolean not null default true,
+  updated_at                    timestamptz not null default now()
+);
+
+create table if not exists public.push_outbox (
+  id                 uuid primary key default gen_random_uuid(),
+  event_type         text not null check (event_type in ('DAILY_REPORT_POSTED', 'ATTENDANCE_CHECKIN', 'STREAK_OR_VOUCHER',
+                       'UPCOMING_CLASS_REMINDER', 'NEW_LEAVE_REQUEST', 'HOT_LEAD_ASSIGNED', 'TRIAL_REMINDER_ACTION')),
+  recipient_user_id  uuid not null references auth.users (id) on delete cascade,
+  recipient_role     text not null,
+  params             jsonb not null default '{}',
+  category           text not null check (category in ('CLASS', 'REMINDER', 'PROMO')),
+  urgent             boolean not null default false,
+  dedupe_key         text not null unique,
+  status             text not null default 'PENDING' check (status in ('PENDING', 'PROCESSING', 'SENT', 'SKIPPED', 'FAILED')),
+  attempts           smallint not null default 0,
+  not_before         timestamptz not null default now(),
+  detail             text,
+  created_at         timestamptz not null default now(),
+  processed_at       timestamptz
+);
+create index if not exists push_outbox_due_idx on public.push_outbox (not_before) where status in ('PENDING', 'FAILED', 'PROCESSING');
+
+alter table public.device_push_tokens enable row level security;
+alter table public.notification_preferences enable row level security;
+alter table public.push_outbox enable row level security;
+revoke all on public.device_push_tokens, public.notification_preferences, public.push_outbox from anon, authenticated;
+
+-- ─── Who is calling? ────────────────────────────────────────────────────────
+
+create or replace function public.push_caller_role()
+returns text
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select case
+    when auth.uid() is null then 'GUEST'
+    when public.current_parent_id() is not null then 'PARENT'
+    when public.is_admin() then 'MANAGER'
+    when public.is_staff() then coalesce((select case kind when 'ADVISOR' then 'ADVISOR' when 'MANAGER' then 'MANAGER' else 'TEACHER' end
+                                          from public.staff_profiles where user_id = auth.uid()), 'TEACHER')
+    else 'GUEST'
+  end;
+$$;
+
+-- ─── Device registration ────────────────────────────────────────────────────
+
+-- Called by the app after the OS grants permission and on every sign-in / sign-out. The token moves to
+-- whoever is signed in now (shared phones at the centre), so a device never gets the previous user's pushes.
+create or replace function public.push_register_token(p_token text, p_platform text, p_campus text default null)
+returns text
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_role   text := public.push_caller_role();
+  v_campus text;
+begin
+  if p_token is null or p_token !~ '^Expo(nent)?PushToken\[[A-Za-z0-9_-]{10,}\]$' then
+    raise exception 'Push token không hợp lệ' using hint = 'VALIDATION:token';
+  end if;
+  if p_platform not in ('ios', 'android') then
+    raise exception 'Nền tảng không hợp lệ' using hint = 'VALIDATION:platform';
+  end if;
+  v_campus := case
+    when v_role in ('TEACHER', 'ADVISOR') then coalesce((select campus_location from public.staff_profiles where user_id = auth.uid()), 'ALL')
+    when p_campus in ('XA_LA', 'NGO_THI_NHAM') then p_campus
+    else 'ALL'
+  end;
+
+  insert into public.device_push_tokens (user_id, role, expo_push_token, platform, campus_location, is_enabled, updated_at)
+  values (auth.uid(), v_role, p_token, p_platform, v_campus, true, now())
+  on conflict (expo_push_token) do update
+    set user_id = excluded.user_id, role = excluded.role, platform = excluded.platform,
+        campus_location = excluded.campus_location, is_enabled = true, updated_at = now();
+
+  -- A person rarely has more than a few phones; keep the 10 most recent devices.
+  if auth.uid() is not null then
+    delete from public.device_push_tokens
+    where user_id = auth.uid()
+      and id not in (select id from public.device_push_tokens where user_id = auth.uid() order by updated_at desc limit 10);
+  end if;
+  return v_role;
+end $$;
+
+-- Sign-out / "tắt thông báo trên máy này". Knowing the token is the proof of owning the device.
+create or replace function public.push_unregister_token(p_token text)
+returns void
+language sql
+security definer
+set search_path = public
+as $$
+  delete from public.device_push_tokens where expo_push_token = p_token;
+$$;
+
+-- ─── Preferences ────────────────────────────────────────────────────────────
+
+create or replace function public.notification_prefs_get()
+returns table (allow_class_updates boolean, allow_reminders_and_billing boolean, allow_promotions_and_streaks boolean, quiet_hours_enabled boolean)
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select coalesce(p.allow_class_updates, true), coalesce(p.allow_reminders_and_billing, true),
+         coalesce(p.allow_promotions_and_streaks, true), coalesce(p.quiet_hours_enabled, true)
+  from (select 1) one
+  left join public.notification_preferences p on p.user_id = auth.uid();
+$$;
+
+create or replace function public.notification_prefs_set(p_class boolean, p_reminders boolean, p_promos boolean, p_quiet boolean)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if auth.uid() is null then
+    raise exception 'Cần đăng nhập' using hint = 'UNAUTHORIZED';
+  end if;
+  insert into public.notification_preferences as p (user_id, allow_class_updates, allow_reminders_and_billing, allow_promotions_and_streaks, quiet_hours_enabled, updated_at)
+  values (auth.uid(), coalesce(p_class, true), coalesce(p_reminders, true), coalesce(p_promos, true), coalesce(p_quiet, true), now())
+  on conflict (user_id) do update
+    set allow_class_updates = excluded.allow_class_updates,
+        allow_reminders_and_billing = excluded.allow_reminders_and_billing,
+        allow_promotions_and_streaks = excluded.allow_promotions_and_streaks,
+        quiet_hours_enabled = excluded.quiet_hours_enabled,
+        updated_at = now();
+end $$;
+
+-- ─── Outbox ─────────────────────────────────────────────────────────────────
+
+-- Internal: queue one push. Only for recipients with at least one enabled device (no dead rows).
+create or replace function public.push_enqueue(p_event text, p_user uuid, p_role text, p_params jsonb, p_dedupe text)
+returns boolean
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_category text;
+  v_urgent   boolean;
+  v_count    int;
+begin
+  if p_user is null then return false; end if;
+  if not exists (select 1 from public.device_push_tokens where user_id = p_user and is_enabled) then return false; end if;
+  -- Keep in sync with TEMPLATES in supabase/functions/_shared/notificationTemplates.ts.
+  select c, u into v_category, v_urgent from (values
+    ('DAILY_REPORT_POSTED', 'CLASS', false), ('ATTENDANCE_CHECKIN', 'CLASS', false), ('STREAK_OR_VOUCHER', 'PROMO', false),
+    ('UPCOMING_CLASS_REMINDER', 'REMINDER', true), ('NEW_LEAVE_REQUEST', 'CLASS', false),
+    ('HOT_LEAD_ASSIGNED', 'REMINDER', true), ('TRIAL_REMINDER_ACTION', 'REMINDER', true)
+  ) as t(e, c, u) where t.e = p_event;
+  if v_category is null then return false; end if;
+  insert into public.push_outbox (event_type, recipient_user_id, recipient_role, params, category, urgent, dedupe_key)
+  values (p_event, p_user, p_role, coalesce(p_params, '{}'), v_category, v_urgent, p_dedupe)
+  on conflict (dedupe_key) do nothing;
+  get diagnostics v_count = row_count;
+  return v_count > 0;
+end $$;
+
+-- Parents (auth users) of a student.
+create or replace function public.push_parents_of(p_student uuid)
+returns setof uuid
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select distinct u.auth_user_id
+  from public.parent_student_links l
+  join public.users u on u.id = l.parent_id
+  where l.student_id = p_student and u.auth_user_id is not null and u.is_active;
+$$;
+
+-- Sổ liên lạc mới → parents.
+create or replace function public.push_on_daily_report()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_name text;
+  v_user uuid;
+begin
+  begin
+    select full_name into v_name from public.students where id = new.student_id;
+    for v_user in select * from public.push_parents_of(new.student_id) loop
+      perform public.push_enqueue('DAILY_REPORT_POSTED', v_user, 'PARENT',
+        jsonb_build_object('studentName', v_name, 'studentId', new.student_id, 'reportId', new.id),
+        'report:' || new.id || ':' || v_user);
+    end loop;
+  exception when others then
+    raise warning 'push_on_daily_report: %', sqlerrm;
+  end;
+  return new;
+end $$;
+
+drop trigger if exists push_daily_report on public.daily_reports;
+create trigger push_daily_report after insert on public.daily_reports
+  for each row execute function public.push_on_daily_report();
+
+-- Bé đã đến lớp (QR or manual present / late) → parents. Once per class + day.
+create or replace function public.push_on_attendance()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_name   text;
+  v_campus text;
+  v_user   uuid;
+begin
+  if new.status not in ('PRESENT', 'LATE') then return new; end if;
+  if tg_op = 'UPDATE' and old.status in ('PRESENT', 'LATE') then return new; end if;
+  begin
+    select s.full_name into v_name from public.students s where s.id = new.student_id;
+    select b.name into v_campus from public.classes c join public.branches b on b.code = c.campus_location where c.id = new.class_id;
+    for v_user in select * from public.push_parents_of(new.student_id) loop
+      perform public.push_enqueue('ATTENDANCE_CHECKIN', v_user, 'PARENT',
+        jsonb_build_object('studentName', v_name, 'campus', v_campus, 'studentId', new.student_id,
+                           'time', to_char(new.check_in_time at time zone 'Asia/Ho_Chi_Minh', 'HH24:MI')),
+        'att:' || new.class_id || ':' || new.student_id || ':' || new.session_date || ':' || v_user);
+    end loop;
+  exception when others then
+    raise warning 'push_on_attendance: %', sqlerrm;
+  end;
+  return new;
+end $$;
+
+drop trigger if exists push_attendance on public.attendance_logs;
+create trigger push_attendance after insert or update of status on public.attendance_logs
+  for each row execute function public.push_on_attendance();
+
+-- Phụ huynh báo nghỉ / xin học bù → the teachers of the child's active classes.
+create or replace function public.push_on_attendance_request()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_name text;
+  r      record;
+begin
+  begin
+    select full_name into v_name from public.students where id = new.student_id;
+    for r in
+      select distinct c.teacher_id, c.id as class_id
+      from public.class_members cm
+      join public.enrollments e on e.id = cm.enrollment_id
+      join public.classes c on c.id = cm.class_id
+      where e.student_id = new.student_id and e.status = 'ACTIVE' and c.is_active and c.teacher_id is not null
+    loop
+      perform public.push_enqueue('NEW_LEAVE_REQUEST', r.teacher_id, 'TEACHER',
+        jsonb_build_object('studentName', v_name, 'type', new.type, 'classId', r.class_id, 'requestId', new.id,
+                           'date', to_char(new.requested_date, 'DD/MM')),
+        'req:' || new.id || ':' || r.teacher_id);
+    end loop;
+  exception when others then
+    raise warning 'push_on_attendance_request: %', sqlerrm;
+  end;
+  return new;
+end $$;
+
+drop trigger if exists push_attendance_request on public.attendance_requests;
+create trigger push_attendance_request after insert on public.attendance_requests
+  for each row execute function public.push_on_attendance_request();
+
+-- Khách mới đăng ký học thử → advisors / managers of that campus (or of all campuses).
+create or replace function public.push_on_lead()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_course text;
+  v_campus text;
+  r        record;
+begin
+  begin
+    select name into v_course from public.categories where code = new.course_code;
+    select name into v_campus from public.branches where code = new.branch_location;
+    for r in
+      select sp.user_id, sp.kind from public.staff_profiles sp
+      where sp.kind in ('ADVISOR', 'MANAGER') and (sp.campus_location is null or sp.campus_location = new.branch_location)
+    loop
+      perform public.push_enqueue('HOT_LEAD_ASSIGNED', r.user_id, r.kind,
+        jsonb_build_object('course', v_course, 'campus', v_campus, 'parentName', new.parent_name, 'phone', new.phone_number, 'leadId', new.id),
+        'lead:' || new.id || ':' || r.user_id);
+    end loop;
+  exception when others then
+    raise warning 'push_on_lead: %', sqlerrm;
+  end;
+  return new;
+end $$;
+
+drop trigger if exists push_lead on public.leads;
+create trigger push_lead after insert on public.leads
+  for each row execute function public.push_on_lead();
+
+-- ─── Time-based events (called every minute by the dispatcher) ─────────────
+
+create or replace function public.push_enqueue_scheduled(p_now timestamptz default now())
+returns int
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_local  timestamp := p_now at time zone 'Asia/Ho_Chi_Minh';
+  v_today  date := v_local::date;
+  v_d      int := extract(isodow from v_local)::int + 1;   -- 2 = Thứ 2 … 8 = Chủ nhật (same as classes.schedule)
+  v_count  int := 0;
+  r        record;
+begin
+  -- Giờ dạy: classes starting in 15–45 minutes → their teacher, once per class per day.
+  for r in
+    select c.id, c.name, c.teacher_id, b.name as campus, s ->> 'start' as start
+    from public.classes c
+    join public.branches b on b.code = c.campus_location
+    cross join lateral jsonb_array_elements(c.schedule) s
+    where c.is_active and c.teacher_id is not null
+      and (s ->> 'd')::int = v_d
+      and (v_today + (s ->> 'start')::time) between v_local + interval '15 minutes' and v_local + interval '45 minutes'
+  loop
+    if public.push_enqueue('UPCOMING_CLASS_REMINDER', r.teacher_id, 'TEACHER',
+         jsonb_build_object('className', r.name, 'campus', r.campus, 'start', r.start, 'classId', r.id),
+         'class:' || r.id || ':' || v_today) then
+      v_count := v_count + 1;
+    end if;
+  end loop;
+
+  -- Lịch học thử trong 24 giờ tới mà chưa xác nhận → advisors of that campus, once per lead.
+  for r in
+    select l.id, l.student_name, l.appointment_time, sp.user_id, sp.kind
+    from public.leads l
+    join public.staff_profiles sp on sp.kind in ('ADVISOR', 'MANAGER') and (sp.campus_location is null or sp.campus_location = l.branch_location)
+    where l.status::text in ('NEW', 'CONTACTED')
+      and l.appointment_time > p_now and l.appointment_time <= p_now + interval '24 hours'
+  loop
+    if public.push_enqueue('TRIAL_REMINDER_ACTION', r.user_id, r.kind,
+         jsonb_build_object('studentName', r.student_name, 'leadId', r.id,
+                            'time', to_char(r.appointment_time at time zone 'Asia/Ho_Chi_Minh', 'HH24:MI DD/MM')),
+         'trial:' || r.id || ':' || r.user_id) then
+      v_count := v_count + 1;
+    end if;
+  end loop;
+
+  -- Thử thách 21 ngày: Sunday 19:00–19:59 → parents with a child currently studying, once a week.
+  if v_d = 8 and extract(hour from v_local) = 19 then
+    for r in
+      select distinct u.auth_user_id
+      from public.users u
+      join public.parent_student_links l on l.parent_id = u.id
+      join public.enrollments e on e.student_id = l.student_id and e.status = 'ACTIVE'
+      where u.auth_user_id is not null and u.is_active
+    loop
+      if public.push_enqueue('STREAK_OR_VOUCHER', r.auth_user_id, 'PARENT', '{}'::jsonb,
+           'streak:' || r.auth_user_id || ':' || to_char(v_today, 'IYYY-IW')) then
+        v_count := v_count + 1;
+      end if;
+    end loop;
+  end if;
+
+  -- Housekeeping: keep 30 days of history.
+  delete from public.push_outbox where created_at < p_now - interval '30 days';
+  return v_count;
+end $$;
+
+-- ─── Dispatcher RPCs (service role only) ───────────────────────────────────
+
+create or replace function public.push_claim_batch(p_limit int default 200)
+returns table (id uuid, event_type text, params jsonb, category text, urgent boolean, attempts smallint, tokens text[], prefs jsonb)
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  return query
+  with picked as (
+    select o.id
+    from public.push_outbox o
+    where o.not_before <= now()
+      and (o.status = 'PENDING'
+           or (o.status = 'FAILED' and o.attempts < 3)
+           or (o.status = 'PROCESSING' and o.processed_at < now() - interval '10 minutes'))   -- crashed run
+    order by o.urgent desc, o.created_at
+    limit least(greatest(coalesce(p_limit, 200), 1), 500)
+    for update skip locked
+  ), upd as (
+    update public.push_outbox o
+    set status = 'PROCESSING', attempts = o.attempts + 1, processed_at = now()
+    from picked where o.id = picked.id
+    returning o.id, o.event_type, o.params, o.category, o.urgent, o.attempts, o.recipient_user_id
+  )
+  select upd.id, upd.event_type, upd.params, upd.category, upd.urgent, upd.attempts,
+         (select coalesce(array_agg(t.expo_push_token order by t.updated_at desc), '{}') from public.device_push_tokens t
+          where t.user_id = upd.recipient_user_id and t.is_enabled),
+         (select to_jsonb(p) - 'user_id' - 'updated_at' from public.notification_preferences p where p.user_id = upd.recipient_user_id)
+  from upd;
+end $$;
+
+-- p_status: SENT | SKIPPED | FAILED | DEFER (quiet hours → back to PENDING at p_not_before).
+create or replace function public.push_finish(p_id uuid, p_status text, p_detail text default null, p_not_before timestamptz default null)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if p_status = 'DEFER' then
+    update public.push_outbox
+    set status = 'PENDING', attempts = greatest(attempts - 1, 0), not_before = coalesce(p_not_before, now() + interval '1 hour'), detail = p_detail
+    where id = p_id;
+  elsif p_status in ('SENT', 'SKIPPED', 'FAILED') then
+    update public.push_outbox set status = p_status, detail = left(p_detail, 300), processed_at = now() where id = p_id;
+  else
+    raise exception 'Trạng thái không hợp lệ: %', p_status;
+  end if;
+end $$;
+
+create or replace function public.push_disable_tokens(p_tokens text[])
+returns int
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_count int;
+begin
+  delete from public.device_push_tokens where expo_push_token = any (p_tokens);
+  get diagnostics v_count = row_count;
+  return v_count;
+end $$;
+
+-- ─── Grants ─────────────────────────────────────────────────────────────────
+
+revoke all on function public.push_caller_role() from public;
+revoke all on function public.push_register_token(text, text, text) from public;
+revoke all on function public.push_unregister_token(text) from public;
+revoke all on function public.notification_prefs_get() from public;
+revoke all on function public.notification_prefs_set(boolean, boolean, boolean, boolean) from public;
+revoke all on function public.push_enqueue(text, uuid, text, jsonb, text) from public;
+revoke all on function public.push_parents_of(uuid) from public;
+revoke all on function public.push_enqueue_scheduled(timestamptz) from public;
+revoke all on function public.push_claim_batch(int) from public;
+revoke all on function public.push_finish(uuid, text, text, timestamptz) from public;
+revoke all on function public.push_disable_tokens(text[]) from public;
+
+grant execute on function public.push_register_token(text, text, text) to anon, authenticated;
+grant execute on function public.push_unregister_token(text) to anon, authenticated;
+grant execute on function public.notification_prefs_get() to authenticated;
+grant execute on function public.notification_prefs_set(boolean, boolean, boolean, boolean) to authenticated;
+grant execute on function public.push_enqueue_scheduled(timestamptz) to service_role;
+grant execute on function public.push_claim_batch(int) to service_role;
+grant execute on function public.push_finish(uuid, text, text, timestamptz) to service_role;
+grant execute on function public.push_disable_tokens(text[]) to service_role;
 
 -- ───────────────── Reference data (required) ─────────────────
 insert into public.categories (code, name, icon, color, sort_order) values
