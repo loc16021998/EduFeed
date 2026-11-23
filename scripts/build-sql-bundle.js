@@ -96,6 +96,7 @@ const REQUIRES = {
   '20261128090000_voice_games_community.sql': [['public.class_flashes', '20261127090000_parent_engagement.sql']],
   '20261130090000_push_notifications.sql': [['public.class_flashes', '20261127090000_parent_engagement.sql']],
   '20261201090000_weekly_progress_reports.sql': [['public.push_outbox', '20261130090000_push_notifications.sql']],
+  '20261202090000_video_social.sql': [['public.weekly_progress_reports', '20261201090000_weekly_progress_reports.sql']],
 };
 const guard = (f) =>
   (REQUIRES[f] ?? [])

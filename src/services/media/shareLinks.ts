@@ -15,3 +15,13 @@ export function buildShareUrl(slug: string | undefined | null): string | null {
 export function shareMessage(title: string, url: string): string {
   return `🎬 ${title}\n👉 Xem video & đăng ký học thử miễn phí tại TH EDU: ${url}`;
 }
+
+/** EduFeed share: title, teacher + course, link, and both campuses (for Zalo / Messenger groups). */
+export function feedShareMessage(input: { title: string; teacherName: string; courseLabel: string; url: string | null }): string {
+  return [
+    `🎬 ${input.title}`,
+    `👩‍🏫 ${input.teacherName} · ${input.courseLabel}`,
+    input.url ? `👉 Xem video & đăng ký học thử miễn phí: ${input.url}` : '👉 Đăng ký học thử miễn phí trên app TH EDU Companion',
+    '📍 TH EDU — Cơ sở Xa La & Cơ sở Ngô Thì Nhậm',
+  ].join('\n');
+}

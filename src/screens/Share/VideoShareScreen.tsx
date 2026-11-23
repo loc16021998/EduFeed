@@ -2,15 +2,17 @@ import { useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native';
 
 import { Button, ScreenHeader, StickyCta } from '@/components';
+import VideoCommentsSheet from '@/components/Feed/VideoCommentsSheet';
 import type { RootStackScreenProps } from '@/navigation/types';
 import FeedVideoCard from '@/screens/Home/components/FeedVideoCard';
 import { trackEvent } from '@/services/analytics';
 import { fetchVideoBySlug } from '@/services/videoAdmin';
-import { useParentClubStore, useStaffStore } from '@/store';
+import { buildShareUrl, feedShareMessage } from '@/services/media/shareLinks';
+import { useFeedStore, useParentClubStore, useStaffStore } from '@/store';
 import type { FeedItem } from '@/types';
 import { CATEGORY_LABELS, COLORS } from '@/utils/constants';
 import { VIDEO_WATCH_MS } from '@/utils/parentClub';
-import { useAppWidth } from '@/utils/platform';
+import { shareText, useAppWidth } from '@/utils/platform';
 
 /**
  * Landing page for a shared video link (https://<web>/v/<slug>, thedu://v/<slug>).
@@ -22,6 +24,10 @@ export default function VideoShareScreen({ navigation, route }: RootStackScreenP
   const [video, setVideo] = useState<FeedItem | null>(null);
   const [state, setState] = useState<'loading' | 'ready' | 'missing' | 'error'>('loading');
   const [muted, setMuted] = useState(true);
+  const [commentsOpen, setCommentsOpen] = useState(false);
+  const liked = useFeedStore((s) => !!video && s.likedIds.includes(video.id));
+  const counts = useFeedStore((s) => (video ? s.social[video.id] : undefined));
+  const { likeVideo, shareVideo, hydrateSocial } = useFeedStore.getState();
 
   useEffect(() => {
     let alive = true;
@@ -31,6 +37,7 @@ export default function VideoShareScreen({ navigation, route }: RootStackScreenP
         if (!alive) return;
         setVideo(v);
         setState(v ? 'ready' : 'missing');
+        if (v) hydrateSocial([v.id]);
       })
       .catch(() => alive && setState('error'));
     return () => {
@@ -84,10 +91,17 @@ export default function VideoShareScreen({ navigation, route }: RootStackScreenP
               height={Math.round((width - 32) * 1.25)}
               active
               muted={muted}
-              liked={false}
+              liked={liked}
+              counts={counts}
               following={false}
               onToggleMute={() => setMuted((m) => !m)}
-              onLike={() => {}}
+              onLike={(id) => likeVideo(id, 'toggle')}
+              onDoubleTapLike={(id) => likeVideo(id, 'like')}
+              onComments={() => setCommentsOpen(true)}
+              onShare={async (v) => {
+                await shareText(feedShareMessage({ title: v.title, teacherName: v.teacherName, courseLabel: CATEGORY_LABELS[v.category], url: buildShareUrl(v.shareSlug) }));
+                shareVideo(v.id);
+              }}
               onFollow={() => {}}
               onCta={book}
             />
@@ -102,6 +116,14 @@ export default function VideoShareScreen({ navigation, route }: RootStackScreenP
           />
         </>
       )}
+      <VideoCommentsSheet
+        item={commentsOpen ? video : null}
+        onClose={() => setCommentsOpen(false)}
+        onSignIn={() => {
+          setCommentsOpen(false);
+          navigation.navigate('ParentAuth');
+        }}
+      />
     </View>
   );
 }

@@ -34,6 +34,10 @@ export interface FeedItem {
   ctaLink: string;
   /** Short id for the public share link /v/<shareSlug> (absent on bundled sample data). */
   shareSlug?: string;
+  /** Social counters from the server (absent before the video_social upgrade / on sample data). */
+  likesCount?: number;
+  commentsCount?: number;
+  sharesCount?: number;
 }
 
 export interface PortfolioItem {

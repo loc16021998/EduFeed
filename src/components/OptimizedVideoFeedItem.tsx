@@ -16,7 +16,7 @@
  */
 import { Play, WifiOff } from 'lucide-react-native';
 import { memo, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Image, Pressable, StyleSheet, Text, View, type GestureResponderEvent } from 'react-native';
 
 import VideoPlayer from '@/components/media/VideoPlayer';
 import { useNetworkStore } from '@/store/networkStore';
@@ -31,13 +31,18 @@ export interface OptimizedVideoFeedItemProps {
   muted: boolean;
   /** false = Data Saver: tap to play instead of autoplay. */
   autoplay: boolean;
+  /** Double-tap anywhere on the video (♥ like). Single taps then wait ~250 ms to tell the two apart. */
+  onDoubleTap?: (x: number, y: number) => void;
   testID?: string;
 }
+
+/** Two taps closer than this = a double-tap. */
+const DOUBLE_TAP_MS = 260;
 
 /** Delay before showing a spinner — most clips start faster than this, so no flicker. */
 const SPINNER_DELAY_MS = 350;
 
-function OptimizedVideoFeedItem({ uri, posterUri, mode, muted, autoplay, testID }: OptimizedVideoFeedItemProps) {
+function OptimizedVideoFeedItem({ uri, posterUri, mode, muted, autoplay, onDoubleTap, testID }: OptimizedVideoFeedItemProps) {
   const [userPaused, setUserPaused] = useState(false);
   const [tapToPlay, setTapToPlay] = useState(false); // Data Saver: parent chose to watch this one
   const [ready, setReady] = useState(false); // first frame rendered
@@ -78,10 +83,31 @@ function OptimizedVideoFeedItem({ uri, posterUri, mode, muted, autoplay, testID 
     return () => clearTimeout(t);
   }, [playing, buffering, ready]);
 
-  const onPress = () => {
+  const singleTap = () => {
     if (!active) return;
     if (!autoplay && !tapToPlay) return setTapToPlay(true);
     setUserPaused((p) => !p);
+  };
+  const lastTap = useRef(0);
+  const pendingTap = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => {
+    if (pendingTap.current) clearTimeout(pendingTap.current);
+  }, []);
+  const onPress = (e: GestureResponderEvent) => {
+    if (!onDoubleTap) return singleTap();
+    const now = Date.now();
+    if (now - lastTap.current < DOUBLE_TAP_MS) {
+      lastTap.current = 0;
+      if (pendingTap.current) clearTimeout(pendingTap.current);
+      pendingTap.current = null;
+      onDoubleTap(e.nativeEvent.locationX, e.nativeEvent.locationY);
+      return;
+    }
+    lastTap.current = now;
+    pendingTap.current = setTimeout(() => {
+      pendingTap.current = null;
+      singleTap();
+    }, DOUBLE_TAP_MS);
   };
 
   return (

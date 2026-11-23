@@ -181,7 +181,21 @@ Mỗi **tối Chủ nhật 19:30** hệ thống tự tổng hợp tuần học (
 Chạy lại một tuần bằng tay (VD sau khi sửa dữ liệu): gọi `POST /api/cron/weekly-digest` với header `x-cron-secret`
 và body `{"weekStart":"2026-11-16","force":true}` — chỉ những bé chưa có báo cáo đã gửi của tuần đó được tạo.
 
-## 9. Sau phát hành (24–48 giờ)
+## 9. Thích, bình luận, chia sẻ trên EduFeed
+
+1. Chạy `supabase/sql/upgrades/20261202090000_video_social.sql` (sau bản 20261201 báo cáo tuần). Không cần deploy lại Edge Function.
+2. Mỗi video có thanh nút bên phải: ♥ (chạm đôi vào video cũng thích), 💬 bình luận, chia sẻ (kèm link video và 2 cơ sở).
+
+- **Ai bình luận được:** phụ huynh đã đăng nhập hiện tên "Mẹ/Bố + tên bé" (không họ, không số điện thoại); khách chưa đăng
+  nhập tự đặt tên (không được dùng tên kiểu "TH EDU", "Giáo viên", "Quản trị"); giáo viên / quản trị hiện huy hiệu
+  **"Giáo viên TH EDU"** / **"Quản trị viên"**.
+- **Chỉ giáo viên / quản trị** được trả lời (1 tầng) và **ẩn** bình luận không phù hợp (ẩn câu hỏi thì ẩn luôn câu trả lời; bấm
+  "Hiện lại" để khôi phục).
+- **Chống spam:** 1–500 ký tự, phụ huynh / khách không được gửi link, tối đa 5 bình luận / 10 phút và 30 / ngày mỗi người,
+  không gửi trùng; tổng bình luận của khách tối đa 300 / giờ.
+- Xem / kiểm duyệt nhanh: `select v.title, c.author_name, c.author_role, c.content, c.is_hidden, c.created_at from public.video_comments c join public.videos v on v.id = c.video_id order by c.created_at desc limit 50;`
+
+## 10. Sau phát hành (24–48 giờ)
 
 - Sentry: số lỗi mới theo `release`; lỗi `area:payment` / `area:zns` / `area:upload` cần xem ngay.
 - Supabase → Logs → Edge Functions: lỗi 5xx.

@@ -20,11 +20,12 @@ import DailySparkCard, { useSparkHiddenToday } from '@/components/DailySparkCard
 import type { TabScreenProps } from '@/navigation/types';
 import { useCtaHandler } from '@/navigation/useCtaHandler';
 import { trackEvent } from '@/services/analytics';
-import { buildShareUrl, shareMessage } from '@/services/media/shareLinks';
+import { buildShareUrl, feedShareMessage } from '@/services/media/shareLinks';
+import VideoCommentsSheet from '@/components/Feed/VideoCommentsSheet';
 import { useBookmarkStore, useFeedStore, useMyBookingsStore, useNotificationStore, useParentClubStore, useStaffStore } from '@/store';
 import { selectUnreadCount, type NotificationLink } from '@/store/useNotificationStore';
 import type { Category, FeedItem } from '@/types';
-import { COLORS, FEED_FILTERS } from '@/utils/constants';
+import { CATEGORY_LABELS, COLORS, FEED_FILTERS } from '@/utils/constants';
 import { normalizeVN } from '@/utils/helpers';
 import { BADGES, VIDEO_WATCH_MS } from '@/utils/parentClub';
 import { useAppActive } from '@/hooks/useAppActive';
@@ -49,12 +50,13 @@ export default function HomeScreen(_: TabScreenProps<'Home'>) {
 
   // Shallow selector: the feed re-renders only when these fields change (not on unrelated store updates).
   const {
-    items, status, selectedCategory, likedIds, followedTeachers, loadingMore,
-    load, loadMore, setCategory, toggleLike, toggleFollow,
+    items, status, selectedCategory, likedIds, followedTeachers, loadingMore, social, socialNotice,
+    load, loadMore, setCategory, toggleLike, likeVideo, shareVideo, clearSocialNotice, toggleFollow,
   } = useFeedStore(
     useShallow((s) => ({
       items: s.items, status: s.status, selectedCategory: s.selectedCategory, likedIds: s.likedIds, followedTeachers: s.followedTeachers,
-      loadingMore: s.loadingMore, load: s.load, loadMore: s.loadMore, setCategory: s.setCategory, toggleLike: s.toggleLike, toggleFollow: s.toggleFollow,
+      loadingMore: s.loadingMore, social: s.social, socialNotice: s.socialNotice, load: s.load, loadMore: s.loadMore, setCategory: s.setCategory,
+      toggleLike: s.toggleLike, likeVideo: s.likeVideo, shareVideo: s.shareVideo, clearSocialNotice: s.clearSocialNotice, toggleFollow: s.toggleFollow,
     })),
   );
   const policy = useMediaPolicy();
@@ -66,10 +68,22 @@ export default function HomeScreen(_: TabScreenProps<'Home'>) {
   const navigation = useNavigation();
   const isStaff = useStaffStore((s) => s.isStaff);
 
-  const onShare = useCallback((item: FeedItem) => {
-    const url = buildShareUrl(item.shareSlug);
-    if (url) shareText(shareMessage(item.title, url));
-  }, []);
+  const onShare = useCallback(
+    async (item: FeedItem) => {
+      const url = buildShareUrl(item.shareSlug);
+      await shareText(feedShareMessage({ title: item.title, teacherName: item.teacherName, courseLabel: CATEGORY_LABELS[item.category], url }));
+      shareVideo(item.id);
+    },
+    [shareVideo],
+  );
+  const onDoubleTapLike = useCallback((id: string) => likeVideo(id, 'like'), [likeVideo]);
+  const [commentsFor, setCommentsFor] = useState<FeedItem | null>(null);
+  // A failed ♥ rolled back: say so briefly.
+  useEffect(() => {
+    if (!socialNotice) return undefined;
+    const t = setTimeout(clearSocialNotice, 3500);
+    return () => clearTimeout(t);
+  }, [socialNotice, clearSocialNotice]);
 
   /** Hidden admin entry: long-press the TH EDU logo (teachers / staff sign in at /quan-ly/dang-nhap). */
   const openStaffArea = useCallback(() => {
@@ -185,16 +199,19 @@ export default function HomeScreen(_: TabScreenProps<'Home'>) {
         preferLowRes={policy.preferLowRes}
         muted={muted}
         liked={likedSet.has(item.id)}
+        counts={social[item.id]}
         following={followedSet.has(item.teacherName)}
         onToggleMute={toggleMute}
         onLike={toggleLike}
+        onDoubleTapLike={onDoubleTapLike}
+        onComments={setCommentsFor}
         onFollow={toggleFollow}
         onCta={onCta}
         onShare={onShare}
         onExpand={setPlaying}
       />
     ),
-    [cardHeight, isFocused, appActive, activeId, nextId, policy.warmNextVideo, policy.autoplay, policy.preferLowRes, muted, likedSet, followedSet, toggleMute, toggleLike, toggleFollow, onCta, onShare],
+    [cardHeight, isFocused, appActive, activeId, nextId, policy.warmNextVideo, policy.autoplay, policy.preferLowRes, muted, likedSet, social, followedSet, toggleMute, toggleLike, onDoubleTapLike, toggleFollow, onCta, onShare],
   );
 
   return (
@@ -311,6 +328,19 @@ export default function HomeScreen(_: TabScreenProps<'Home'>) {
           setPlaying(v);
         }}
       />
+      <VideoCommentsSheet
+        item={commentsFor}
+        onClose={() => setCommentsFor(null)}
+        onSignIn={() => {
+          setCommentsFor(null);
+          navigation.navigate('ParentAuth');
+        }}
+      />
+      {!!socialNotice && (
+        <View pointerEvents="none" className="absolute left-4 right-4 top-28 items-center" testID="social-notice">
+          <Text className="rounded-2xl bg-ink/90 px-4 py-2.5 text-center text-[13px] font-semibold text-white">{socialNotice}</Text>
+        </View>
+      )}
       <NotificationCenter visible={notificationsOpen} onClose={() => setNotificationsOpen(false)} onNavigate={openNotificationLink} />
 
       {/* Staff only: quick access to publish a new video. */}

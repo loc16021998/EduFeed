@@ -30,7 +30,12 @@ const toFeedItem = (r: Tables<'videos'>): FeedItem => ({
   ctaText: r.cta_text,
   ctaLink: r.cta_link ?? `thedu://booking?course=${r.category_code}`,
   shareSlug: r.share_slug ?? undefined,
+  // Counters (20261202090000_video_social.sql); undefined on a database without the upgrade.
+  likesCount: num((r as { likes_count?: number }).likes_count),
+  commentsCount: num((r as { comments_count?: number }).comments_count),
+  sharesCount: num((r as { shares_count?: number }).shares_count),
 });
+const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : undefined);
 
 /** Cursor = "<published_at>|<id>" of the last item (keyset pagination, stable as new videos arrive). */
 const encodeCursor = (r: Tables<'videos'>) => `${r.published_at}|${r.id}`;
