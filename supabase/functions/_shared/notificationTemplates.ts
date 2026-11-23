@@ -16,7 +16,8 @@ export type PushEvent =
   | 'UPCOMING_CLASS_REMINDER'
   | 'NEW_LEAVE_REQUEST'
   | 'HOT_LEAD_ASSIGNED'
-  | 'TRIAL_REMINDER_ACTION';
+  | 'TRIAL_REMINDER_ACTION'
+  | 'WEEKLY_REPORT_READY';
 
 /** Maps to the three switches in "Cài đặt thông báo" (notification_preferences). */
 export type PushCategory = 'CLASS' | 'REMINDER' | 'PROMO';
@@ -24,7 +25,7 @@ export type PushCategory = 'CLASS' | 'REMINDER' | 'PROMO';
 export type AndroidChannelId = 'default' | 'urgent_reminders' | 'class_updates';
 
 /** App screens a notification can open (names from src/navigation/types.ts). */
-export type PushRoute = 'ParentPortal' | 'Referral' | 'TeacherDashboard' | 'AdvisorTasks' | 'StaffTrials';
+export type PushRoute = 'ParentPortal' | 'Referral' | 'TeacherDashboard' | 'AdvisorTasks' | 'StaffTrials' | 'WeeklyReport';
 
 export interface AndroidChannelDef {
   id: AndroidChannelId;
@@ -135,13 +136,28 @@ export const TEMPLATES: Record<PushEvent, TemplateDef> = {
     body: (p) => `Nhắc lịch học thử sắp diễn ra của bé ${s(p.studentName, '')}${p.time ? ` (${p.time})` : ''} — Cần xác nhận`,
     dataKeys: ['leadId'],
   },
+  WEEKLY_REPORT_READY: {
+    roles: ['PARENT'],
+    category: 'CLASS',
+    channel: 'class_updates',
+    urgent: false,
+    route: 'WeeklyReport',
+    title: () => 'Báo cáo tuần của bé đã sẵn sàng 🌟',
+    body: (p) => {
+      const total = Number(p.total) || 0;
+      const streak = Number(p.streak) || 0;
+      const parts = [total > 0 ? `đi học ${Number(p.attended) || 0}/${total} buổi` : '', streak >= 2 ? `chuỗi luyện tập ${streak} ngày 🔥` : ''].filter(Boolean);
+      return `Xem tuần học của bé ${s(p.studentName, 'nhà mình')}${parts.length ? `: ${parts.join(', ')}` : ''} — kèm gợi ý 5 phút luyện cùng con`;
+    },
+    dataKeys: ['studentId', 'reportId'],
+  },
 };
 
 /** Branch names are stored as "Cơ sở Xa La"; accept both forms so copy never reads "cơ sở Cơ sở". */
 export function campusName(v: unknown): string {
   const n = String(v ?? '').trim();
   if (!n) return 'trung tâm';
-  return /^cơ sở/i.test(n) ? `cơ sở ${n.replace(/^cơ sởs*/i, '')}` : `cơ sở ${n}`;
+  return /^cơ sở/i.test(n) ? `cơ sở ${n.replace(/^cơ sở\s*/i, '')}` : `cơ sở ${n}`;
 }
 
 /** "0912345678" → "0912 *** 678"; anything else → "đã ẩn số". */

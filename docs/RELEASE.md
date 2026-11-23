@@ -132,6 +132,7 @@ Sự kiện → ai nhận (tự động, không cần ai bấm gửi):
 | Giáo viên gửi sổ liên lạc | phụ huynh của bé | Sổ liên lạc |
 | Bé được điểm danh có mặt / muộn | phụ huynh của bé | Sổ liên lạc |
 | Chủ nhật 19:00 — thử thách 21 ngày | phụ huynh có con đang học | Sổ liên lạc |
+| Chủ nhật 19:30 — báo cáo tuần đã sẵn sàng (mục 8) | phụ huynh của bé (tuần có buổi học / luyện tập) | Báo cáo tuần |
 | 15–45 phút trước giờ dạy | giáo viên của lớp | Lớp của tôi |
 | Phụ huynh báo nghỉ / xin học bù | giáo viên các lớp của bé | Lớp của tôi |
 | Khách đăng ký học thử | tư vấn viên cơ sở đó + quản lý | Công việc |
@@ -153,7 +154,34 @@ Sau đó thay `nativeProvider` trong `src/services/pushNotificationService.ts` t
 (xin quyền → `getExpoPushTokenAsync` → tạo 3 kênh Android → nghe sự kiện bấm thông báo). Đăng ký thiết bị với máy chủ,
 điều hướng khi bấm và màn hình cài đặt đã sẵn sàng. Thử: `npm run build:preview`, đăng nhập, gửi một sổ liên lạc.
 
-## 8. Sau phát hành (24–48 giờ)
+## 8. Báo cáo tiến độ tuần
+
+Mỗi **tối Chủ nhật 19:30** hệ thống tự tổng hợp tuần học (thứ 2 → Chủ nhật) của mọi bé đang học, gửi thông báo
+"Báo cáo tuần của bé đã sẵn sàng 🌟" cho phụ huynh (và tin Zalo nếu đã cấu hình). Không ai cần bấm gửi.
+
+1. Chạy `supabase/sql/upgrades/20261201090000_weekly_progress_reports.sql` (sau bản 20261130 thông báo đẩy).
+2. `npx supabase functions deploy api --no-verify-jwt`
+3. Chạy `supabase/sql/schedule_weekly_digest_cron.sql` (Chủ nhật 19:30–21:50 mỗi 10 phút; sáng thứ 2 chạy bù nếu tối
+   Chủ nhật bị gián đoạn — báo cáo đã gửi không gửi lại).
+4. Tuỳ chọn: `WEEKLY_REPORT_AI=1` (Claude viết lại lời khen / gợi ý cho tự nhiên hơn — **số liệu luôn do hệ thống tính**,
+   AI không được đổi), `ZNS_TEMPLATE_WEEKLY_REPORT` (mẫu ZNS: C_NAME, STUDENT_NAME, WEEK, ATTENDANCE, STREAK, REPORT_URL).
+
+| Phần | Lấy từ |
+|---|---|
+| Chuyên cần `X/Y buổi` | điểm danh QR / thủ công, sổ liên lạc; ngày nghỉ có phép đã duyệt |
+| Chuỗi luyện tập tại nhà | "Thử thách 21 ngày" phụ huynh đánh dấu trong app (nay được lưu cả lên máy chủ) |
+| Thanh kỹ năng (chữ, không phải điểm) | nhận xét nhanh của giáo viên + đi học đúng giờ + luyện ở nhà |
+| Điểm sáng, 5 phút luyện ở nhà | quy tắc theo môn (Tiền tiểu học, Luyện chữ, Toán tư duy, Bồi dưỡng) |
+| Lời thầy cô | ghi chú 1 dòng của giáo viên, nếu không có thì nhận xét gần nhất trong tuần |
+
+**Giáo viên:** Lớp của tôi → tab **"Báo cáo tuần"**: xem trước bản nháp của từng bé, thêm 1 dòng nhận xét riêng trước
+19:30 Chủ nhật, và xem phụ huynh nào **đã xem** báo cáo. Tuần nghỉ (không có buổi) vẫn có báo cáo nhẹ nhàng nhưng
+**không** gửi thông báo.
+
+Chạy lại một tuần bằng tay (VD sau khi sửa dữ liệu): gọi `POST /api/cron/weekly-digest` với header `x-cron-secret`
+và body `{"weekStart":"2026-11-16","force":true}` — chỉ những bé chưa có báo cáo đã gửi của tuần đó được tạo.
+
+## 9. Sau phát hành (24–48 giờ)
 
 - Sentry: số lỗi mới theo `release`; lỗi `area:payment` / `area:zns` / `area:upload` cần xem ngay.
 - Supabase → Logs → Edge Functions: lỗi 5xx.

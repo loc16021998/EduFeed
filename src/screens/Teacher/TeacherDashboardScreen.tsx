@@ -28,6 +28,7 @@ import { Coachmarks, EmptyState, StatusBanner, UndoSnackbar, useUndoAction, type
 
 import FlashComposer from './components/FlashComposer';
 import VoiceNoteField from './components/VoiceNoteField';
+import WeeklyNotePanel from './components/WeeklyNotePanel';
 import { CAMPUS_LABELS, CATEGORY_COLORS, COLORS } from '@/utils/constants';
 
 const msg = (e: unknown) => (e instanceof Error ? e.message : 'Đã có lỗi xảy ra');
@@ -53,7 +54,7 @@ export default function TeacherDashboardScreen({ navigation }: RootStackScreenPr
   const [classes, setClasses] = useState<ClassInfo[]>([]);
   const [classId, setClassId] = useState<string | null>(null);
   const [roster, setRoster] = useState<RosterRow[]>([]);
-  const [tab, setTab] = useState<'attendance' | 'report' | 'flash'>('attendance');
+  const [tab, setTab] = useState<'attendance' | 'report' | 'flash' | 'weekly'>('attendance');
   const undo = useUndoAction();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -153,10 +154,11 @@ export default function TeacherDashboardScreen({ navigation }: RootStackScreenPr
                   ['attendance', 'Điểm danh'],
                   ['report', 'Sổ liên lạc'],
                   ['flash', 'Khoảnh khắc'],
+                  ['weekly', 'Báo cáo tuần'],
                 ] as const
               ).map(([id, label]) => (
-                <Pressable key={id} onPress={() => setTab(id)} accessibilityRole="tab" aria-selected={tab === id} accessibilityState={{ selected: tab === id }} className={`h-12 flex-1 items-center justify-center rounded-xl ${tab === id ? 'bg-white' : ''}`}>
-                  <Text className={`text-[14px] font-bold ${tab === id ? 'text-brand-700' : 'text-ink-muted'}`}>{label}</Text>
+                <Pressable key={id} onPress={() => setTab(id)} accessibilityRole="tab" aria-selected={tab === id} accessibilityState={{ selected: tab === id }} className={`h-12 flex-1 items-center justify-center rounded-xl px-0.5 ${tab === id ? 'bg-white' : ''}`} testID={`teacher-tab-${id}`}>
+                  <Text numberOfLines={2} className={`text-center text-[13px] font-bold leading-4 ${tab === id ? 'text-brand-700' : 'text-ink-muted'}`}>{label}</Text>
                 </Pressable>
               ))}
             </View>
@@ -165,8 +167,10 @@ export default function TeacherDashboardScreen({ navigation }: RootStackScreenPr
               <AttendancePanel cls={cls} roster={roster} onChanged={loadRoster} undo={undo} />
             ) : tab === 'report' ? (
               <BatchReportPanel cls={cls} roster={roster} onSent={loadRoster} />
-            ) : (
+            ) : tab === 'flash' ? (
               <FlashComposer key={cls.id} cls={cls} />
+            ) : (
+              <WeeklyNotePanel key={cls.id} cls={cls} />
             )}
           </>
         )}

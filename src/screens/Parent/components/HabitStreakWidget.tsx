@@ -13,7 +13,7 @@ const EMPTY: string[] = [];
 
 /**
  * "Thử thách 21 Ngày" — pick a small daily habit for the child and tick it off each evening.
- * 21 dots fill up; confetti + haptic on each tick (bigger burst at day 21). Stored on this device only.
+ * 21 dots fill up; confetti + haptic on each tick (bigger burst at day 21). Stored on the device, synced to the centre.
  */
 export default function HabitStreakWidget({ studentId, studentName, courses }: { studentId: string; studentName: string; courses: CourseCategory[] }) {
   const challenges = useMemo(() => challengesFor(courses), [courses]);
@@ -125,7 +125,7 @@ export default function HabitStreakWidget({ studentId, studentName, courses }: {
           </Pressable>
         </Animated.View>
       )}
-      <Text className="text-center text-[11px] text-ink-subtle">Chỉ lưu trên máy này · ba mẹ tự đánh dấu cùng bé</Text>
+      <Text className="text-center text-[11px] text-ink-subtle">Ba mẹ tự đánh dấu cùng bé · chuỗi ngày hiện trong Báo cáo tuần</Text>
 
       {box.w > 0 && <Confetti shot={shot} width={box.w} height={box.h} count={p.completed ? 60 : 28} />}
     </View>

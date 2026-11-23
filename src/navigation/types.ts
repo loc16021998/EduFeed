@@ -49,6 +49,8 @@ export type RootStackParamList = {
   ParentAuth: undefined;
   /** Parents: electronic contact book (children, sessions, reports, leave requests, fees, referral). */
   ParentPortal: undefined;
+  /** Parents: automatic weekly progress digest (Sunday 19:30), history and sharing. */
+  WeeklyReport: { studentId?: string } | undefined;
   /** Parents: referral code, rewards, vouchers, invited friends. */
   Referral: undefined;
   NotebookCheck: undefined;

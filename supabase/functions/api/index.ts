@@ -28,6 +28,8 @@
  *   POST /api/cron/reminders                                  → TickSummary
  * Scheduler (pg_cron every minute, same header):
  *   POST /api/cron/push                                       → PushTickSummary (Expo push outbox)
+ * Scheduler (pg_cron every 10 min on Sunday evening + Monday morning catch-up, same header):
+ *   POST /api/cron/weekly-digest  { weekStart?, force? }      → WeeklyDigestSummary (Báo cáo tiến độ tuần)
  *
  * Deployed URL: https://<project-ref>.supabase.co/functions/v1/api/…
  * Deploy:       supabase functions deploy api --no-verify-jwt   (auth is checked here, per route)
@@ -86,6 +88,8 @@ import { handlePaymentIpn, type PaymentIpnConfig } from '../_shared/paymentWebho
 import { randomToken, requestOtp, signupParent, verifyOtp, type ParentAuthConfig, type ParentAuthDeps, type ParentSession } from '../_shared/parentAuth.ts';
 import { runReminderTick, sendCrmMessage, type CrmDeps } from '../_shared/reminderCron.ts';
 import { runPushTick } from '../_shared/pushDispatcher.ts';
+import { runWeeklyDigest, type WeeklyDigestDeps } from '../_shared/weeklyDigestCron.ts';
+import { firstName, WEEKLY_AI_SCHEMA, WEEKLY_AI_SYSTEM, weekLabel, weeklyAiPrompt } from '../_shared/weeklyReport.ts';
 import { toZaloPhone } from '../_shared/zaloPayloads.ts';
 import { bearerToken, verifyCronSecret } from '../_shared/security.ts';
 import { getAccessToken } from '../_shared/zaloToken.ts';
@@ -907,6 +911,67 @@ async function handleNotebookCheck(req: Request): Promise<Response> {
   }
 }
 
+// ─── POST /api/cron/weekly-digest ───────────────────────────────────────────
+// Sunday 19:30: builds + publishes each ACTIVE student's weekly report, queues the push WEEKLY_REPORT_READY and
+// (optional) one Zalo summary per parent. Body (manual re-run): { "weekStart": "2026-11-16", "force": true }.
+// AI wording only when ANTHROPIC_API_KEY is set AND WEEKLY_REPORT_AI=1 (numbers always come from the rules).
+
+async function handleCronWeeklyDigest(req: Request): Promise<Response> {
+  if (!CRON_SECRET) return fail('SERVICE_UNAVAILABLE', 'CRON_SECRET chưa được cấu hình', 503);
+  if (!(await verifyCronSecret(req, CRON_SECRET))) return fail('UNAUTHORIZED', 'Sai cron secret', 401);
+  const body = await readJson(req);
+  const weekStart = typeof body?.weekStart === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(body.weekStart) ? body.weekStart : undefined;
+  const now = new Date();
+
+  const useAi = !!anthropic && env('WEEKLY_REPORT_AI') === '1';
+  const polish: WeeklyDigestDeps['polish'] = useAi
+    ? async (src, draft) => {
+        const msg = await anthropic!.beta.messages.create({
+          model: 'claude-opus-5-5',
+          max_tokens: 1500,
+          betas: ['server-side-fallback-2026-07-01'],
+          fallbacks: 'default',
+          system: WEEKLY_AI_SYSTEM,
+          output_config: { effort: 'low', format: { type: 'json_schema', schema: WEEKLY_AI_SCHEMA as unknown as Record<string, unknown> } },
+          messages: [{ role: 'user', content: weeklyAiPrompt(src, draft) }],
+        });
+        if (msg.stop_reason === 'refusal' || msg.stop_reason === 'max_tokens') return null;
+        return JSON.parse(msg.content.flatMap((b) => (b.type === 'text' ? [b.text] : [])).join(''));
+      }
+    : undefined;
+
+  // Zalo summary (optional): approved ZNS template, else an OA text when the parent follows the OA.
+  const { messaging } = await liveConfig();
+  const template = env('ZNS_TEMPLATE_WEEKLY_REPORT');
+  const reportUrl = `${env('WEB_URL').replace(/\/+$/, '')}/con-toi/bao-cao-tuan`;
+  const zalo: WeeklyDigestDeps['zalo'] =
+    messaging.accessToken && !isQuietHour(now)
+      ? async (t, ctx) => {
+          const a = ctx.digest.attendanceSummary;
+          const attendance = a.totalSessions > 0 ? `${a.attendedCount}/${a.totalSessions} buổi` : 'Lớp nghỉ';
+          const streak = `${ctx.digest.habitSummary.streak} ngày`;
+          const phone = toZaloPhone(t.phone);
+          const clip = (v: string, n = 30) => (v.length > n ? `${v.slice(0, n - 1)}…` : v);
+          const plan = template && /^84[35789]\d{8}$/.test(phone)
+            ? ({ channel: 'ZNS', payload: { phone, template_id: template, template_data: { C_NAME: clip(t.fullName), STUDENT_NAME: clip(ctx.studentName), WEEK: weekLabel(ctx.weekStart), ATTENDANCE: attendance, STREAK: streak, REPORT_URL: reportUrl }, tracking_id: `${ctx.reportId}:WEEKLY`, ...(ZNS_MODE === 'development' ? { mode: 'development' as const } : {}) } } as const)
+            : t.zaloId
+              ? ({ channel: 'OA', payload: { recipient: { user_id: t.zaloId }, message: { text: `🌟 Báo cáo tuần ${weekLabel(ctx.weekStart)} của bé ${firstName(ctx.studentName)} đã sẵn sàng: chuyên cần ${attendance}, chuỗi luyện tập tại nhà ${streak}. Xem chi tiết và gợi ý 5 phút luyện cùng con: ${reportUrl}` } } } as const)
+              : null;
+          if (!plan) return false;
+          const res = await sendZaloMessage(plan, messaging.accessToken);
+          if (!res.ok) console.error('[weekly] Zalo', ctx.reportId, res.error);
+          return res.ok;
+        }
+      : undefined;
+
+  const summary = await runWeeklyDigest(
+    { rpc, now: () => now, polish, zalo, log: (m, x) => console.warn(m, x ?? '') },
+    { weekStart, force: body?.force === true },
+  );
+  if (!summary.skipped) console.log('[cron] weekly-digest', JSON.stringify(summary));
+  return json(summary);
+}
+
 // ─── Router ─────────────────────────────────────────────────────────────────
 
 const UUID = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
@@ -941,6 +1006,7 @@ Deno.serve(async (req) => {
     if (path === '/cron/reminders') return req.method === 'POST' ? await handleCronReminders(req) : postOnly();
     if (path === '/cron/lifecycle') return req.method === 'POST' ? await handleCronLifecycle(req) : postOnly();
     if (path === '/cron/push') return req.method === 'POST' ? await handleCronPush(req) : postOnly();
+    if (path === '/cron/weekly-digest') return req.method === 'POST' ? await handleCronWeeklyDigest(req) : postOnly();
     const enr = ENROLLMENT_COMPLETE.exec(path);
     if (enr) return req.method === 'POST' ? await handleCompleteEnrollment(req, enr[1]) : postOnly();
 

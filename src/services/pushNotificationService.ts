@@ -93,16 +93,17 @@ export async function unregisterDevice(): Promise<void> {
 
 // ─── Tap → screen ───────────────────────────────────────────────────────────
 
-const ROUTES: readonly PushRoute[] = ['ParentPortal', 'Referral', 'TeacherDashboard', 'AdvisorTasks', 'StaffTrials'];
+const ROUTES: readonly PushRoute[] = ['ParentPortal', 'Referral', 'TeacherDashboard', 'AdvisorTasks', 'StaffTrials', 'WeeklyReport'];
 const ROUTE_ROLES: Record<PushRoute, PushRole[]> = {
   ParentPortal: ['PARENT'],
   Referral: ['PARENT'],
   TeacherDashboard: ['TEACHER', 'MANAGER'],
   AdvisorTasks: ['ADVISOR', 'MANAGER', 'TEACHER'],
   StaffTrials: ['ADVISOR', 'MANAGER'],
+  WeeklyReport: ['PARENT'],
 };
 
-export type PushTarget = { name: PushRoute } | { name: 'Home' };
+export type PushTarget = { name: Exclude<PushRoute, 'WeeklyReport'> } | { name: 'WeeklyReport'; params: { studentId?: string } } | { name: 'Home' };
 
 /** Defensive parse of a notification's data payload. Anything unexpected → null (ignored). */
 export function parsePushData(raw: unknown): PushData | null {
@@ -132,6 +133,7 @@ export function routeForPush(data: PushData | null, currentRole: PushRole | null
   if (!data) return { name: 'Home' };
   const allowed = ROUTE_ROLES[data.deepLinkRoute];
   if (!currentRole || !allowed.includes(currentRole)) return { name: 'Home' };
+  if (data.deepLinkRoute === 'WeeklyReport') return { name: 'WeeklyReport', params: data.params.studentId ? { studentId: data.params.studentId } : {} };
   return { name: data.deepLinkRoute };
 }
 

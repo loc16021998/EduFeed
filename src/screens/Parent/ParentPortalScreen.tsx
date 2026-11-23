@@ -1,4 +1,4 @@
-import { AlertTriangle, CalendarDays, CalendarOff, CheckCircle2, ChevronRight, Copy, Gift, Heart, LogOut, MessageCircle, Send, Sparkles, Wallet, QrCode, HardDrive } from 'lucide-react-native';
+import { AlertTriangle, BarChart3, CalendarDays, CalendarOff, CheckCircle2, ChevronRight, Copy, Gift, Heart, LogOut, MessageCircle, Send, Sparkles, Wallet, QrCode, HardDrive } from 'lucide-react-native';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Image, KeyboardAvoidingView, Modal, Platform, Pressable, RefreshControl, ScrollView, Text, TextInput, View } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
@@ -137,6 +137,21 @@ export default function ParentPortalScreen({ navigation }: RootStackScreenProps<
               <>
                 <Overview student={student} />
 
+                <Pressable
+                  onPress={() => navigation.navigate('WeeklyReport', { studentId: student.id })}
+                  accessibilityRole="button"
+                  className="flex-row items-center gap-3 rounded-3xl bg-white p-4 active:bg-slate-50"
+                  testID="open-weekly-report"
+                >
+                  <View className="h-11 w-11 items-center justify-center rounded-2xl bg-leaf-50">
+                    <BarChart3 size={22} color={COLORS.leafDark} />
+                  </View>
+                  <View className="flex-1">
+                    <Text className="text-[15px] font-bold text-ink">Báo cáo tuần của con</Text>
+                    <Text className="text-xs leading-[17px] text-ink-muted">Chuyên cần, điểm sáng, gợi ý 5 phút luyện ở nhà — mỗi tối Chủ nhật</Text>
+                  </View>
+                  <ChevronRight size={20} color={COLORS.subtle} />
+                </Pressable>
 
                 <Pressable
                   onPress={() => navigation.navigate('NotebookCheck')}

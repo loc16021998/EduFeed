@@ -4,11 +4,11 @@
 -- HOW TO RUN: Supabase Dashboard → project → SQL Editor → New query → paste this whole file → Run.
 -- Run ONCE on a fresh project. It is wrapped in a transaction: if anything fails, nothing is applied.
 --
--- Includes migrations: 20261111090000_core_schema.sql, 20261111090100_rls_policies.sql, 20261111090200_functions.sql, 20261112090000_trust.sql, 20261113090000_video_publishing.sql, 20261114090000_crm_automation.sql, 20261115090000_zalo_tokens.sql, 20261116090000_dashboard_analytics.sql, 20261117090000_admin_accounts.sql, 20261118090000_admin_only_business.sql, 20261119090000_staff_signup_requests.sql, 20261120090000_parent_club_promo.sql, 20261121090000_parent_booking_actions.sql, 20261122090000_lifecycle_upsell.sql, 20261123090000_tuition_payments.sql, 20261124090000_parent_portal.sql, 20261125090000_referral_rewards.sql, 20261126090000_staff_rbac_tasks.sql, 20261127090000_parent_engagement.sql, 20261128090000_voice_games_community.sql, 20261129090000_app_release_config.sql, 20261130090000_push_notifications.sql
+-- Includes migrations: 20261111090000_core_schema.sql, 20261111090100_rls_policies.sql, 20261111090200_functions.sql, 20261112090000_trust.sql, 20261113090000_video_publishing.sql, 20261114090000_crm_automation.sql, 20261115090000_zalo_tokens.sql, 20261116090000_dashboard_analytics.sql, 20261117090000_admin_accounts.sql, 20261118090000_admin_only_business.sql, 20261119090000_staff_signup_requests.sql, 20261120090000_parent_club_promo.sql, 20261121090000_parent_booking_actions.sql, 20261122090000_lifecycle_upsell.sql, 20261123090000_tuition_payments.sql, 20261124090000_parent_portal.sql, 20261125090000_referral_rewards.sql, 20261126090000_staff_rbac_tasks.sql, 20261127090000_parent_engagement.sql, 20261128090000_voice_games_community.sql, 20261129090000_app_release_config.sql, 20261130090000_push_notifications.sql, 20261201090000_weekly_progress_reports.sql
 -- plus required reference data (course categories, branches).
 --
 -- If you later switch to the Supabase CLI (supabase db push), first mark these as applied:
---   npx supabase migration repair --status applied 20261111090000 20261111090100 20261111090200 20261112090000 20261113090000 20261114090000 20261115090000 20261116090000 20261117090000 20261118090000 20261119090000 20261120090000 20261121090000 20261122090000 20261123090000 20261124090000 20261125090000 20261126090000 20261127090000 20261128090000 20261129090000 20261130090000
+--   npx supabase migration repair --status applied 20261111090000 20261111090100 20261111090200 20261112090000 20261113090000 20261114090000 20261115090000 20261116090000 20261117090000 20261118090000 20261119090000 20261120090000 20261121090000 20261122090000 20261123090000 20261124090000 20261125090000 20261126090000 20261127090000 20261128090000 20261129090000 20261130090000 20261201090000
 -- ═══════════════════════════════════════════════════════════════════════════
 
 begin;
@@ -6703,6 +6703,505 @@ grant execute on function public.push_enqueue_scheduled(timestamptz) to service_
 grant execute on function public.push_claim_batch(int) to service_role;
 grant execute on function public.push_finish(uuid, text, text, timestamptz) to service_role;
 grant execute on function public.push_disable_tokens(text[]) to service_role;
+
+-- ───────────────── 20261201090000_weekly_progress_reports.sql ─────────────────
+-- ═══════════════════════════════════════════════════════════════════════════
+-- Weekly student progress reports ("Báo cáo tiến độ tuần") + home-practice check-ins.
+--
+--   habit_checkins            "Thử thách 21 ngày" ticks, now also sent to the centre (the app still keeps its
+--                             own copy, so ticking works offline). Feeds "Chuỗi luyện tập tại nhà".
+--   weekly_progress_reports   one row per student and week (Mon–Sun, Asia/Ho_Chi_Minh). Built every Sunday
+--                             19:30 by the Edge Function POST /api/cron/weekly-digest from attendance_logs,
+--                             daily_reports, approved leave requests and habit_checkins
+--                             (supabase/functions/_shared/weeklyReport.ts — rule-based, optional AI wording).
+--
+-- Flow: teachers may add a one-line note to the week's draft (row with published_at = null) → Sunday 19:30
+-- the digest fills the numbers, keeps the teacher's note, sets published_at and queues the push
+-- WEEKLY_REPORT_READY for linked parents → the parent opens it (parent_viewed_at, first view only).
+--
+-- Visibility: parents see PUBLISHED reports of their own children only (parent_can_see); staff see the
+-- students they may see (staff_can_see_student: teachers → their classes, advisors → their campus).
+-- All writes go through the functions below; the digest RPCs are service-role only.
+-- ═══════════════════════════════════════════════════════════════════════════
+
+create table if not exists public.habit_checkins (
+  id             uuid primary key default gen_random_uuid(),
+  student_id     uuid not null references public.students (id) on delete cascade,
+  parent_id      uuid references public.users (id) on delete set null,
+  challenge_key  text not null check (challenge_key ~ '^[A-Z_]{3,24}$'),
+  day            date not null,
+  created_at     timestamptz not null default now(),
+  unique (student_id, challenge_key, day)
+);
+create index if not exists habit_checkins_student_day_idx on public.habit_checkins (student_id, day desc);
+
+create table if not exists public.weekly_progress_reports (
+  id                    uuid primary key default gen_random_uuid(),
+  student_id            uuid not null references public.students (id) on delete cascade,
+  week_start_date       date not null check (extract(isodow from week_start_date) = 1),
+  week_end_date         date not null,
+  -- { totalSessions, attendedCount, onTimeCount, excusedCount }
+  attendance_summary    jsonb not null default '{"totalSessions":0,"attendedCount":0,"onTimeCount":0,"excusedCount":0}'
+                        check (jsonb_typeof(attendance_summary) = 'object'),
+  -- { focus, handwritingOrLogic, confidence, homePractice } — 0–100, null = not enough to say this week
+  skill_scores          jsonb not null default '{}' check (jsonb_typeof(skill_scores) = 'object'),
+  -- { daysPracticed, streak } — home practice ("Thử thách 21 ngày")
+  habit_summary         jsonb not null default '{"daysPracticed":0,"streak":0}' check (jsonb_typeof(habit_summary) = 'object'),
+  highlights_vi         text[] not null default '{}' check (cardinality(highlights_vi) <= 5),
+  improvement_tips_vi   text[] not null default '{}' check (cardinality(improvement_tips_vi) <= 5),
+  teacher_summary_note  text check (teacher_summary_note is null or char_length(teacher_summary_note) <= 600),
+  -- Who the quote is from ("Cô Hường"); taken from the week's contact book or the teacher who wrote the note.
+  teacher_name          text check (teacher_name is null or char_length(teacher_name) <= 60),
+  -- Up to 2 storage paths in the private bucket class-reports (<student_id>/…), read through signed URLs.
+  featured_media_urls   jsonb not null default '[]' check (jsonb_typeof(featured_media_urls) = 'array' and jsonb_array_length(featured_media_urls) <= 2),
+  generated_by          text not null default 'AUTO_DIGEST' check (generated_by in ('AUTO_DIGEST', 'TEACHER_EDITED')),
+  -- AI = wording polished by Claude (numbers always come from the rules); RULES = deterministic fallback.
+  wording_source        text not null default 'RULES' check (wording_source in ('RULES', 'AI')),
+  has_activity          boolean not null default false,
+  teacher_note_by       uuid references auth.users (id) on delete set null,
+  published_at          timestamptz,
+  zalo_notified_at      timestamptz,
+  parent_viewed_at      timestamptz,
+  created_at            timestamptz not null default now(),
+  updated_at            timestamptz not null default now(),
+  unique (student_id, week_start_date),
+  check (week_end_date = week_start_date + 6)
+);
+create index if not exists weekly_reports_week_idx on public.weekly_progress_reports (week_start_date, published_at);
+drop trigger if exists weekly_reports_set_updated_at on public.weekly_progress_reports;
+create trigger weekly_reports_set_updated_at before update on public.weekly_progress_reports
+  for each row execute function public.set_updated_at();
+
+alter table public.habit_checkins enable row level security;
+alter table public.weekly_progress_reports enable row level security;
+
+drop policy if exists "linked parents and staff read habit checkins" on public.habit_checkins;
+create policy "linked parents and staff read habit checkins" on public.habit_checkins for select to authenticated
+  using (public.parent_can_see(student_id) or public.staff_can_see_student(student_id));
+drop policy if exists "parents read published weekly reports, staff in scope" on public.weekly_progress_reports;
+create policy "parents read published weekly reports, staff in scope" on public.weekly_progress_reports for select to authenticated
+  using ((published_at is not null and public.parent_can_see(student_id)) or public.staff_can_see_student(student_id));
+
+revoke all on public.habit_checkins, public.weekly_progress_reports from anon;
+revoke insert, update, delete on public.habit_checkins, public.weekly_progress_reports from authenticated;
+-- Reads are row-filtered by the policies above (explicit, not relying on Supabase's default grants).
+grant select on public.habit_checkins, public.weekly_progress_reports to authenticated;
+
+-- ─── Helpers ────────────────────────────────────────────────────────────────
+
+create or replace function public.vn_today()
+returns date
+language sql
+stable
+as $$ select (now() at time zone 'Asia/Ho_Chi_Minh')::date $$;
+
+-- Monday of the week that contains p_day.
+create or replace function public.week_monday(p_day date)
+returns date
+language sql
+immutable
+as $$ select (p_day - (extract(isodow from p_day)::int - 1))::date $$;
+
+-- ─── Parents: home-practice check-in ───────────────────────────────────────
+-- Idempotent. Up to 7 days back, so ticks made offline still count when the phone syncs.
+create or replace function public.habit_checkin(p_student_id uuid, p_key text, p_day date)
+returns boolean
+language plpgsql
+volatile
+security definer
+set search_path = public
+as $$
+declare
+  v_parent uuid := public.current_parent_id();
+  v_today  date := public.vn_today();
+  v_count  int;
+begin
+  if v_parent is null or not public.parent_can_see(p_student_id) then
+    raise exception 'Không có quyền ghi thử thách cho học viên này' using hint = 'FORBIDDEN';
+  end if;
+  if coalesce(p_key, '') !~ '^[A-Z_]{3,24}$' then
+    raise exception 'Thử thách không hợp lệ' using hint = 'VALIDATION:key';
+  end if;
+  if p_day is null or p_day > v_today + 1 or p_day < v_today - 7 then
+    raise exception 'Ngày không hợp lệ' using hint = 'VALIDATION:day';
+  end if;
+  insert into public.habit_checkins (student_id, parent_id, challenge_key, day)
+  values (p_student_id, v_parent, p_key, p_day)
+  on conflict (student_id, challenge_key, day) do nothing;
+  get diagnostics v_count = row_count;
+  return v_count > 0;
+end $$;
+
+-- ─── Source data for one student and week (digest + teacher preview) ───────
+
+create or replace function public.weekly_report_source_internal(p_student_id uuid, p_week_start date)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+declare
+  v_start date := public.week_monday(p_week_start);
+  v_end   date := public.week_monday(p_week_start) + 6;
+  v_s     public.students;
+begin
+  select * into v_s from public.students where id = p_student_id;
+  if not found then return null; end if;
+  return jsonb_build_object(
+    'studentId', v_s.id,
+    'studentName', v_s.full_name,
+    'campus', v_s.campus_location,
+    'branchName', (select name from public.branches where code = v_s.campus_location),
+    'weekStart', v_start,
+    'weekEnd', v_end,
+    'courses', coalesce((
+      select jsonb_agg(distinct jsonb_build_object('code', e.course_code, 'name', c.name))
+      from public.enrollments e join public.categories c on c.code = e.course_code
+      where e.student_id = v_s.id and e.status = 'ACTIVE'), '[]'::jsonb),
+    -- Check-ins (QR / manual), with the class's course.
+    'attendance', coalesce((
+      select jsonb_agg(jsonb_build_object('date', a.session_date, 'courseCode', c.course_code, 'status', a.status) order by a.session_date)
+      from public.attendance_logs a join public.classes c on c.id = a.class_id
+      where a.student_id = v_s.id and a.session_date between v_start and v_end), '[]'::jsonb),
+    -- The contact book: attendance, teacher, note, quick tags, photos.
+    'reports', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'date', r.session_date, 'courseCode', r.course_code, 'attendance', r.attendance, 'teacherName', r.teacher_name,
+        'feedback', r.feedback_text, 'tags', to_jsonb(r.tags), 'media', r.media_urls) order by r.session_date, r.created_at)
+      from public.daily_reports r
+      where r.student_id = v_s.id and r.session_date between v_start and v_end), '[]'::jsonb),
+    -- Approved leave: counts as an excused session when no attendance was recorded that day.
+    'leaves', coalesce((
+      select jsonb_agg(distinct q.requested_date)
+      from public.attendance_requests q
+      where q.student_id = v_s.id and q.type = 'LEAVE' and q.status = 'APPROVED' and q.requested_date between v_start and v_end), '[]'::jsonb),
+    -- Practice days (any challenge) for the week and the 60 days before it (streak at week end).
+    'habitDays', coalesce((
+      select jsonb_agg(distinct h.day order by h.day)
+      from public.habit_checkins h
+      where h.student_id = v_s.id and h.day between v_end - 66 and v_end), '[]'::jsonb),
+    'existing', (
+      select jsonb_build_object('id', w.id, 'generatedBy', w.generated_by, 'teacherNote', w.teacher_summary_note,
+                                'teacherName', w.teacher_name, 'publishedAt', w.published_at)
+      from public.weekly_progress_reports w where w.student_id = v_s.id and w.week_start_date = v_start)
+  );
+end $$;
+
+-- Staff preview (teacher quick review): same data, scoped to students the caller may see.
+create or replace function public.staff_weekly_source(p_student_id uuid, p_week_start date)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+begin
+  if not public.is_staff() or not public.staff_can_see_student(p_student_id) then
+    raise exception 'Không có quyền xem học viên này' using hint = 'FORBIDDEN';
+  end if;
+  return public.weekly_report_source_internal(p_student_id, p_week_start);
+end $$;
+
+-- ─── Digest (service role, Edge Function) ──────────────────────────────────
+
+-- Students to build this week: an ACTIVE course, not yet published for the week.
+create or replace function public.weekly_digest_candidates(p_week_start date, p_limit int default 200)
+returns table (student_id uuid)
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select s.id
+  from public.students s
+  where exists (select 1 from public.enrollments e where e.student_id = s.id and e.status = 'ACTIVE')
+    and not exists (select 1 from public.weekly_progress_reports w
+                     where w.student_id = s.id and w.week_start_date = public.week_monday(p_week_start) and w.published_at is not null)
+  order by s.campus_location, s.id
+  limit least(greatest(coalesce(p_limit, 200), 1), 1000);
+$$;
+
+-- Save the built report (upsert). A teacher's note is never overwritten. p_publish: set published_at and
+-- queue WEEKLY_REPORT_READY for linked parents (only when the week had sessions or home practice).
+-- Returns { id, published, pushed, zalo: [{ parentId, fullName, phone, zaloId }] } — zalo lists parents to
+-- message when this report has not been sent on Zalo yet.
+create or replace function public.weekly_report_save(p_student_id uuid, p_week_start date, p_report jsonb, p_publish boolean default true)
+returns jsonb
+language plpgsql
+volatile
+security definer
+set search_path = public
+as $$
+declare
+  v_start   date := public.week_monday(p_week_start);
+  v_row     public.weekly_progress_reports;
+  v_media   jsonb := coalesce(p_report -> 'featuredMedia', '[]'::jsonb);
+  v_hl      text[];
+  v_tips    text[];
+  v_active  boolean := coalesce((p_report ->> 'hasActivity')::boolean, false);
+  v_name    text;
+  v_user    uuid;
+  v_pushed  int := 0;
+  v_new_pub boolean := false;
+  m         text;
+begin
+  if jsonb_typeof(p_report) is distinct from 'object' then
+    raise exception 'Báo cáo không hợp lệ' using hint = 'VALIDATION:report';
+  end if;
+  select coalesce(array_agg(left(btrim(x), 300)) filter (where btrim(x) <> ''), '{}') into v_hl
+    from (select jsonb_array_elements_text(coalesce(p_report -> 'highlights', '[]')) x limit 5) t;
+  select coalesce(array_agg(left(btrim(x), 300)) filter (where btrim(x) <> ''), '{}') into v_tips
+    from (select jsonb_array_elements_text(coalesce(p_report -> 'tips', '[]')) x limit 5) t;
+  if jsonb_typeof(v_media) <> 'array' then v_media := '[]'; end if;
+  select coalesce(jsonb_agg(x), '[]') into v_media
+    from (select x from jsonb_array_elements_text(v_media) x where split_part(x, '/', 1) = p_student_id::text limit 2) t;
+
+  insert into public.weekly_progress_reports as w (
+    student_id, week_start_date, week_end_date, attendance_summary, skill_scores, habit_summary, highlights_vi,
+    improvement_tips_vi, teacher_summary_note, teacher_name, featured_media_urls, wording_source, has_activity)
+  values (
+    p_student_id, v_start, v_start + 6,
+    coalesce(p_report -> 'attendanceSummary', '{}'), coalesce(p_report -> 'skillScores', '{}'), coalesce(p_report -> 'habitSummary', '{}'),
+    v_hl, v_tips, left(nullif(btrim(p_report ->> 'teacherSummaryNote'), ''), 600), left(nullif(btrim(p_report ->> 'teacherName'), ''), 60),
+    v_media, case when p_report ->> 'wordingSource' = 'AI' then 'AI' else 'RULES' end, v_active)
+  on conflict (student_id, week_start_date) do update set
+    attendance_summary = excluded.attendance_summary,
+    skill_scores = excluded.skill_scores,
+    habit_summary = excluded.habit_summary,
+    highlights_vi = excluded.highlights_vi,
+    improvement_tips_vi = excluded.improvement_tips_vi,
+    teacher_summary_note = case when w.generated_by = 'TEACHER_EDITED' then w.teacher_summary_note else excluded.teacher_summary_note end,
+    teacher_name = case when w.generated_by = 'TEACHER_EDITED' then w.teacher_name else excluded.teacher_name end,
+    featured_media_urls = excluded.featured_media_urls,
+    wording_source = excluded.wording_source,
+    has_activity = excluded.has_activity
+  returning * into v_row;
+
+  if p_publish and v_row.published_at is null then
+    update public.weekly_progress_reports set published_at = now() where id = v_row.id returning * into v_row;
+    v_new_pub := true;
+  end if;
+
+  -- Push (exception-safe: a push problem never loses the report).
+  if v_new_pub and v_active then
+    begin
+      select full_name into v_name from public.students where id = p_student_id;
+      for v_user in select * from public.push_parents_of(p_student_id) loop
+        if public.push_enqueue('WEEKLY_REPORT_READY', v_user, 'PARENT',
+             jsonb_build_object('studentName', v_name, 'studentId', p_student_id, 'reportId', v_row.id,
+                                'attended', v_row.attendance_summary ->> 'attendedCount', 'total', v_row.attendance_summary ->> 'totalSessions',
+                                'streak', v_row.habit_summary ->> 'streak'),
+             'weekly:' || v_row.id || ':' || v_user) then
+          v_pushed := v_pushed + 1;
+        end if;
+      end loop;
+    exception when others then
+      raise warning 'weekly_report_save push: %', sqlerrm;
+    end;
+  end if;
+
+  return jsonb_build_object(
+    'id', v_row.id,
+    'published', v_row.published_at is not null,
+    'pushed', v_pushed,
+    'zalo', case when v_row.published_at is not null and v_active and v_row.zalo_notified_at is null then coalesce((
+      select jsonb_agg(jsonb_build_object('parentId', u.id, 'fullName', u.full_name, 'phone', u.phone, 'zaloId', u.zalo_id))
+      from public.parent_student_links l join public.users u on u.id = l.parent_id
+      where l.student_id = p_student_id and u.is_active), '[]'::jsonb) else '[]'::jsonb end);
+end $$;
+
+create or replace function public.weekly_report_mark_zalo(p_id uuid)
+returns void
+language sql
+volatile
+security definer
+set search_path = public
+as $$
+  update public.weekly_progress_reports set zalo_notified_at = coalesce(zalo_notified_at, now()) where id = p_id;
+$$;
+
+-- ─── Teachers: one-line note on the week's draft ───────────────────────────
+-- This week or last week only. Empty note = back to the automatic summary.
+create or replace function public.weekly_report_teacher_note(p_student_id uuid, p_week_start date, p_note text)
+returns jsonb
+language plpgsql
+volatile
+security definer
+set search_path = public
+as $$
+declare
+  v_start  date := public.week_monday(p_week_start);
+  v_this   date := public.week_monday(public.vn_today());
+  v_note   text := nullif(btrim(regexp_replace(coalesce(p_note, ''), '\s+', ' ', 'g')), '');
+  v_name   text;
+  v_row    public.weekly_progress_reports;
+begin
+  if not public.is_staff() or not public.staff_can_see_student(p_student_id) then
+    raise exception 'Bạn chỉ ghi chú được cho học viên trong lớp của mình' using hint = 'FORBIDDEN';
+  end if;
+  if p_week_start is null or v_start not in (v_this, v_this - 7) then
+    raise exception 'Chỉ ghi chú cho tuần này hoặc tuần trước' using hint = 'VALIDATION:week';
+  end if;
+  if v_note is not null and char_length(v_note) > 200 then
+    raise exception 'Ghi chú tối đa 200 ký tự (1 dòng)' using hint = 'VALIDATION:note';
+  end if;
+  select coalesce(nullif(btrim(sp.display_name), ''), nullif(btrim(u.raw_user_meta_data ->> 'full_name'), ''), split_part(u.email, '@', 1))
+    into v_name
+    from auth.users u left join public.staff_profiles sp on sp.user_id = u.id where u.id = auth.uid();
+
+  insert into public.weekly_progress_reports as w (student_id, week_start_date, week_end_date, teacher_summary_note, teacher_name, generated_by, teacher_note_by)
+  values (p_student_id, v_start, v_start + 6, v_note, case when v_note is null then null else left(v_name, 60) end,
+          case when v_note is null then 'AUTO_DIGEST' else 'TEACHER_EDITED' end, auth.uid())
+  on conflict (student_id, week_start_date) do update set
+    teacher_summary_note = excluded.teacher_summary_note,
+    teacher_name = coalesce(excluded.teacher_name, w.teacher_name),
+    generated_by = excluded.generated_by,
+    teacher_note_by = excluded.teacher_note_by
+  returning * into v_row;
+  return jsonb_build_object('id', v_row.id, 'generatedBy', v_row.generated_by, 'published', v_row.published_at is not null);
+end $$;
+
+-- Teacher overview for one class and week: draft / sent / seen by parents.
+create or replace function public.staff_weekly_overview(p_class_id uuid, p_week_start date)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+declare
+  v_start date := public.week_monday(coalesce(p_week_start, public.vn_today()));
+begin
+  if not public.staff_owns_class(p_class_id) then
+    raise exception 'Không có quyền xem lớp này' using hint = 'FORBIDDEN';
+  end if;
+  return coalesce((
+    select jsonb_agg(jsonb_build_object(
+      'studentId', s.id, 'studentName', s.full_name, 'reportId', w.id, 'generatedBy', w.generated_by,
+      'teacherNote', case when w.generated_by = 'TEACHER_EDITED' then w.teacher_summary_note end,
+      'publishedAt', w.published_at, 'parentViewedAt', w.parent_viewed_at) order by s.full_name)
+    from (select distinct e.student_id from public.class_members m join public.enrollments e on e.id = m.enrollment_id
+           where m.class_id = p_class_id and e.student_id is not null) cm
+    join public.students s on s.id = cm.student_id
+    left join public.weekly_progress_reports w on w.student_id = s.id and w.week_start_date = v_start), '[]'::jsonb);
+end $$;
+
+-- ─── Parents: read + "đã xem" ──────────────────────────────────────────────
+
+create or replace function public.parent_weekly_reports(p_student_id uuid, p_limit int default 12)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+declare
+  v_staff boolean := public.is_staff() and public.staff_can_see_student(p_student_id);
+begin
+  if not public.parent_can_see(p_student_id) and not v_staff then
+    raise exception 'Không có quyền xem báo cáo của học viên này' using hint = 'FORBIDDEN';
+  end if;
+  return coalesce((
+    select jsonb_agg(jsonb_build_object(
+      'id', w.id, 'student_id', w.student_id, 'week_start_date', w.week_start_date, 'week_end_date', w.week_end_date,
+      'attendance_summary', w.attendance_summary, 'skill_scores', w.skill_scores, 'habit_summary', w.habit_summary,
+      'highlights_vi', to_jsonb(w.highlights_vi), 'improvement_tips_vi', to_jsonb(w.improvement_tips_vi),
+      'teacher_summary_note', w.teacher_summary_note, 'teacher_name', w.teacher_name,
+      'featured_media_urls', w.featured_media_urls, 'generated_by', w.generated_by, 'has_activity', w.has_activity,
+      'published_at', w.published_at, 'parent_viewed_at', w.parent_viewed_at,
+      'courses', (select coalesce(jsonb_agg(distinct e.course_code), '[]') from public.enrollments e
+                   where e.student_id = w.student_id and e.status <> 'DROPPED')) order by w.week_start_date desc)
+    from (select * from public.weekly_progress_reports x
+           where x.student_id = p_student_id and (x.published_at is not null or v_staff)
+           order by x.week_start_date desc
+           limit least(greatest(coalesce(p_limit, 12), 1), 52)) w), '[]'::jsonb);
+end $$;
+
+-- First open by a parent (staff opening it does not count).
+create or replace function public.parent_weekly_report_viewed(p_report_id uuid)
+returns timestamptz
+language plpgsql
+volatile
+security definer
+set search_path = public
+as $$
+declare
+  v_row public.weekly_progress_reports;
+begin
+  select * into v_row from public.weekly_progress_reports where id = p_report_id;
+  if not found or v_row.published_at is null or public.current_parent_id() is null or not public.parent_can_see(v_row.student_id) then
+    raise exception 'Không tìm thấy báo cáo' using hint = 'NOT_FOUND';
+  end if;
+  if v_row.parent_viewed_at is null then
+    update public.weekly_progress_reports set parent_viewed_at = now() where id = p_report_id returning * into v_row;
+  end if;
+  return v_row.parent_viewed_at;
+end $$;
+
+-- ─── Push: register the new event ───────────────────────────────────────────
+alter table public.push_outbox drop constraint if exists push_outbox_event_type_check;
+alter table public.push_outbox add constraint push_outbox_event_type_check check (event_type in (
+  'DAILY_REPORT_POSTED', 'ATTENDANCE_CHECKIN', 'STREAK_OR_VOUCHER', 'UPCOMING_CLASS_REMINDER', 'NEW_LEAVE_REQUEST',
+  'HOT_LEAD_ASSIGNED', 'TRIAL_REMINDER_ACTION', 'WEEKLY_REPORT_READY'));
+
+-- Same as 20261130090000_push_notifications.sql + WEEKLY_REPORT_READY.
+create or replace function public.push_enqueue(p_event text, p_user uuid, p_role text, p_params jsonb, p_dedupe text)
+returns boolean
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_category text;
+  v_urgent   boolean;
+  v_count    int;
+begin
+  if p_user is null then return false; end if;
+  if not exists (select 1 from public.device_push_tokens where user_id = p_user and is_enabled) then return false; end if;
+  -- Keep in sync with TEMPLATES in supabase/functions/_shared/notificationTemplates.ts.
+  select c, u into v_category, v_urgent from (values
+    ('DAILY_REPORT_POSTED', 'CLASS', false), ('ATTENDANCE_CHECKIN', 'CLASS', false), ('STREAK_OR_VOUCHER', 'PROMO', false),
+    ('UPCOMING_CLASS_REMINDER', 'REMINDER', true), ('NEW_LEAVE_REQUEST', 'CLASS', false),
+    ('HOT_LEAD_ASSIGNED', 'REMINDER', true), ('TRIAL_REMINDER_ACTION', 'REMINDER', true),
+    ('WEEKLY_REPORT_READY', 'CLASS', false)
+  ) as t(e, c, u) where t.e = p_event;
+  if v_category is null then return false; end if;
+  insert into public.push_outbox (event_type, recipient_user_id, recipient_role, params, category, urgent, dedupe_key)
+  values (p_event, p_user, p_role, coalesce(p_params, '{}'), v_category, v_urgent, p_dedupe)
+  on conflict (dedupe_key) do nothing;
+  get diagnostics v_count = row_count;
+  return v_count > 0;
+end $$;
+
+-- ─── Grants ─────────────────────────────────────────────────────────────────
+
+revoke all on function public.vn_today() from public;
+revoke all on function public.week_monday(date) from public;
+revoke all on function public.habit_checkin(uuid, text, date) from public;
+revoke all on function public.weekly_report_source_internal(uuid, date) from public;
+revoke all on function public.staff_weekly_source(uuid, date) from public;
+revoke all on function public.weekly_digest_candidates(date, int) from public;
+revoke all on function public.weekly_report_save(uuid, date, jsonb, boolean) from public;
+revoke all on function public.weekly_report_mark_zalo(uuid) from public;
+revoke all on function public.weekly_report_teacher_note(uuid, date, text) from public;
+revoke all on function public.staff_weekly_overview(uuid, date) from public;
+revoke all on function public.parent_weekly_reports(uuid, int) from public;
+revoke all on function public.parent_weekly_report_viewed(uuid) from public;
+revoke all on function public.push_enqueue(text, uuid, text, jsonb, text) from public;
+
+grant execute on function public.vn_today() to authenticated, service_role;
+grant execute on function public.week_monday(date) to authenticated, service_role;
+grant execute on function public.habit_checkin(uuid, text, date) to authenticated;
+grant execute on function public.staff_weekly_source(uuid, date) to authenticated;
+grant execute on function public.weekly_report_teacher_note(uuid, date, text) to authenticated;
+grant execute on function public.staff_weekly_overview(uuid, date) to authenticated;
+grant execute on function public.parent_weekly_reports(uuid, int) to authenticated;
+grant execute on function public.parent_weekly_report_viewed(uuid) to authenticated;
+grant execute on function public.weekly_report_source_internal(uuid, date) to service_role;
+grant execute on function public.weekly_digest_candidates(date, int) to service_role;
+grant execute on function public.weekly_report_save(uuid, date, jsonb, boolean) to service_role;
+grant execute on function public.weekly_report_mark_zalo(uuid) to service_role;
 
 -- ───────────────── Reference data (required) ─────────────────
 insert into public.categories (code, name, icon, color, sort_order) values

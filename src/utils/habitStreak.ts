@@ -1,6 +1,6 @@
 /**
- * "Thử thách 21 Ngày" — small daily at-home habits, ticked off by the parent on this device.
- * Pure logic (tested); state lives in useHabitStore. Nothing here is sent to the centre.
+ * "Thử thách 21 Ngày" — small daily at-home habits, ticked off by the parent (stored on the device, synced to the centre).
+ * Pure logic (tested); state lives in useHabitStore.
  */
 import type { CourseCategory } from '@/types';
 

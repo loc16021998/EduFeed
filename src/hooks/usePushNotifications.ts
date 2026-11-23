@@ -43,6 +43,7 @@ export function usePushNotifications() {
       const go = () => {
         if (!navigationRef.isReady()) return setTimeout(go, 150);
         if (target.name === 'Home') navigationRef.navigate('MainTabs', { screen: 'Home' });
+        else if (target.name === 'WeeklyReport') navigationRef.navigate('WeeklyReport', target.params);
         else navigationRef.navigate(target.name);
       };
       go();
