@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button, ScreenHeader } from '@/components';
 import AppVersionFooter from '@/components/AppVersionFooter';
+import ReplayGuideCard from '@/screens/Onboarding/ReplayGuideCard';
 import { StatusBanner } from '@/components/ux';
 import type { RootStackScreenProps } from '@/navigation/types';
 import { useMediaPolicy, useNetworkStore } from '@/store/networkStore';
@@ -129,6 +130,7 @@ export default function DataSettingsScreen({ navigation }: RootStackScreenProps<
           <Text className="text-xs leading-[17px] text-ink-subtle">Không ảnh hưởng đăng nhập, lịch hẹn hay sổ liên lạc. Video không được lưu lại trên máy.</Text>
         </View>
 
+        <ReplayGuideCard />
         <AppVersionFooter />
       </ScrollView>
     </View>

@@ -9,6 +9,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import AppUpdates from '@/components/AppUpdates';
 import ErrorBoundary, { DevCrashProbe } from '@/components/ErrorBoundary';
 import AppNavigator from '@/navigation/AppNavigator';
+import OnboardingGate from '@/screens/Onboarding/OnboardingGate';
 import { initObservability } from '@/services/observability';
 import { useUiStore } from '@/store';
 import { startNetworkMonitor } from '@/store/networkStore';
@@ -44,6 +45,7 @@ export default function App() {
                 {__DEV__ && <DevCrashProbe />}
                 <AppNavigator />
                 <AppUpdates />
+                <OnboardingGate />
               </ErrorBoundary>
             </View>
           </View>
@@ -51,6 +53,7 @@ export default function App() {
           <ErrorBoundary>
             <AppNavigator />
             <AppUpdates />
+            <OnboardingGate />
           </ErrorBoundary>
         )}
         <StatusBar barStyle="dark-content" backgroundColor="#F3F8F5" />

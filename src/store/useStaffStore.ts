@@ -16,6 +16,8 @@ import { demoRequestStatus } from '@/services/staffRequests';
 interface StaffState {
   status: 'unknown' | 'signedOut' | 'signedIn';
   email: string | null;
+  /** Auth user id (opaque UUID; demo: "demo:<email>") — keys per-account state such as onboarding. */
+  userId: string | null;
   isStaff: boolean;
   /** Can manage staff accounts. */
   isAdmin: boolean;
@@ -30,6 +32,7 @@ const roleOf = (s: Session | null) => (s?.user.app_metadata as { role?: string }
 const fromSession = (s: Session | null) => ({
   status: s ? ('signedIn' as const) : ('signedOut' as const),
   email: s?.user.email ?? null,
+  userId: s?.user.id ?? null,
   isStaff: roleOf(s) === 'staff' || roleOf(s) === 'admin',
   isAdmin: roleOf(s) === 'admin',
   demo: false,
@@ -47,6 +50,7 @@ let initialised = false;
 export const useStaffStore = create<StaffState>()((set) => ({
   status: 'unknown',
   email: null,
+  userId: null,
   isStaff: false,
   isAdmin: false,
   demo: false,
@@ -76,7 +80,7 @@ export const useStaffStore = create<StaffState>()((set) => ({
       const admin = /^(admin|chu\.trung\.tam)/.test(e);
       // Demo roles: admin… = quản trị, chi.mai / tu.van… = tư vấn, others = giáo viên.
       setDemoKind(admin ? 'ADMIN' : /^(chi.mai|tu.van)/.test(e) ? 'ADVISOR' : 'TEACHER');
-      set({ status: 'signedIn', email: e, isStaff: true, isAdmin: admin, demo: true });
+      set({ status: 'signedIn', email: e, userId: `demo:${e}`, isStaff: true, isAdmin: admin, demo: true });
       return null;
     }
 
@@ -88,6 +92,6 @@ export const useStaffStore = create<StaffState>()((set) => ({
 
   signOut: async () => {
     if (supabase) await supabase.auth.signOut().catch(() => {});
-    set({ status: 'signedOut', email: null, isStaff: false, isAdmin: false, demo: false });
+    set({ status: 'signedOut', email: null, userId: null, isStaff: false, isAdmin: false, demo: false });
   },
 }));

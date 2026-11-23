@@ -1,4 +1,5 @@
 import AppVersionFooter from '@/components/AppVersionFooter';
+import ReplayGuideCard from '@/screens/Onboarding/ReplayGuideCard';
 import { LIST_PERF } from '@/utils/listPerf';
 import { EmptyState } from '@/components/ux';
 import { CalendarClock, ChevronLeft, ChevronRight, GraduationCap, ImagePlus, LogOut, Plus, ShieldCheck, ListChecks, QrCode, MessagesSquare } from 'lucide-react-native';
@@ -72,7 +73,7 @@ export default function StaffVideosScreen({ navigation }: RootStackScreenProps<'
         contentContainerClassName="gap-3 px-4 pb-10"
         refreshControl={<RefreshControl refreshing={status === 'loading'} onRefresh={load} tintColor={COLORS.brand} />}
         // Version + manual update check for support calls (teachers at both campuses).
-        ListFooterComponent={<View className="pt-4"><AppVersionFooter /></View>}
+        ListFooterComponent={<View className="gap-3 pt-4"><ReplayGuideCard /><AppVersionFooter /></View>}
         ListHeaderComponent={
           <View className="gap-3 pb-1">
             <Text className="text-xs text-ink-subtle">

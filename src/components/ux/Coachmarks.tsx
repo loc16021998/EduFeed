@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 
+import { useRoleOnboardingStore } from '@/store/onboardingStore';
 import { useOnboardingStore } from '@/store/useOnboardingStore';
 
 import Button from '../Button';
@@ -42,8 +43,10 @@ export default function Coachmarks({ tour, steps, enabled = true, bottom = 16 }:
   const seen = useOnboardingStore((s) => !!s.seen[tour]);
   const markSeen = useOnboardingStore((s) => s.markSeen);
   const [i, setI] = useState(0);
+  // The full-screen role walkthrough goes first; these smaller tips wait until it is closed.
+  const walkthroughOpen = useRoleOnboardingStore((s) => !!s.active);
 
-  if (!hydrated || seen || !enabled || steps.length === 0) return null;
+  if (!hydrated || seen || !enabled || walkthroughOpen || steps.length === 0) return null;
   const step = steps[Math.min(i, steps.length - 1)];
   const last = i >= steps.length - 1;
 
