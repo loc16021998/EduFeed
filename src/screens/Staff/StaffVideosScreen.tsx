@@ -2,7 +2,7 @@ import AppVersionFooter from '@/components/AppVersionFooter';
 import ReplayGuideCard from '@/screens/Onboarding/ReplayGuideCard';
 import { LIST_PERF } from '@/utils/listPerf';
 import { EmptyState } from '@/components/ux';
-import { CalendarClock, ChevronLeft, ChevronRight, GraduationCap, ImagePlus, LogOut, Plus, ShieldCheck, ListChecks, QrCode, MessagesSquare } from 'lucide-react-native';
+import { CalendarClock, ChevronLeft, ChevronRight, GraduationCap, ImagePlus, LogOut, Plus, ShieldCheck, ListChecks, QrCode, MessagesSquare, Settings } from 'lucide-react-native';
 import { useCallback, useEffect } from 'react';
 import { ActivityIndicator, FlatList, Pressable, RefreshControl, Text, View } from 'react-native';
 
@@ -61,9 +61,14 @@ export default function StaffVideosScreen({ navigation }: RootStackScreenProps<'
         title="Khu giáo viên"
         onBack={() => (navigation.canGoBack() ? navigation.goBack() : navigation.navigate('MainTabs', { screen: 'Home' }))}
         right={
-          <HeaderIconButton label="Đăng xuất" onPress={onSignOut}>
-            <LogOut size={20} color={COLORS.ink} />
-          </HeaderIconButton>
+          <View className="flex-row">
+            <HeaderIconButton label="Cài đặt & Tài khoản" onPress={() => navigation.navigate('Settings')}>
+              <Settings size={20} color={COLORS.ink} />
+            </HeaderIconButton>
+            <HeaderIconButton label="Đăng xuất" onPress={onSignOut}>
+              <LogOut size={20} color={COLORS.ink} />
+            </HeaderIconButton>
+          </View>
         }
       />
 

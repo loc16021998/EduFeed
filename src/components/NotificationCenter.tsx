@@ -1,4 +1,4 @@
-import { BellOff, CalendarCheck, CheckCheck, Gift, Info, X, type LucideIcon } from 'lucide-react-native';
+import { BellOff, CalendarCheck, CheckCheck, Gift, Info, X, type LucideIcon, Settings } from 'lucide-react-native';
 import { useEffect } from 'react';
 import { Modal, Pressable, ScrollView, Text, useWindowDimensions, View } from 'react-native';
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -30,13 +30,15 @@ interface Props {
   onClose: () => void;
   /** Open the screen a notification points to. */
   onNavigate: (link: NotificationLink) => void;
+  /** Gear button → "Cài đặt & Tài khoản". */
+  onOpenSettings?: () => void;
 }
 
 /**
  * Slide-out notification history (right edge). Swipe right or tap outside to close.
  * Opening it does not mark everything read — each item is read when tapped, or via "Đánh dấu đã đọc".
  */
-export default function NotificationCenter({ visible, onClose, onNavigate }: Props) {
+export default function NotificationCenter({ visible, onClose, onNavigate, onOpenSettings }: Props) {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const items = useNotificationStore((s) => s.items);
@@ -103,7 +105,12 @@ export default function NotificationCenter({ visible, onClose, onNavigate }: Pro
                     <Text className="text-xs font-bold text-brand-700">Đánh dấu đã đọc</Text>
                   </Pressable>
                 )}
-                <Pressable onPress={close} accessibilityRole="button" accessibilityLabel="Đóng" className="h-10 w-10 items-center justify-center rounded-full active:bg-slate-200">
+                {onOpenSettings && (
+                  <Pressable onPress={onOpenSettings} accessibilityRole="button" accessibilityLabel="Cài đặt & Tài khoản" className="h-11 w-11 items-center justify-center rounded-full active:bg-slate-200" testID="open-settings">
+                    <Settings size={20} color={COLORS.ink} />
+                  </Pressable>
+                )}
+                <Pressable onPress={close} accessibilityRole="button" accessibilityLabel="Đóng" className="h-11 w-11 items-center justify-center rounded-full active:bg-slate-200">
                   <X size={20} color={COLORS.ink} />
                 </Pressable>
               </View>

@@ -195,7 +195,22 @@ và body `{"weekStart":"2026-11-16","force":true}` — chỉ những bé chưa c
   không gửi trùng; tổng bình luận của khách tối đa 300 / giờ.
 - Xem / kiểm duyệt nhanh: `select v.title, c.author_name, c.author_role, c.content, c.is_hidden, c.created_at from public.video_comments c join public.videos v on v.id = c.video_id order by c.created_at desc limit 50;`
 
-## 10. Sau phát hành (24–48 giờ)
+## 10. Cài đặt & Tài khoản (/cai-dat)
+
+1. Chạy `supabase/sql/upgrades/20261203090000_account_center.sql` (sau bản 20261202). Tạo thêm bucket **avatars** (công khai,
+   tối đa 2 MB, mỗi tài khoản chỉ ghi vào thư mục của chính mình). Không cần deploy lại Edge Function.
+2. Lối vào: phụ huynh — dòng "Cài đặt & tài khoản" cuối Sổ liên lạc; khách — nút ⚙ trong bảng Thông báo ở EduFeed;
+   giáo viên / tư vấn — nút ⚙ trên Khu giáo viên; quản trị — nút ⚙ trên trang Quản trị.
+
+- **Hồ sơ:** đổi tên hiển thị và ảnh đại diện (phụ huynh lưu ở `users`, nhân viên ở `staff_profiles`). Số điện thoại / email
+  đăng nhập không tự đổi được (cần trung tâm xác minh).
+- **Xoá tài khoản (yêu cầu của App Store & Google Play):** người dùng gõ "XOA" để gửi yêu cầu; quản trị xử lý ở
+  Cài đặt → **Yêu cầu xoá tài khoản**. "Đã xoá xong" với phụ huynh: khoá đăng nhập, xoá ảnh đại diện và liên kết Zalo; với nhân
+  viên: nhớ khoá tài khoản ở **Tài khoản nhân viên**. Cam kết xử lý trong 7 ngày làm việc.
+- **Cấu hình phiên bản** (chỉ quản trị): sửa `app_release_config` ngay trong app thay vì Table Editor.
+- **Cơ sở ưu tiên** được chọn sẵn ở màn Đặt lịch học thử (trừ khi ba mẹ đã tự chọn cơ sở khác trên form).
+
+## 11. Sau phát hành (24–48 giờ)
 
 - Sentry: số lỗi mới theo `release`; lỗi `area:payment` / `area:zns` / `area:upload` cần xem ngay.
 - Supabase → Logs → Edge Functions: lỗi 5xx.

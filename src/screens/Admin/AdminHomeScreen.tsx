@@ -1,5 +1,5 @@
 import { useFocusEffect } from '@react-navigation/native';
-import { BarChart3, Bell, CalendarClock, ChevronRight, Clapperboard, GraduationCap, House, HeartHandshake, ImagePlus, LogOut, ShieldCheck, UserCheck, Users, ListChecks, QrCode, School } from 'lucide-react-native';
+import { BarChart3, Bell, CalendarClock, ChevronRight, Clapperboard, GraduationCap, House, HeartHandshake, ImagePlus, LogOut, ShieldCheck, UserCheck, Users, ListChecks, QrCode, School, Settings } from 'lucide-react-native';
 import type { ReactNode } from 'react';
 import { useCallback, useEffect, useState } from 'react';
 import { Image, Pressable, ScrollView, Text, useWindowDimensions, View, type ImageSourcePropType } from 'react-native';
@@ -77,6 +77,16 @@ export default function AdminHomeScreen({ navigation }: RootStackScreenProps<'Ad
           >
             <House size={18} color="#fff" />
             {!compact && <Text className="text-[13px] font-bold text-white">EduFeed</Text>}
+          </Pressable>
+          <Pressable
+            onPress={() => navigation.navigate('Settings')}
+            accessibilityRole="button"
+            accessibilityLabel="Cài đặt & Tài khoản"
+            testID="admin-settings"
+            hitSlop={4}
+            className="h-10 w-10 items-center justify-center rounded-full bg-white/10 active:bg-white/20"
+          >
+            <Settings size={18} color="#fff" />
           </Pressable>
           <Pressable
             onPress={onSignOut}

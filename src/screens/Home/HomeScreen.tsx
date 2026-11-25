@@ -341,7 +341,15 @@ export default function HomeScreen(_: TabScreenProps<'Home'>) {
           <Text className="rounded-2xl bg-ink/90 px-4 py-2.5 text-center text-[13px] font-semibold text-white">{socialNotice}</Text>
         </View>
       )}
-      <NotificationCenter visible={notificationsOpen} onClose={() => setNotificationsOpen(false)} onNavigate={openNotificationLink} />
+      <NotificationCenter
+        visible={notificationsOpen}
+        onClose={() => setNotificationsOpen(false)}
+        onNavigate={openNotificationLink}
+        onOpenSettings={() => {
+          setNotificationsOpen(false);
+          navigation.navigate('Settings');
+        }}
+      />
 
       {/* Staff only: quick access to publish a new video. */}
       {isStaff && (

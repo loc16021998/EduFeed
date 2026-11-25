@@ -56,6 +56,8 @@ export type RootStackParamList = {
   NotebookCheck: undefined;
   MiniGames: undefined;
   Community: undefined;
+  /** "Cài đặt & Tài khoản" — profile, campus, notifications, role shortcuts, support, sign out. */
+  Settings: undefined;
   DataSettings: undefined;
   /** Teachers: my classes, QR / manual attendance, batch contact book. */
   TeacherDashboard: undefined;

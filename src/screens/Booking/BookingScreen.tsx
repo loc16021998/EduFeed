@@ -102,10 +102,22 @@ export default function BookingScreen({ route, navigation }: TabScreenProps<'Boo
       phone: formatPhoneInput(profile.phone),
       childName: profile.childName,
       childAge: profile.childAge,
-      campus: profile.preferredCampus ?? undefined,
     });
+    // The form starts on CS1, so the saved campus must overwrite that default (prefill keeps non-empty values).
+    if (profile.preferredCampus) prefill({ campus: profile.preferredCampus }, { overwrite: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // "Cơ sở ưu tiên" changed in Settings while this tab was already mounted: follow it,
+  // unless the parent already picked a different campus on this form.
+  const campusPicked = useRef(false);
+  const lastPreferred = useRef(profile.preferredCampus);
+  useEffect(() => {
+    if (lastPreferred.current === profile.preferredCampus) return;
+    lastPreferred.current = profile.preferredCampus;
+    if (!campusPicked.current && profile.preferredCampus) prefill({ campus: profile.preferredCampus }, { overwrite: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profile.preferredCampus]);
 
   // Course passed from EduFeed / Quiz / Portfolio always wins.
   useEffect(() => {
@@ -158,6 +170,8 @@ export default function BookingScreen({ route, navigation }: TabScreenProps<'Boo
     setInteracted(false);
     navigation.navigate('BookingSuccess', { bookingId: record.id });
     resetForm();
+    campusPicked.current = false;
+    prefill({ campus: record.selectedCampus }, { overwrite: true });
   };
 
   const courseNote =
@@ -219,6 +233,7 @@ export default function BookingScreen({ route, navigation }: TabScreenProps<'Boo
             course={form.course}
             value={form.campus}
             onChange={(c) => {
+              campusPicked.current = true;
               edit('campus', c);
               // Remember the campus right away: next time (and other screens) start from it.
               profile.setProfile({ preferredCampus: c });

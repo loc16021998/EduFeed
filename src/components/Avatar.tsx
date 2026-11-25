@@ -8,8 +8,10 @@ interface AvatarProps {
 
 const initials = (name: string) =>
   name
-    .split(' ')
-    .filter(Boolean)
+    // "Mẹ An (mẫu)" → "MA": ignore notes in brackets and anything that isn't a word.
+    .replace(/\(.*?\)/g, ' ')
+    .split(/\s+/)
+    .filter((w) => !!w && w[0].toLowerCase() !== w[0].toUpperCase())
     .slice(-2)
     .map((w) => w[0]?.toUpperCase())
     .join('');

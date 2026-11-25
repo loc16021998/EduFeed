@@ -214,14 +214,14 @@ export default function ParentPortalScreen({ navigation }: RootStackScreenProps<
 
             <ReferralCard code={portal.parent.referralCode} onOpen={() => navigation.navigate('Referral')} />
             <Pressable
-              onPress={() => navigation.navigate('DataSettings')}
+              onPress={() => navigation.navigate('Settings')}
               accessibilityRole="button"
               className="min-h-12 flex-row items-center gap-3 rounded-2xl bg-white px-4 active:bg-slate-50"
               testID="open-data-settings"
             >
               <HardDrive size={18} color={COLORS.ink} />
-              <Text className="flex-1 text-[14px] font-semibold text-ink">Cài đặt</Text>
-              <Text className="text-xs text-ink-subtle">Tiết kiệm 4G · bộ nhớ · phiên bản ›</Text>
+              <Text className="flex-1 text-[14px] font-semibold text-ink">Cài đặt & tài khoản</Text>
+              <Text className="text-xs text-ink-subtle">Hồ sơ · thông báo · 4G ›</Text>
             </Pressable>
           </>
         )}

@@ -27,6 +27,7 @@ export default function CampusRadio({ course, value, onChange, error }: CampusRa
             disabled={!available}
             onPress={() => onChange(c.id)}
             accessibilityRole="radio"
+            aria-checked={selected}
             accessibilityState={{ checked: selected, disabled: !available }}
             accessibilityLabel={`${c.code}: ${c.shortAddress}${available ? '' : ', chưa mở lớp'}`}
             className={`flex-row items-center gap-3 rounded-2xl border-2 p-3.5 ${
