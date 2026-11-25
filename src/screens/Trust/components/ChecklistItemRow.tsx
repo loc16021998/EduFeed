@@ -44,7 +44,7 @@ function ChecklistItemRow({ item, checked, onToggle }: Props) {
           accessibilityRole="checkbox"
           accessibilityState={{ checked }}
           accessibilityLabel={item.label}
-          className="flex-1 flex-row items-start gap-3"
+          className="min-h-11 flex-1 flex-row items-center gap-3"
         >
           <Animated.View style={[{ width: 24, height: 24, borderRadius: 8, borderWidth: 2, alignItems: 'center', justifyContent: 'center' }, boxStyle]}>
             {checked && <Check size={15} color="#fff" strokeWidth={3.5} />}
@@ -57,7 +57,7 @@ function ChecklistItemRow({ item, checked, onToggle }: Props) {
           accessibilityRole="button"
           accessibilityLabel={showTip ? 'Ẩn gợi ý' : 'Xem gợi ý'}
           accessibilityState={{ expanded: showTip }}
-          className={`h-7 w-7 items-center justify-center rounded-full ${showTip ? 'bg-amber-100' : ''}`}
+          className={`-my-2 -mr-2 h-11 w-11 items-center justify-center rounded-full ${showTip ? 'bg-amber-100' : ''}`}
         >
           <Lightbulb size={16} color={showTip ? '#D97706' : '#94A3B8'} />
         </Pressable>

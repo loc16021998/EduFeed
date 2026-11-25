@@ -48,7 +48,7 @@ export default function VoiceNoteField({ value, onChange, disabled }: { value: P
       {value ? (
         <View className="gap-1.5">
           <VoiceFeedbackPlayer url={value.uri} duration={value.durationSec ?? null} seed={value.name} />
-          <Pressable onPress={() => onChange(null)} disabled={disabled} accessibilityRole="button" className="h-9 flex-row items-center gap-1.5 self-start rounded-full px-2 active:bg-slate-100">
+          <Pressable onPress={() => onChange(null)} disabled={disabled} accessibilityRole="button" className="h-11 flex-row items-center gap-1.5 self-start rounded-full px-2 active:bg-slate-100">
             <Trash2 size={14} color={COLORS.muted} />
             <Text className="text-xs font-semibold text-ink-muted">Ghi lại</Text>
           </Pressable>

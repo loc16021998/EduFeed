@@ -60,7 +60,7 @@ export default function QuizModal({ navigation }: RootStackScreenProps<'QuizModa
           <ChevronLeft size={24} color={COLORS.ink} />
         </IconBtn>
         <Text className="text-[15px] font-bold text-ink">Kiểm tra nhanh 30 giây</Text>
-        <IconBtn label="Đóng" onPress={() => navigation.goBack()}>
+        <IconBtn label="Đóng" onPress={() => (navigation.canGoBack() ? navigation.goBack() : navigation.navigate('MainTabs', { screen: 'Home' }))}>
           <X size={22} color={COLORS.ink} />
         </IconBtn>
       </View>

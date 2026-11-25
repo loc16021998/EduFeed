@@ -112,7 +112,7 @@ export default function TeacherUploadScreen({ navigation }: RootStackScreenProps
           <FormField label="Giáo viên" value={d.teacherName} onChangeText={(t) => set('teacherName', t)} error={errors.teacherName} placeholder="VD: Cô Hường" maxLength={60} />
           <View className="flex-row flex-wrap gap-1.5">
             {TEACHERS.map((t) => (
-              <Pressable key={t.id} onPress={() => set('teacherName', t.name)} accessibilityRole="button" className="h-9 justify-center rounded-full border border-dashed border-slate-300 px-3.5 active:bg-slate-50">
+              <Pressable key={t.id} onPress={() => set('teacherName', t.name)} accessibilityRole="button" className="h-11 justify-center rounded-full border border-dashed border-slate-300 px-3.5 active:bg-slate-50">
                 <Text className="text-xs text-ink-muted">{t.name}</Text>
               </Pressable>
             ))}
@@ -184,7 +184,7 @@ function Chips({ label, options, value, onChange, error }: { label: string; opti
               onPress={() => onChange(o.id)}
               accessibilityRole="radio"
               accessibilityState={{ checked: active }}
-              className={`flex-row items-center gap-1.5 rounded-full border px-3.5 py-2 ${active ? 'border-brand-500 bg-brand-50' : 'border-slate-200 bg-white'}`}
+              className={`min-h-11 flex-row items-center gap-1.5 rounded-full border px-3.5 py-2 ${active ? 'border-brand-500 bg-brand-50' : 'border-slate-200 bg-white'}`}
             >
               {!!o.color && <View className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: o.color }} />}
               <Text className={`text-[13px] font-semibold ${active ? 'text-brand-700' : 'text-ink'}`}>{o.label}</Text>

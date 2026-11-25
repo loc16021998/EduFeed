@@ -171,7 +171,7 @@ export default function StaffLoginScreen({ navigation, route }: RootStackScreenP
                 <Text className="text-center text-[11px] leading-4 text-ink-subtle">
                   Chỉ quản trị viên đang đăng nhập mới tạo được tài khoản quản trị mới.
                 </Text>
-                <Pressable onPress={() => navigation.navigate('StaffLogin')} accessibilityRole="link" className="items-center pt-1">
+                <Pressable onPress={() => navigation.navigate('StaffLogin')} accessibilityRole="link" className="min-h-11 items-center justify-center">
                   <Text className="text-[13px] font-semibold text-brand-600">Bạn là giáo viên / nhân viên? Đăng nhập tại đây</Text>
                 </Pressable>
               </View>

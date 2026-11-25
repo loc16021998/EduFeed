@@ -21,7 +21,7 @@ export default function SubjectFilter({ options, value, onChange }: SubjectFilte
             onPress={() => onChange(c)}
             accessibilityRole="tab"
             accessibilityState={{ selected: active }}
-            className={`flex-1 items-center justify-center rounded-xl px-1 py-2.5 ${active ? 'bg-white shadow-sm shadow-black/10' : ''}`}
+            className={`min-h-11 flex-1 items-center justify-center rounded-xl px-1 py-2 ${active ? 'bg-white shadow-sm shadow-black/10' : ''}`}
           >
             <Text
               className="text-center text-[13px] font-bold"

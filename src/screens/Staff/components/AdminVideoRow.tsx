@@ -80,7 +80,7 @@ function RowButton({ label, onPress, disabled, children }: { label: string; onPr
       disabled={disabled}
       accessibilityRole="button"
       accessibilityLabel={label}
-      className={`h-9 flex-row items-center gap-1 rounded-full px-3 active:bg-slate-100 ${disabled ? 'opacity-40' : ''}`}
+      className={`h-11 flex-row items-center gap-1 rounded-full px-3 active:bg-slate-100 ${disabled ? 'opacity-40' : ''}`}
     >
       {children}
       <Text className="text-xs font-semibold text-ink">{label}</Text>

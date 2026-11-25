@@ -93,7 +93,7 @@ export default function StaffRegisterScreen({ navigation, route }: RootStackScre
               <FormField label="Vị trí / ghi chú cho quản trị viên (không bắt buộc)" value={form.note} onChangeText={set('note')} error={errors.note} placeholder="VD: Giáo viên Luyện chữ, cơ sở Xa La" maxLength={300} />
               {!!errors.form && <Text className="rounded-xl bg-red-50 p-2.5 text-xs leading-[18px] text-red-700">{errors.form}</Text>}
               <Button title="Gửi đăng ký" size="lg" loading={busy} onPress={submit} />
-              <Pressable onPress={() => navigation.navigate('StaffLogin')} accessibilityRole="link" className="self-center py-1">
+              <Pressable onPress={() => navigation.navigate('StaffLogin')} accessibilityRole="link" className="min-h-11 justify-center self-center px-2">
                 <Text className="text-[13px] font-semibold text-brand-600">Đã có tài khoản? Đăng nhập</Text>
               </Pressable>
             </View>
@@ -124,7 +124,7 @@ export default function StaffRegisterScreen({ navigation, route }: RootStackScre
             {status !== 'signedIn' && (
               <Button title="Đăng nhập quản trị để mở khóa" className="self-stretch" onPress={() => navigation.navigate('AdminLogin', { next: 'createAdmin' })} />
             )}
-            <Pressable onPress={() => navigation.navigate('StaffRegister', { type: 'staff' })} accessibilityRole="link" className="py-1">
+            <Pressable onPress={() => navigation.navigate('StaffRegister', { type: 'staff' })} accessibilityRole="link" className="min-h-11 justify-center">
               <Text className="text-center text-[13px] font-semibold text-brand-600">Bạn là giáo viên / nhân viên? Đăng ký tại đây</Text>
             </Pressable>
           </View>

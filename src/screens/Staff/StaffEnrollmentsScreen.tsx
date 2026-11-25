@@ -149,7 +149,7 @@ export default function StaffEnrollmentsScreen({ navigation }: RootStackScreenPr
                 onPress={() => setFilter(f.id)}
                 accessibilityRole="tab"
                 accessibilityState={{ selected: active }}
-                className={`rounded-full px-4 py-2 ${active ? 'bg-brand-500' : 'border border-slate-200 bg-white'}`}
+                className={`min-h-11 justify-center rounded-full px-4 py-2 ${active ? 'bg-brand-500' : 'border border-slate-200 bg-white'}`}
               >
                 <Text className={`text-sm font-semibold ${active ? 'text-white' : 'text-ink-muted'}`}>{f.label}</Text>
               </Pressable>
@@ -279,7 +279,7 @@ function EnrollmentCard({ e, busy, onComplete, onDrop, onContacted, onCertificat
         <View className="flex-row items-center justify-between">
           <Text className="text-[13px] text-ink-muted">{e.parentName}</Text>
           {!!e.phone && (
-            <Pressable onPress={() => Linking.openURL(`tel:${e.phone}`).catch(() => {})} accessibilityRole="link" className="h-9 flex-row items-center gap-1 rounded-full bg-brand-50 px-3 active:bg-brand-100">
+            <Pressable onPress={() => Linking.openURL(`tel:${e.phone}`).catch(() => {})} accessibilityRole="link" className="h-11 flex-row items-center gap-1 rounded-full bg-brand-50 px-3 active:bg-brand-100">
               <Phone size={13} color={COLORS.brand} />
               <Text className="text-xs font-bold text-brand-700">{formatPhone(e.phone)}</Text>
             </Pressable>
@@ -390,7 +390,7 @@ function CompleteModal({ enrollment, onClose, onSubmit }: { enrollment: Enrollme
               <Text className="text-[13px] font-semibold text-ink-muted">Cấp độ đã hoàn thành</Text>
               <View className="flex-row gap-2">
                 {Array.from({ length: MAX_LEVEL }, (_, i) => i + 1).map((l) => (
-                  <Pressable key={l} onPress={() => setLevel(l)} accessibilityRole="radio" accessibilityState={{ checked: l === level }} className={`rounded-full border px-4 py-2 ${l === level ? 'border-brand-500 bg-brand-50' : 'border-slate-200 bg-white'}`}>
+                  <Pressable key={l} onPress={() => setLevel(l)} accessibilityRole="radio" accessibilityState={{ checked: l === level }} className={`min-h-11 justify-center rounded-full border px-4 py-2 ${l === level ? 'border-brand-500 bg-brand-50' : 'border-slate-200 bg-white'}`}>
                     <Text className={`text-[13px] font-semibold ${l === level ? 'text-brand-700' : 'text-ink'}`}>Cấp {l}</Text>
                   </Pressable>
                 ))}
@@ -602,7 +602,7 @@ function InvoiceModal({ enrollment, onClose, onOpenPayment }: { enrollment: Enro
                       {draft.vouchers.map((v) => {
                         const on = v.id === voucherId;
                         return (
-                          <Pressable key={v.id} onPress={() => setVoucherId(on ? null : v.id)} accessibilityRole="checkbox" aria-checked={on} accessibilityState={{ checked: on }} className={`rounded-full border px-3 py-2 ${on ? 'border-emerald-500 bg-emerald-50' : 'border-slate-200 bg-white'}`}>
+                          <Pressable key={v.id} onPress={() => setVoucherId(on ? null : v.id)} accessibilityRole="checkbox" aria-checked={on} accessibilityState={{ checked: on }} className={`min-h-11 justify-center rounded-full border px-3 py-2 ${on ? 'border-emerald-500 bg-emerald-50' : 'border-slate-200 bg-white'}`}>
                             <Text className={`text-[13px] font-semibold ${on ? 'text-emerald-700' : 'text-ink'}`}>
                               {on ? '✓ ' : ''}
                               {v.code} · {formatVnd(v.amountVnd)}
@@ -752,7 +752,7 @@ function ReportModal({ enrollment, onClose, onDone }: { enrollment: Enrollment |
               {ATTENDANCE_OPTIONS.map((o) => {
                 const on = attendance === o.id;
                 return (
-                  <Pressable key={o.id} onPress={() => setAttendance(o.id)} accessibilityRole="radio" aria-checked={on} accessibilityState={{ checked: on }} className={`flex-1 items-center rounded-2xl border py-2.5 ${on ? 'border-brand-500 bg-brand-50' : 'border-slate-200 bg-white'}`}>
+                  <Pressable key={o.id} onPress={() => setAttendance(o.id)} accessibilityRole="radio" aria-checked={on} accessibilityState={{ checked: on }} className={`min-h-11 flex-1 items-center justify-center rounded-2xl border py-2.5 ${on ? 'border-brand-500 bg-brand-50' : 'border-slate-200 bg-white'}`}>
                     <Text className={`text-[13px] font-semibold ${on ? 'text-brand-700' : 'text-ink'}`}>{o.label}</Text>
                   </Pressable>
                 );

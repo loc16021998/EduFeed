@@ -81,7 +81,7 @@ export default function ChannelBreakdown({ channels, periodDays }: Props) {
         onPress={() => setShowGuide((v) => !v)}
         accessibilityRole="button"
         accessibilityState={{ expanded: showGuide }}
-        className="flex-row items-center gap-1 self-start py-1"
+        className="min-h-11 flex-row items-center gap-1 self-start"
       >
         <Text className="text-xs font-semibold text-brand-600">Cách gắn nguồn cho link quảng cáo</Text>
         {showGuide ? <ChevronUp size={14} color={COLORS.brand} /> : <ChevronDown size={14} color={COLORS.brand} />}

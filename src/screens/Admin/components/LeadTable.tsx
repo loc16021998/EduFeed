@@ -47,7 +47,7 @@ export function StatusFilterBar({ value, onChange }: { value: LeadStatusGroup; o
             onPress={() => onChange(f.id)}
             accessibilityRole="tab"
             accessibilityState={{ selected: active }}
-            className={`rounded-full px-3.5 py-1.5 ${active ? 'bg-ink' : 'border border-slate-200 bg-white'}`}
+            className={`min-h-11 justify-center rounded-full px-3.5 py-1.5 ${active ? 'bg-ink' : 'border border-slate-200 bg-white'}`}
           >
             <Text className={`text-[13px] font-semibold ${active ? 'text-white' : 'text-ink-muted'}`}>{f.label}</Text>
           </Pressable>
@@ -94,7 +94,7 @@ function Actions({ lead, compact }: { lead: DashboardLead; compact?: boolean }) 
         onPress={() => call(lead.phone)}
         accessibilityRole="button"
         accessibilityLabel={`Gọi ${lead.parentName}, số ${formatPhone(lead.phone)}`}
-        className={`flex-row items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 ${compact ? 'h-9 flex-1' : 'h-9'} active:bg-slate-50`}
+        className={`flex-row items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 ${compact ? 'h-11 flex-1' : 'h-11'} active:bg-slate-50`}
       >
         <Phone size={14} color={COLORS.ink} />
         <Text className="text-[13px] font-semibold text-ink">Gọi</Text>
@@ -103,7 +103,7 @@ function Actions({ lead, compact }: { lead: DashboardLead; compact?: boolean }) 
         onPress={() => zalo(lead.phone)}
         accessibilityRole="link"
         accessibilityLabel={`Mở Zalo chat với ${lead.parentName}`}
-        className={`flex-row items-center justify-center gap-1.5 rounded-xl border border-brand-100 bg-brand-50 px-3 ${compact ? 'h-9 flex-1' : 'h-9'} active:bg-brand-100`}
+        className={`flex-row items-center justify-center gap-1.5 rounded-xl border border-brand-100 bg-brand-50 px-3 ${compact ? 'h-11 flex-1' : 'h-11'} active:bg-brand-100`}
       >
         <MessageCircle size={14} color={COLORS.brand} />
         <Text className="text-[13px] font-semibold text-brand-700">Chat Zalo</Text>

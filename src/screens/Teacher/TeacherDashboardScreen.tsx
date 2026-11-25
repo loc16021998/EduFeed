@@ -356,7 +356,7 @@ function BatchReportPanel({ cls, roster, onSent }: { cls: ClassInfo; roster: Ros
       <View className="gap-2 rounded-3xl bg-white p-4">
         <View className="flex-row items-center justify-between">
           <Text className="text-[15px] font-bold text-ink">Học viên ({selected.length})</Text>
-          <Pressable onPress={() => setSelected(selected.length === eligible.length ? [] : eligible.map((r) => r.studentId!))} accessibilityRole="button" className="h-9 justify-center px-2">
+          <Pressable onPress={() => setSelected(selected.length === eligible.length ? [] : eligible.map((r) => r.studentId!))} accessibilityRole="button" className="h-11 justify-center px-2">
             <Text className="text-[13px] font-semibold text-brand-700">{selected.length === eligible.length ? 'Bỏ chọn' : 'Chọn tất cả'}</Text>
           </Pressable>
         </View>
@@ -380,7 +380,7 @@ function BatchReportPanel({ cls, roster, onSent }: { cls: ClassInfo; roster: Ros
           {FEEDBACK_TAGS.map((t) => {
             const on = tags.includes(t);
             return (
-              <Pressable key={t} onPress={() => setTags((cur) => (on ? cur.filter((x) => x !== t) : [...cur, t].slice(0, 8)))} accessibilityRole="checkbox" aria-checked={on} accessibilityState={{ checked: on }} className={`h-9 justify-center rounded-full border px-3 ${on ? 'border-emerald-500 bg-emerald-50' : 'border-slate-200 bg-white'}`}>
+              <Pressable key={t} onPress={() => setTags((cur) => (on ? cur.filter((x) => x !== t) : [...cur, t].slice(0, 8)))} accessibilityRole="checkbox" aria-checked={on} accessibilityState={{ checked: on }} className={`h-11 justify-center rounded-full border px-3 ${on ? 'border-emerald-500 bg-emerald-50' : 'border-slate-200 bg-white'}`}>
                 <Text className={`text-[13px] font-semibold ${on ? 'text-emerald-700' : 'text-ink-muted'}`}>{t}</Text>
               </Pressable>
             );

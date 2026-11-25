@@ -139,7 +139,7 @@ export default function AccountManagementScreen({ navigation }: RootStackScreenP
               ['referral', 'Giới thiệu'],
             ] as const
           ).map(([id, label]) => (
-            <Pressable key={id} onPress={() => setTab(id)} accessibilityRole="tab" aria-selected={tab === id} accessibilityState={{ selected: tab === id }} className={`flex-1 items-center rounded-xl py-2.5 ${tab === id ? 'bg-white' : ''}`}>
+            <Pressable key={id} onPress={() => setTab(id)} accessibilityRole="tab" aria-selected={tab === id} accessibilityState={{ selected: tab === id }} className={`min-h-11 flex-1 items-center justify-center rounded-xl py-2.5 ${tab === id ? 'bg-white' : ''}`}>
               <Text className={`text-[14px] font-bold ${tab === id ? 'text-brand-700' : 'text-ink-muted'}`}>{label}</Text>
             </Pressable>
           ))}
@@ -225,7 +225,7 @@ function Banners({ demo, notice, error }: { demo: boolean; notice: string | null
 
 function Pill({ label, on, onPress }: { label: string; on: boolean; onPress: () => void }) {
   return (
-    <Pressable onPress={onPress} accessibilityRole="radio" aria-checked={on} accessibilityState={{ checked: on }} className={`rounded-full border px-3.5 py-2 ${on ? 'border-brand-500 bg-brand-500' : 'border-slate-200 bg-white'}`}>
+    <Pressable onPress={onPress} accessibilityRole="radio" aria-checked={on} accessibilityState={{ checked: on }} className={`min-h-11 justify-center rounded-full border px-3.5 py-2 ${on ? 'border-brand-500 bg-brand-500' : 'border-slate-200 bg-white'}`}>
       <Text className={`text-[13px] font-semibold ${on ? 'text-white' : 'text-ink-muted'}`}>{label}</Text>
     </Pressable>
   );
@@ -271,14 +271,14 @@ function ParentCard({ p, busy, onToggle, onAdjust, onAddChild }: { p: AdminParen
                   {e.schedule.length ? ` · ${e.schedule.map((x) => (x.d === 8 ? 'CN' : `T${x.d}`) + ' ' + x.start).join(', ')}` : ''}
                 </Text>
                 <View className="flex-row items-center gap-1.5">
-                  <Pressable onPress={() => onAdjust(e.id, -1)} disabled={busy || (e.sessionsRemaining ?? 0) <= 0} accessibilityRole="button" accessibilityLabel={`Bớt 1 buổi ${s.fullName}`} className="h-8 w-8 items-center justify-center rounded-full bg-white active:bg-slate-200">
+                  <Pressable onPress={() => onAdjust(e.id, -1)} disabled={busy || (e.sessionsRemaining ?? 0) <= 0} accessibilityRole="button" accessibilityLabel={`Bớt 1 buổi ${s.fullName}`} hitSlop={6} className="h-9 w-9 items-center justify-center rounded-full bg-white active:bg-slate-200">
                     <Minus size={15} color={COLORS.ink} />
                   </Pressable>
                   <Text className={`min-w-[52px] text-center text-[13px] font-extrabold ${low ? 'text-red-600' : 'text-ink'}`} testID="admin-sessions">
                     {e.sessionsRemaining ?? '—'}
                     {e.sessionsTotal ? `/${e.sessionsTotal}` : ''}
                   </Text>
-                  <Pressable onPress={() => onAdjust(e.id, 1)} disabled={busy} accessibilityRole="button" accessibilityLabel={`Thêm 1 buổi ${s.fullName}`} className="h-8 w-8 items-center justify-center rounded-full bg-white active:bg-slate-200">
+                  <Pressable onPress={() => onAdjust(e.id, 1)} disabled={busy} accessibilityRole="button" accessibilityLabel={`Thêm 1 buổi ${s.fullName}`} hitSlop={6} className="h-9 w-9 items-center justify-center rounded-full bg-white active:bg-slate-200">
                     <Plus size={15} color={COLORS.ink} />
                   </Pressable>
                 </View>

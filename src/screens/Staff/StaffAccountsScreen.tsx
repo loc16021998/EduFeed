@@ -124,7 +124,7 @@ export default function StaffAccountsScreen({ navigation }: RootStackScreenProps
                   {!!item.displayName && <Text className="text-xs text-ink-muted" numberOfLines={1}>{item.email}</Text>}
                   <Text className="text-[11px] text-ink-subtle">{when(item.lastSignInAt)}</Text>
                   {!admin && profiles[item.email.toLowerCase()] && (
-                    <Pressable onPress={() => setRoleFor(item)} accessibilityRole="button" accessibilityLabel="Phân vai trò và cơ sở" className="-ml-1 mt-1 min-h-9 flex-row items-center self-start rounded-full bg-brand-50 px-3 py-1.5 active:bg-brand-100">
+                    <Pressable onPress={() => setRoleFor(item)} accessibilityRole="button" accessibilityLabel="Phân vai trò và cơ sở" className="-ml-1 mt-1 min-h-11 flex-row items-center self-start rounded-full bg-brand-50 px-3 py-1.5 active:bg-brand-100">
                     <Text className="text-xs font-semibold text-brand-700" testID="staff-kind">
                       {KIND_LABEL[profiles[item.email.toLowerCase()].kind]}
                       {profiles[item.email.toLowerCase()].campus ? ` · ${CAMPUS_LABELS[profiles[item.email.toLowerCase()].campus!]}` : ' · mọi cơ sở'}
@@ -186,7 +186,7 @@ function Action({ icon, label, a11y, onPress, danger }: { icon: ReactNode; label
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={a11y ?? label}
-      className={`h-9 flex-row items-center gap-1.5 rounded-xl px-3 active:bg-slate-50 ${danger ? '' : 'border border-slate-200'}`}
+      className={`h-11 flex-row items-center gap-1.5 rounded-xl px-3 active:bg-slate-50 ${danger ? '' : 'border border-slate-200'}`}
     >
       {icon}
       <Text className={`text-[13px] font-semibold ${danger ? 'text-red-700' : 'text-ink'}`}>{label}</Text>

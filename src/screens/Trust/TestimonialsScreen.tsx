@@ -33,7 +33,7 @@ export default function TestimonialsScreen({ navigation, route }: RootStackScree
 
   return (
     <View className="flex-1 bg-surface">
-      <ScreenHeader title="Góc Phụ huynh" onBack={() => navigation.goBack()} />
+      <ScreenHeader title="Góc Phụ huynh" onBack={() => (navigation.canGoBack() ? navigation.goBack() : navigation.navigate('MainTabs', { screen: 'Home' }))} />
 
       <ScrollView className="flex-1" contentContainerClassName="gap-6 pb-8 pt-1">
         <View className="px-4">

@@ -235,7 +235,7 @@ export default function PaymentScreen({ route, navigation }: RootStackScreenProp
             )}
 
             {hasHotline && invoice.status !== 'PAID' && (
-              <Pressable onPress={() => Linking.openURL(`tel:${ENV.hotline}`).catch(() => {})} accessibilityRole="link" className="flex-row items-center justify-center gap-1.5 py-2">
+              <Pressable onPress={() => Linking.openURL(`tel:${ENV.hotline}`).catch(() => {})} accessibilityRole="link" className="min-h-11 flex-row items-center justify-center gap-1.5 py-2">
                 <Phone size={14} color={COLORS.brand} />
                 <Text className="text-[13px] font-semibold text-brand-700">Cần hỗ trợ? Gọi {formatPhone(ENV.hotline)}</Text>
               </Pressable>

@@ -105,7 +105,7 @@ export default function VideoShareScreen({ navigation, route }: RootStackScreenP
               onFollow={() => {}}
               onCta={book}
             />
-            <Pressable onPress={goHome} className="items-center py-2" accessibilityRole="link">
+            <Pressable onPress={goHome} className="min-h-11 items-center justify-center py-2" accessibilityRole="link">
               <Text className="text-[13px] font-semibold text-brand-600">Xem thêm video của TH EDU →</Text>
             </Pressable>
           </ScrollView>

@@ -65,7 +65,7 @@ export default function HabitStreakWidget({ studentId, studentName, courses }: {
               }}
               accessibilityRole="button"
               accessibilityState={{ selected: on }}
-              className={`h-9 flex-row items-center gap-1.5 rounded-full px-3 ${on ? 'bg-brand-500' : 'bg-slate-100 active:bg-slate-200'}`}
+              className={`h-11 flex-row items-center gap-1.5 rounded-full px-3 ${on ? 'bg-brand-500' : 'bg-slate-100 active:bg-slate-200'}`}
             >
               <Text className="text-[14px]">{c.emoji}</Text>
               <Text className={`text-[13px] font-semibold ${on ? 'text-white' : 'text-ink'}`}>{c.title}</Text>

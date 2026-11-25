@@ -126,7 +126,8 @@ function FeedVideoCard({
           onPress={() => onFollow(item.teacherName)}
           accessibilityRole="button"
           accessibilityState={{ selected: following }}
-          className={`ml-1 h-9 justify-center rounded-full px-3.5 ${following ? 'border border-white/70 bg-white/10' : 'bg-white'}`}
+          hitSlop={4}
+          className={`ml-1 h-10 justify-center rounded-full px-3.5 ${following ? 'border border-white/70 bg-white/10' : 'bg-white'}`}
         >
           <Text className={`text-xs font-bold ${following ? 'text-white' : 'text-brand-600'}`}>
             {following ? 'Đang theo dõi' : '+ Theo dõi'}

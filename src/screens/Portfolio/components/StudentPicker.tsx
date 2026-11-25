@@ -22,7 +22,7 @@ export default function StudentPicker({ students, selectedId, onSelect, accent }
             onPress={() => onSelect(s.id)}
             accessibilityRole="button"
             accessibilityState={{ selected: active }}
-            className="flex-row items-center gap-2 rounded-full border-2 bg-white py-1 pl-1 pr-3.5"
+            className="min-h-11 flex-row items-center gap-2 rounded-full border-2 bg-white py-1 pl-1.5 pr-3.5"
             style={{ borderColor: active ? accent : '#E2E8F0' }}
           >
             <Avatar name={s.studentName} size={28} />

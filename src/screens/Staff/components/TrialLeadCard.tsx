@@ -85,7 +85,7 @@ function TrialLeadCard({ lead, busy, onConfirm, onCancel, onComplete, onEnroll }
             onPress={() => Linking.openURL(`tel:${lead.phone}`)}
             accessibilityRole="link"
             accessibilityLabel={`Gọi ${lead.parentName}`}
-            className="h-9 flex-row items-center gap-1 rounded-full bg-brand-50 px-3 active:bg-brand-100"
+            className="h-11 flex-row items-center gap-1 rounded-full bg-brand-50 px-3 active:bg-brand-100"
           >
             <Phone size={13} color={COLORS.brand} />
             <Text className="text-xs font-bold text-brand-700">{formatPhone(lead.phone)}</Text>

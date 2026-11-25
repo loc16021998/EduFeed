@@ -154,7 +154,7 @@ export default function CategoryChips({ options, value, onChange }: CategoryChip
               onLayout={(e) => (chipLayout.current[c] = e.nativeEvent.layout)}
               accessibilityRole="button"
               accessibilityState={{ selected: active }}
-              className={`rounded-full px-4 py-2 ${active ? 'bg-brand-500' : 'bg-white border border-slate-200'}`}
+              className={`min-h-11 justify-center rounded-full px-4 py-2 ${active ? 'bg-brand-500' : 'bg-white border border-slate-200'}`}
             >
               <Text className={`text-sm font-semibold ${active ? 'text-white' : 'text-ink-muted'}`}>
                 {CATEGORY_LABELS[c]}
@@ -186,7 +186,8 @@ function EdgeArrow({ side, onPress }: { side: 'left' | 'right'; onPress: () => v
         onPress={onPress}
         accessibilityRole="button"
         accessibilityLabel={side === 'left' ? 'Xem các môn trước' : 'Xem thêm môn học'}
-        className="h-8 w-8 items-center justify-center rounded-full border border-slate-200 bg-white active:bg-slate-100"
+        hitSlop={6}
+        className="h-11 w-11 items-center justify-center rounded-full border border-slate-200 bg-white active:bg-slate-100"
         style={{ shadowColor: '#0F172A', shadowOpacity: 0.12, shadowRadius: 6, shadowOffset: { width: 0, height: 2 }, elevation: 3 }}
       >
         <Icon size={18} color={COLORS.ink} />

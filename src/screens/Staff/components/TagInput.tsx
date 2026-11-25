@@ -83,7 +83,7 @@ export default function TagInput({ value, onChange, suggestions = [], max = 6 }:
               onPress={() => add(s)}
               accessibilityRole="button"
               accessibilityLabel={`Thêm ${s}`}
-              className="h-9 flex-row items-center gap-1 rounded-full border border-dashed border-slate-300 px-3"
+              className="h-11 flex-row items-center gap-1 rounded-full border border-dashed border-slate-300 px-3"
             >
               <Plus size={11} color={COLORS.muted} />
               <Text className="text-xs text-ink-muted">{s}</Text>

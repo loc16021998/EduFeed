@@ -62,7 +62,7 @@ export default function ChecklistScreen({ navigation, route }: RootStackScreenPr
     <View className="flex-1 bg-surface">
       <ScreenHeader
         title="Checklist cho ba mẹ"
-        onBack={() => navigation.goBack()}
+        onBack={() => (navigation.canGoBack() ? navigation.goBack() : navigation.navigate('MainTabs', { screen: 'Home' }))}
         right={
           done > 0 ? (
             <HeaderIconButton label="Làm lại" onPress={confirmReset}>

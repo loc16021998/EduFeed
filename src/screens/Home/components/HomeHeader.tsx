@@ -113,7 +113,7 @@ export default function HomeHeader({
             accessibilityRole="button"
             accessibilityLabel={`CLB Phụ huynh: ${club.done} trên ${club.total} huy hiệu`}
             testID="club-button"
-            className="h-9 flex-row items-center gap-1 rounded-full bg-amber-100 px-2.5 active:bg-amber-200"
+            className="h-11 flex-row items-center gap-1 rounded-full bg-amber-100 px-2.5 active:bg-amber-200"
           >
             <Trophy size={16} color="#B45309" />
             <Text className="text-xs font-extrabold text-amber-800">

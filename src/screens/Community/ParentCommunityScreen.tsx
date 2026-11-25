@@ -208,10 +208,11 @@ function Chip({ label, on, onPress, small }: { label: string; on: boolean; onPre
   return (
     <Pressable
       onPress={onPress}
+      hitSlop={4}
       accessibilityRole="tab"
       aria-selected={on}
       accessibilityState={{ selected: on }}
-      className={`${small ? 'h-8 px-3' : 'h-10 px-3.5'} justify-center rounded-full border ${on ? 'border-brand-500 bg-brand-500' : 'border-slate-200 bg-white'}`}
+      className={`${small ? 'h-10 px-3.5' : 'h-11 px-3.5'} justify-center rounded-full border ${on ? 'border-brand-500 bg-brand-500' : 'border-slate-200 bg-white'}`}
     >
       <Text className={`${small ? 'text-xs' : 'text-[13px]'} font-semibold ${on ? 'text-white' : 'text-ink'}`}>{label}</Text>
     </Pressable>

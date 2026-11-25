@@ -655,7 +655,7 @@ function ReferralCard({ code, onOpen }: { code: string; onOpen: () => void }) {
       <View className="flex-row items-center gap-2">
         <Gift size={18} color="#B45309" />
         <Text className="flex-1 text-[15px] font-bold text-amber-900">Giới thiệu bạn bè</Text>
-        <Pressable onPress={onOpen} accessibilityRole="button" hitSlop={6} className="h-9 justify-center rounded-full bg-amber-100 px-3.5 active:bg-amber-200" testID="open-referral">
+        <Pressable onPress={onOpen} accessibilityRole="button" hitSlop={6} className="h-11 justify-center rounded-full bg-amber-100 px-3.5 active:bg-amber-200" testID="open-referral">
           <Text className="text-[13px] font-bold text-amber-800">Xem quà & bạn bè ›</Text>
         </Pressable>
       </View>
@@ -669,7 +669,7 @@ function ReferralCard({ code, onOpen }: { code: string; onOpen: () => void }) {
             onPress={() => navigator.clipboard.writeText(code).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1500); }, () => {})}
             accessibilityRole="button"
             accessibilityLabel="Sao chép mã giới thiệu"
-            className="h-9 flex-row items-center gap-1 rounded-full bg-slate-100 px-3 active:bg-slate-200"
+            className="-my-1 h-11 min-w-[64px] flex-row items-center justify-center gap-1 rounded-full bg-slate-100 px-3 active:bg-slate-200"
           >
             <Copy size={14} color={COLORS.ink} />
             <Text className="text-xs font-bold text-ink">{copied ? 'Đã chép' : 'Chép'}</Text>

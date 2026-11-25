@@ -79,7 +79,7 @@ export default function StaffTrialsScreen({ navigation }: RootStackScreenProps<'
                 onPress={() => setFilter(f.id)}
                 accessibilityRole="tab"
                 accessibilityState={{ selected: active }}
-                className={`rounded-full px-4 py-2 ${active ? 'bg-brand-500' : 'border border-slate-200 bg-white'}`}
+                className={`min-h-11 justify-center rounded-full px-4 py-2 ${active ? 'bg-brand-500' : 'border border-slate-200 bg-white'}`}
               >
                 <Text className={`text-sm font-semibold ${active ? 'text-white' : 'text-ink-muted'}`}>{f.label}</Text>
               </Pressable>
