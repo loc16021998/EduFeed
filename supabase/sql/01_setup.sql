@@ -4,11 +4,11 @@
 -- HOW TO RUN: Supabase Dashboard → project → SQL Editor → New query → paste this whole file → Run.
 -- Run ONCE on a fresh project. It is wrapped in a transaction: if anything fails, nothing is applied.
 --
--- Includes migrations: 20261111090000_core_schema.sql, 20261111090100_rls_policies.sql, 20261111090200_functions.sql, 20261112090000_trust.sql, 20261113090000_video_publishing.sql, 20261114090000_crm_automation.sql, 20261115090000_zalo_tokens.sql, 20261116090000_dashboard_analytics.sql, 20261117090000_admin_accounts.sql, 20261118090000_admin_only_business.sql, 20261119090000_staff_signup_requests.sql, 20261120090000_parent_club_promo.sql, 20261121090000_parent_booking_actions.sql, 20261122090000_lifecycle_upsell.sql, 20261123090000_tuition_payments.sql, 20261124090000_parent_portal.sql, 20261125090000_referral_rewards.sql, 20261126090000_staff_rbac_tasks.sql, 20261127090000_parent_engagement.sql, 20261128090000_voice_games_community.sql, 20261129090000_app_release_config.sql, 20261130090000_push_notifications.sql, 20261201090000_weekly_progress_reports.sql, 20261202090000_video_social.sql, 20261203090000_account_center.sql, 20261204090000_admin_command_center.sql, 20261205090000_video_presenters.sql
+-- Includes migrations: 20261111090000_core_schema.sql, 20261111090100_rls_policies.sql, 20261111090200_functions.sql, 20261112090000_trust.sql, 20261113090000_video_publishing.sql, 20261114090000_crm_automation.sql, 20261115090000_zalo_tokens.sql, 20261116090000_dashboard_analytics.sql, 20261117090000_admin_accounts.sql, 20261118090000_admin_only_business.sql, 20261119090000_staff_signup_requests.sql, 20261120090000_parent_club_promo.sql, 20261121090000_parent_booking_actions.sql, 20261122090000_lifecycle_upsell.sql, 20261123090000_tuition_payments.sql, 20261124090000_parent_portal.sql, 20261125090000_referral_rewards.sql, 20261126090000_staff_rbac_tasks.sql, 20261127090000_parent_engagement.sql, 20261128090000_voice_games_community.sql, 20261129090000_app_release_config.sql, 20261130090000_push_notifications.sql, 20261201090000_weekly_progress_reports.sql, 20261202090000_video_social.sql, 20261203090000_account_center.sql, 20261204090000_admin_command_center.sql, 20261205090000_video_presenters.sql, 20261206090000_security_hardening.sql
 -- plus required reference data (course categories, branches).
 --
 -- If you later switch to the Supabase CLI (supabase db push), first mark these as applied:
---   npx supabase migration repair --status applied 20261111090000 20261111090100 20261111090200 20261112090000 20261113090000 20261114090000 20261115090000 20261116090000 20261117090000 20261118090000 20261119090000 20261120090000 20261121090000 20261122090000 20261123090000 20261124090000 20261125090000 20261126090000 20261127090000 20261128090000 20261129090000 20261130090000 20261201090000 20261202090000 20261203090000 20261204090000 20261205090000
+--   npx supabase migration repair --status applied 20261111090000 20261111090100 20261111090200 20261112090000 20261113090000 20261114090000 20261115090000 20261116090000 20261117090000 20261118090000 20261119090000 20261120090000 20261121090000 20261122090000 20261123090000 20261124090000 20261125090000 20261126090000 20261127090000 20261128090000 20261129090000 20261130090000 20261201090000 20261202090000 20261203090000 20261204090000 20261205090000 20261206090000
 -- ═══════════════════════════════════════════════════════════════════════════
 
 begin;
@@ -8373,6 +8373,41 @@ begin
   end if;
 end $$;
 grant execute on function public.video_presenter_archive(uuid) to authenticated;
+
+-- ───────────────── 20261206090000_security_hardening.sql ─────────────────
+-- ═══════════════════════════════════════════════════════════════════════════
+-- Hardening: account / admin / presenter functions are for signed-in users only.
+-- Postgres grants EXECUTE to PUBLIC by default, so anon could call them; each one already
+-- refuses guests inside ("Cần đăng nhập" / "Chỉ quản trị viên"), this removes the entry point too.
+-- Public features (feed, comments, booking, certificates, payments…) are not touched.
+-- ═══════════════════════════════════════════════════════════════════════════
+
+do $$
+declare
+  f text;
+begin
+  foreach f in array array[
+    'public.account_role()',
+    'public.my_account()',
+    'public.update_my_profile(text, text)',
+    'public.request_account_deletion(text)',
+    'public.cancel_account_deletion()',
+    'public.admin_deletion_requests(text)',
+    'public.admin_resolve_deletion(uuid, text)',
+    'public.admin_release_config_save(text, text, text, text, text, boolean)',
+    'public.admin_ad_spend_save(text, text, date, bigint, text)',
+    'public.admin_command_overview(text, int, timestamptz)',
+    'public.admin_class_report_status(text, date)',
+    'public.admin_recent_comments(text, int)',
+    'public.admin_system_health()',
+    'public.video_presenters_list()',
+    'public.video_presenter_save(uuid, text, text, boolean)',
+    'public.video_presenter_archive(uuid)'
+  ] loop
+    execute format('revoke execute on function %s from public, anon', f);
+    execute format('grant execute on function %s to authenticated', f);
+  end loop;
+end $$;
 
 -- ───────────────── Reference data (required) ─────────────────
 insert into public.categories (code, name, icon, color, sort_order) values

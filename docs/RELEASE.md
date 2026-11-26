@@ -235,6 +235,12 @@ và body `{"weekStart":"2026-11-16","force":true}` — chỉ những bé chưa c
 
 - Ảnh lưu ở bucket **avatars** (công khai, tối đa 2 MB); nên dùng ảnh chân dung rõ mặt, nền sáng.
 
+### Siết quyền (bản 20261206)
+
+Chạy `supabase/sql/upgrades/20261206090000_security_hardening.sql` (sau bản 20261205): khách chưa đăng nhập không còn gọi được
+các hàm tài khoản / quản trị / danh sách giáo viên (trước đó các hàm đã tự từ chối, giờ chặn luôn từ cửa vào). Không ảnh hưởng
+EduFeed, bình luận, đặt lịch, chứng nhận, thanh toán.
+
 ## 13. Sau phát hành (24–48 giờ)
 
 - Sentry: số lỗi mới theo `release`; lỗi `area:payment` / `area:zns` / `area:upload` cần xem ngay.

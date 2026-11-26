@@ -100,6 +100,7 @@ const REQUIRES = {
   '20261203090000_account_center.sql': [['public.video_likes', '20261202090000_video_social.sql']],
   '20261204090000_admin_command_center.sql': [['public.account_deletion_requests', '20261203090000_account_center.sql']],
   '20261205090000_video_presenters.sql': [['public.ad_spend', '20261204090000_admin_command_center.sql']],
+  '20261206090000_security_hardening.sql': [['public.video_presenters', '20261205090000_video_presenters.sql']],
 };
 const guard = (f) =>
   (REQUIRES[f] ?? [])

@@ -176,7 +176,10 @@ export default function SettingsScreen({ navigation }: RootStackScreenProps<'Set
   const ownRole: OnboardingRole | null = parentIn ? 'PARENT' : account?.role === 'ADVISOR' ? 'ADVISOR' : account?.role === 'TEACHER' ? 'TEACHER' : (currentRole ?? null);
   const goBack = () => (navigation.canGoBack() ? navigation.goBack() : navigation.navigate('MainTabs', { screen: 'Home' }));
   const zaloUrl = ENV.zaloOAId ? buildZaloOAUrl(ENV.zaloOAId) : '';
-  const role = account?.role ?? (parentIn ? 'PARENT' : null);
+  // Fall back to the signed-in session when the profile could not load (offline / DB not upgraded yet),
+  // so role shortcuts and "Đăng xuất" never disappear.
+  const role = account?.role ?? (parentIn ? 'PARENT' : staffIn ? (isAdmin ? 'ADMIN' : currentRole === 'ADVISOR' ? 'ADVISOR' : 'TEACHER') : null);
+  const staffEmail = useStaffStore((s) => s.email);
   const isStaffRole = role === 'TEACHER' || role === 'ADVISOR' || role === 'MANAGER' || role === 'ADMIN';
 
   return (
@@ -369,10 +372,10 @@ export default function SettingsScreen({ navigation }: RootStackScreenProps<'Set
 
         {isAdmin && <ReplayGuideCard />}
 
-        {!!account && (
+        {signedIn && (
           <SettingsSection title="Tài khoản" testID="section-account">
-            <SettingsRow first icon={LogOut} title="Đăng xuất" subtitle={account.phone ? formatPhone(account.phone) : account.email ?? undefined} onPress={signOut} testID="row-sign-out" />
-            {account.deletionPending ? (
+            <SettingsRow first icon={LogOut} title="Đăng xuất" subtitle={account?.phone ? formatPhone(account.phone) : (account?.email ?? staffEmail ?? undefined)} onPress={signOut} testID="row-sign-out" />
+            {!account ? null : account.deletionPending ? (
               <SettingsRow icon={Trash2} title="Huỷ yêu cầu xoá tài khoản" subtitle="Yêu cầu đang chờ trung tâm xử lý" onPress={cancelDeletion} testID="row-cancel-delete" />
             ) : (
               <SettingsRow icon={Trash2} tone="danger" title="Yêu cầu xoá tài khoản" subtitle="Xoá dữ liệu cá nhân, xử lý trong 7 ngày" onPress={() => setSheet('delete')} testID="row-delete" />

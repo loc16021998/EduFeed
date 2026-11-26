@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { BackHandler } from 'react-native';
+import { BackHandler, Platform } from 'react-native';
 
 import { useTrustStore } from '@/store/useTrustStore';
 
@@ -44,7 +44,8 @@ export function useExitIntent({ inProgress, focused, activity, idleMs = 30_000 }
 
   // 2. Android back button.
   useEffect(() => {
-    if (!focused) return;
+    // BackHandler only exists on Android (web logs an error, iOS has no back button).
+    if (!focused || Platform.OS !== 'android') return;
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
       const s = useTrustStore.getState();
       if (s.shouldOfferOnLeave()) {
