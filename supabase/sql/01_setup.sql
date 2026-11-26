@@ -4,11 +4,11 @@
 -- HOW TO RUN: Supabase Dashboard → project → SQL Editor → New query → paste this whole file → Run.
 -- Run ONCE on a fresh project. It is wrapped in a transaction: if anything fails, nothing is applied.
 --
--- Includes migrations: 20261111090000_core_schema.sql, 20261111090100_rls_policies.sql, 20261111090200_functions.sql, 20261112090000_trust.sql, 20261113090000_video_publishing.sql, 20261114090000_crm_automation.sql, 20261115090000_zalo_tokens.sql, 20261116090000_dashboard_analytics.sql, 20261117090000_admin_accounts.sql, 20261118090000_admin_only_business.sql, 20261119090000_staff_signup_requests.sql, 20261120090000_parent_club_promo.sql, 20261121090000_parent_booking_actions.sql, 20261122090000_lifecycle_upsell.sql, 20261123090000_tuition_payments.sql, 20261124090000_parent_portal.sql, 20261125090000_referral_rewards.sql, 20261126090000_staff_rbac_tasks.sql, 20261127090000_parent_engagement.sql, 20261128090000_voice_games_community.sql, 20261129090000_app_release_config.sql, 20261130090000_push_notifications.sql, 20261201090000_weekly_progress_reports.sql, 20261202090000_video_social.sql, 20261203090000_account_center.sql, 20261204090000_admin_command_center.sql
+-- Includes migrations: 20261111090000_core_schema.sql, 20261111090100_rls_policies.sql, 20261111090200_functions.sql, 20261112090000_trust.sql, 20261113090000_video_publishing.sql, 20261114090000_crm_automation.sql, 20261115090000_zalo_tokens.sql, 20261116090000_dashboard_analytics.sql, 20261117090000_admin_accounts.sql, 20261118090000_admin_only_business.sql, 20261119090000_staff_signup_requests.sql, 20261120090000_parent_club_promo.sql, 20261121090000_parent_booking_actions.sql, 20261122090000_lifecycle_upsell.sql, 20261123090000_tuition_payments.sql, 20261124090000_parent_portal.sql, 20261125090000_referral_rewards.sql, 20261126090000_staff_rbac_tasks.sql, 20261127090000_parent_engagement.sql, 20261128090000_voice_games_community.sql, 20261129090000_app_release_config.sql, 20261130090000_push_notifications.sql, 20261201090000_weekly_progress_reports.sql, 20261202090000_video_social.sql, 20261203090000_account_center.sql, 20261204090000_admin_command_center.sql, 20261205090000_video_presenters.sql
 -- plus required reference data (course categories, branches).
 --
 -- If you later switch to the Supabase CLI (supabase db push), first mark these as applied:
---   npx supabase migration repair --status applied 20261111090000 20261111090100 20261111090200 20261112090000 20261113090000 20261114090000 20261115090000 20261116090000 20261117090000 20261118090000 20261119090000 20261120090000 20261121090000 20261122090000 20261123090000 20261124090000 20261125090000 20261126090000 20261127090000 20261128090000 20261129090000 20261130090000 20261201090000 20261202090000 20261203090000 20261204090000
+--   npx supabase migration repair --status applied 20261111090000 20261111090100 20261111090200 20261112090000 20261113090000 20261114090000 20261115090000 20261116090000 20261117090000 20261118090000 20261119090000 20261120090000 20261121090000 20261122090000 20261123090000 20261124090000 20261125090000 20261126090000 20261127090000 20261128090000 20261129090000 20261130090000 20261201090000 20261202090000 20261203090000 20261204090000 20261205090000
 -- ═══════════════════════════════════════════════════════════════════════════
 
 begin;
@@ -8224,6 +8224,155 @@ begin
   );
 end $$;
 grant execute on function public.admin_system_health() to authenticated;
+
+-- ───────────────── 20261205090000_video_presenters.sql ─────────────────
+-- ═══════════════════════════════════════════════════════════════════════════
+-- Video presenters: the teachers who appear on EduFeed videos and Before/After posts
+-- ("Cô Hường", "Thầy Tú"…) with their avatar — editable in the app by staff, so a new photo
+-- no longer needs a code change.
+--
+--   video_presenters                       name (unique, case-insensitive), avatar_url, sort, is_active
+--   video_presenters_list()                staff: active presenters + how many videos use each name
+--   video_presenter_save(id, name, avatar, apply_existing)
+--                                          staff: add / rename / change avatar; optionally copy the
+--                                          new name + avatar onto existing videos and Before/After posts
+--   video_presenter_archive(id)            admin: hide from the picker (old videos keep their name)
+--
+-- Avatars are uploaded to the public "avatars" bucket (20261203 account center), inside the
+-- uploader's own <auth uid>/ folder.
+-- ═══════════════════════════════════════════════════════════════════════════
+
+create table if not exists public.video_presenters (
+  id          uuid primary key default gen_random_uuid(),
+  name        text not null check (char_length(btrim(name)) between 2 and 60),
+  avatar_url  text check (avatar_url is null or (avatar_url ~* '^https://' and char_length(avatar_url) <= 500)),
+  sort        smallint not null default 100,
+  is_active   boolean not null default true,
+  updated_by  uuid references auth.users (id) on delete set null,
+  created_at  timestamptz not null default now(),
+  updated_at  timestamptz not null default now()
+);
+create unique index if not exists video_presenters_name_key on public.video_presenters (lower(btrim(name)));
+drop trigger if exists video_presenters_set_updated_at on public.video_presenters;
+create trigger video_presenters_set_updated_at before update on public.video_presenters for each row execute function public.set_updated_at();
+
+alter table public.video_presenters enable row level security;
+revoke all on public.video_presenters from anon, authenticated;
+
+-- Seed the two teachers the app shipped with; their avatar comes from the newest video that has one.
+insert into public.video_presenters (name, sort, avatar_url)
+select n, s, (select v.teacher_avatar_url from public.videos v
+               where lower(btrim(v.teacher_name)) = lower(n) and v.teacher_avatar_url ~* '^https://' and v.teacher_avatar_url !~* 'pravatar\.cc'
+               order by v.created_at desc limit 1)
+  from (values ('Cô Hường', 1), ('Thầy Tú', 2)) as t(n, s)
+on conflict do nothing;
+
+-- ─── List ───────────────────────────────────────────────────────────────────
+
+create or replace function public.video_presenters_list()
+returns table (id uuid, name text, avatar_url text, sort smallint, videos int)
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+begin
+  if not public.is_staff() then
+    raise exception 'Chỉ nhân viên TH EDU' using hint = 'FORBIDDEN';
+  end if;
+  return query
+    select p.id, p.name, p.avatar_url, p.sort,
+           (select count(*)::int from public.videos v where lower(btrim(v.teacher_name)) = lower(btrim(p.name)))
+      from public.video_presenters p
+     where p.is_active
+     order by p.sort, p.name;
+end $$;
+grant execute on function public.video_presenters_list() to authenticated;
+
+-- ─── Save ───────────────────────────────────────────────────────────────────
+
+create or replace function public.video_presenter_save(p_id uuid, p_name text, p_avatar_url text, p_apply_existing boolean default true)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_name   text := btrim(coalesce(p_name, ''));
+  v_avatar text := nullif(btrim(coalesce(p_avatar_url, '')), '');
+  v_old    public.video_presenters;
+  v_row    public.video_presenters;
+  v_videos int := 0;
+  v_posts  int := 0;
+begin
+  if not public.is_staff() then
+    raise exception 'Chỉ nhân viên TH EDU' using hint = 'FORBIDDEN';
+  end if;
+  if char_length(v_name) < 2 or char_length(v_name) > 60 then
+    raise exception 'Tên giáo viên cần 2–60 ký tự' using hint = 'VALIDATION:name';
+  end if;
+  if v_name ~ '[<>{}]|https?://' then
+    raise exception 'Tên không được chứa đường link hay ký tự đặc biệt' using hint = 'VALIDATION:name';
+  end if;
+  if v_avatar is not null and (v_avatar !~* '^https://' or char_length(v_avatar) > 500) then
+    raise exception 'Ảnh đại diện không hợp lệ' using hint = 'VALIDATION:avatar';
+  end if;
+  if exists (select 1 from public.video_presenters x
+              where lower(btrim(x.name)) = lower(v_name) and (p_id is null or x.id <> p_id) and x.is_active) then
+    raise exception 'Đã có giáo viên tên "%"', v_name using hint = 'CONFLICT';
+  end if;
+
+  if p_id is null then
+    -- Re-adding an archived name brings it back.
+    update public.video_presenters set is_active = true, avatar_url = coalesce(v_avatar, avatar_url), updated_by = auth.uid()
+     where lower(btrim(name)) = lower(v_name) and not is_active
+    returning * into v_row;
+    if v_row.id is null then
+      insert into public.video_presenters (name, avatar_url, sort, updated_by)
+      values (v_name, v_avatar, coalesce((select max(sort) + 1 from public.video_presenters), 1), auth.uid())
+      returning * into v_row;
+    end if;
+  else
+    select * into v_old from public.video_presenters where id = p_id for update;
+    if not found then
+      raise exception 'Không tìm thấy giáo viên' using hint = 'NOT_FOUND';
+    end if;
+    update public.video_presenters set name = v_name, avatar_url = v_avatar, updated_by = auth.uid()
+     where id = p_id returning * into v_row;
+    -- Existing videos / posts that show the old name get the new name + avatar.
+    if coalesce(p_apply_existing, true) then
+      update public.videos set teacher_name = v_name, teacher_avatar_url = v_avatar
+       where lower(btrim(teacher_name)) = lower(btrim(v_old.name));
+      get diagnostics v_videos = row_count;
+      update public.portfolios set teacher_name = v_name, teacher_avatar_url = v_avatar
+       where lower(btrim(teacher_name)) = lower(btrim(v_old.name));
+      get diagnostics v_posts = row_count;
+    end if;
+  end if;
+
+  return jsonb_build_object('id', v_row.id, 'name', v_row.name, 'avatarUrl', v_row.avatar_url,
+                            'updatedVideos', v_videos, 'updatedPosts', v_posts);
+end $$;
+grant execute on function public.video_presenter_save(uuid, text, text, boolean) to authenticated;
+
+-- ─── Archive ────────────────────────────────────────────────────────────────
+
+create or replace function public.video_presenter_archive(p_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if not public.is_admin() then
+    raise exception 'Chỉ quản trị viên được ẩn giáo viên' using hint = 'FORBIDDEN';
+  end if;
+  update public.video_presenters set is_active = false, updated_by = auth.uid() where id = p_id;
+  if not found then
+    raise exception 'Không tìm thấy giáo viên' using hint = 'NOT_FOUND';
+  end if;
+end $$;
+grant execute on function public.video_presenter_archive(uuid) to authenticated;
 
 -- ───────────────── Reference data (required) ─────────────────
 insert into public.categories (code, name, icon, color, sort_order) values

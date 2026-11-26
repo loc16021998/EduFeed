@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Avatar, Button, ScreenHeader, Select, type SelectOption } from '@/components';
+import { Button, ScreenHeader, Select, type SelectOption } from '@/components';
 import type { RootStackScreenProps } from '@/navigation/types';
 import FeedVideoCard from '@/screens/Home/components/FeedVideoCard';
 import { canCaptureFrame, captureVideoFrame, pickImage, pickVideo } from '@/services/media/mediaPicker';
@@ -12,6 +12,7 @@ import { checkMedia, MAX_VIDEO_MB } from '@/services/media/storageUpload';
 import { useStaffStore, useVideoAdminStore } from '@/store';
 import type { AdminVideo, CourseCategory, FeedItem, PickedMedia, VideoDraft } from '@/types';
 import { CATEGORY_COLORS, CATEGORY_LABELS, COLORS, COURSE_CATEGORIES } from '@/utils/constants';
+import PresenterPicker from '@/components/Staff/PresenterPicker';
 import { TEACHERS } from '@/utils/mockData';
 import { confirmAsync, shareText, useAppWidth } from '@/utils/platform';
 
@@ -62,7 +63,7 @@ export default function VideoEditorScreen({ navigation, route }: RootStackScreen
   const [draft, setDraft] = useState<VideoDraft>(() =>
     existing
       ? { title: existing.title, category: existing.category, teacherName: existing.teacherName, teacherAvatar: existing.teacherAvatar, tags: existing.tags, ctaText: existing.ctaText }
-      : { title: '', category: 'TOAN_TU_DUY', teacherName: TEACHERS[0].name, teacherAvatar: TEACHERS[0].avatarUrl, tags: [], ctaText: ctaSuggestion('TOAN_TU_DUY') },
+      : { title: '', category: 'TOAN_TU_DUY', teacherName: TEACHERS[0].name, teacherAvatar: '', tags: [], ctaText: ctaSuggestion('TOAN_TU_DUY') },
   );
   const [ctaEdited, setCtaEdited] = useState(!!existing);
   const [errors, setErrors] = useState<Errors>({});
@@ -254,34 +255,7 @@ export default function VideoEditorScreen({ navigation, route }: RootStackScreen
 
           <Select label="Khóa học" value={draft.category} options={COURSE_OPTIONS} onChange={setCategory} />
 
-          <View className="gap-1.5">
-            <Text className="text-[13px] font-semibold text-ink-muted">Giáo viên trong video</Text>
-            <View className="flex-row flex-wrap gap-2">
-              {TEACHERS.map((t) => {
-                const active = draft.teacherName === t.name;
-                return (
-                  <Pressable
-                    key={t.id}
-                    onPress={() => patch({ teacherName: t.name, teacherAvatar: t.avatarUrl })}
-                    accessibilityRole="radio"
-                    accessibilityState={{ checked: active }}
-                    className={`flex-row items-center gap-2 rounded-full border-2 py-1 pl-1 pr-3 ${active ? 'border-brand-500 bg-brand-50' : 'border-slate-200 bg-white'}`}
-                  >
-                    <Avatar uri={t.avatarUrl} name={t.name} size={28} />
-                    <Text className={`text-sm font-semibold ${active ? 'text-brand-700' : 'text-ink'}`}>{t.name}</Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-            <TextInput
-              value={draft.teacherName}
-              onChangeText={(teacherName) => patch({ teacherName, teacherAvatar: TEACHERS.find((t) => t.name === teacherName)?.avatarUrl ?? '' })}
-              placeholder="Hoặc nhập tên giáo viên khác"
-              placeholderTextColor={COLORS.subtle}
-              className={`h-11 rounded-2xl border bg-white px-4 text-[14px] text-ink ${errors.teacherName ? 'border-red-400' : 'border-slate-200'}`}
-            />
-            {!!errors.teacherName && <Text className="text-xs text-red-500">{errors.teacherName}</Text>}
-          </View>
+          <PresenterPicker value={draft.teacherName} onChange={({ name, avatarUrl }) => patch({ teacherName: name, teacherAvatar: avatarUrl })} error={errors.teacherName} />
 
           <TagInput value={draft.tags} onChange={(tags) => patch({ tags })} suggestions={TAG_SUGGESTIONS[draft.category]} />
 

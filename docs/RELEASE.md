@@ -225,7 +225,17 @@ và body `{"weekStart":"2026-11-16","force":true}` — chỉ những bé chưa c
   chi chung). Chưa nhập thì CPA hiện "—".
 - Trên web / máy tính bảng màn hình dùng toàn bộ chiều rộng và xếp 2 cột; trên điện thoại xếp 1 cột.
 
-## 12. Sau phát hành (24–48 giờ)
+## 12. Ảnh giáo viên trên EduFeed
+
+1. Chạy `supabase/sql/upgrades/20261205090000_video_presenters.sql` (sau bản 20261204). Tạo danh sách giáo viên trong video với
+   sẵn "Cô Hường" và "Thầy Tú".
+2. Đổi ảnh: **Đăng video** (hoặc **Đăng Before/After**) → mục "Giáo viên trong video" → chọn giáo viên → **Đổi ảnh** → chọn ảnh →
+   app hỏi "Đổi ảnh cho cả N video đã đăng?" → **Đổi tất cả** để các video cũ cũng hiện ảnh mới.
+3. **Thêm giáo viên** ngay trong màn đăng video (tên + ảnh). Chỉ quản trị viên ẩn được giáo viên khỏi danh sách.
+
+- Ảnh lưu ở bucket **avatars** (công khai, tối đa 2 MB); nên dùng ảnh chân dung rõ mặt, nền sáng.
+
+## 13. Sau phát hành (24–48 giờ)
 
 - Sentry: số lỗi mới theo `release`; lỗi `area:payment` / `area:zns` / `area:upload` cần xem ngay.
 - Supabase → Logs → Edge Functions: lỗi 5xx.

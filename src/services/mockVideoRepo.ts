@@ -33,4 +33,12 @@ export const mockVideoRepo = {
   remove: (id: string) => {
     videos = videos.filter((v) => v.id !== id);
   },
+  /** Copy a presenter's new name + avatar onto their existing videos. Returns how many changed. */
+  updatePresenter: (oldName: string, name: string, avatarUrl: string) => {
+    const key = oldName.trim().toLowerCase();
+    let n = 0;
+    videos = videos.map((v) => (v.teacherName.trim().toLowerCase() === key ? (n++, { ...v, teacherName: name, teacherAvatar: avatarUrl }) : v));
+    return n;
+  },
+  countByPresenter: (name: string) => videos.filter((v) => v.teacherName.trim().toLowerCase() === name.trim().toLowerCase()).length,
 };

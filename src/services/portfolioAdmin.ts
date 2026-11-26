@@ -17,6 +17,8 @@ export interface PortfolioDraft {
   course: CourseCategory | null;
   campus: CampusLocation | null;
   teacherName: string;
+  /** Teacher photo shown on the post (from the presenter list); '' = initials. */
+  teacherAvatar?: string;
   teacherNote: string;
   duration: string;
   before: PickedMedia | null;
@@ -89,6 +91,7 @@ export async function savePortfolio(d: PortfolioDraft, onProgress?: (fraction: n
     before_image_url: beforeUrl,
     after_image_url: afterUrl,
     teacher_name: d.teacherName.trim(),
+    teacher_avatar_url: d.teacherAvatar && /^https:\/\//i.test(d.teacherAvatar) ? d.teacherAvatar : null,
     teacher_note: d.teacherNote.trim(),
     duration_label: d.duration.trim(),
     parent_consent: d.parentConsent,

@@ -13,7 +13,8 @@ import { savePortfolio, validateDraft, type DraftErrors, type PortfolioDraft, ty
 import { useStaffStore } from '@/store';
 import type { CampusLocation, CourseCategory } from '@/types';
 import { CATEGORY_COLORS, CATEGORY_LABELS, COLORS } from '@/utils/constants';
-import { CAMPUSES, TEACHERS } from '@/utils/mockData';
+import PresenterPicker from '@/components/Staff/PresenterPicker';
+import { CAMPUSES } from '@/utils/mockData';
 
 const COURSES: CourseCategory[] = ['LUYEN_CHU_DEP', 'TOAN_TU_DUY', 'TIEN_TIEU_HOC', 'BOI_DUONG_TOAN_TV'];
 
@@ -108,16 +109,15 @@ export default function TeacherUploadScreen({ navigation }: RootStackScreenProps
         <Chips label="Khóa học" error={errors.course} options={COURSES.map((c) => ({ id: c, label: CATEGORY_LABELS[c], color: CATEGORY_COLORS[c] }))} value={d.course} onChange={(v) => set('course', v as CourseCategory)} />
         <Chips label="Cơ sở" error={errors.campus} options={CAMPUSES.map((c) => ({ id: c.id, label: c.name.replace(/^Cơ sở\s*/, '') }))} value={d.campus} onChange={(v) => set('campus', v as CampusLocation)} />
 
-        <View className="gap-1.5">
-          <FormField label="Giáo viên" value={d.teacherName} onChangeText={(t) => set('teacherName', t)} error={errors.teacherName} placeholder="VD: Cô Hường" maxLength={60} />
-          <View className="flex-row flex-wrap gap-1.5">
-            {TEACHERS.map((t) => (
-              <Pressable key={t.id} onPress={() => set('teacherName', t.name)} accessibilityRole="button" className="h-11 justify-center rounded-full border border-dashed border-slate-300 px-3.5 active:bg-slate-50">
-                <Text className="text-xs text-ink-muted">{t.name}</Text>
-              </Pressable>
-            ))}
-          </View>
-        </View>
+        <PresenterPicker
+          noun="bài"
+          value={d.teacherName}
+          onChange={({ name, avatarUrl }) => {
+            set('teacherName', name);
+            set('teacherAvatar', avatarUrl);
+          }}
+          error={errors.teacherName}
+        />
         <FormField label="Thời gian học" value={d.duration} onChangeText={(t) => set('duration', t)} error={errors.duration} placeholder="VD: 2 tháng" maxLength={30} />
 
         <View className="gap-1.5">
