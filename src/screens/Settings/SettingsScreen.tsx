@@ -4,6 +4,7 @@ import {
   Check,
   ClipboardList,
   Clapperboard,
+  Gauge,
   Gift,
   HardDrive,
   LayoutDashboard,
@@ -325,7 +326,8 @@ export default function SettingsScreen({ navigation }: RootStackScreenProps<'Set
         )}
         {(role === 'ADMIN' || role === 'MANAGER') && (
           <SettingsSection title="Quản trị" testID="section-admin">
-            <SettingsRow first icon={LayoutDashboard} title="Trang quản trị" subtitle="Tổng quan kinh doanh, lớp học, phụ huynh" onPress={() => navigation.navigate('AdminHome')} testID="row-admin-home" />
+            {role === 'ADMIN' && <SettingsRow first icon={Gauge} title="Trung tâm điều hành" subtitle="KPI, lead, học vụ, nội dung, tài khoản" onPress={() => navigation.navigate('AdminCommandCenter')} testID="row-command-center" />}
+            <SettingsRow first={role !== 'ADMIN'} icon={LayoutDashboard} title="Trang quản trị" subtitle="Tổng quan kinh doanh, lớp học, phụ huynh" onPress={() => navigation.navigate('AdminHome')} testID="row-admin-home" />
             <SettingsRow icon={UserCog} title="Tài khoản & phân quyền" subtitle="Nhân viên, vai trò, cơ sở" onPress={() => navigation.navigate('StaffAccounts')} testID="row-staff-accounts" />
             {role === 'ADMIN' && (
               <>

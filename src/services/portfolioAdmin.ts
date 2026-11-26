@@ -8,6 +8,7 @@ import type { CampusLocation, CourseCategory, PickedMedia } from '@/types';
 import { sleep, uuidv4 } from '@/utils/helpers';
 
 import { checkMedia, removeMedia, uploadMedia } from './media/storageUpload';
+import { fetchPortfolios } from './portfolio';
 
 export interface PortfolioDraft {
   displayName: string;
@@ -100,4 +101,60 @@ export async function savePortfolio(d: PortfolioDraft, onProgress?: (fraction: n
   }
   onProgress?.(1);
   return { id, published };
+}
+
+// ─── Admin list / visibility (Command Center) ───────────────────────────────
+
+export interface AdminPortfolioRow {
+  id: string;
+  displayName: string;
+  course: CourseCategory;
+  campus: CampusLocation;
+  teacherName: string;
+  afterImageUrl: string;
+  parentConsent: boolean;
+  isPublished: boolean;
+  createdAt: string;
+}
+
+let demoRows: AdminPortfolioRow[] | null = null;
+
+/** Every Before/After post (published or not), newest first. Staff RLS allows reading all rows. */
+export async function listAdminPortfolios(campus: CampusLocation | null): Promise<AdminPortfolioRow[]> {
+  if (!supabase) {
+    await sleep(200);
+    if (!demoRows) {
+      demoRows = (await fetchPortfolios()).map((p, i) => ({
+        id: p.id, displayName: p.displayName, course: p.course, campus: p.campusLocation, teacherName: p.teacherName,
+        afterImageUrl: p.afterImageUrl, parentConsent: true, isPublished: i !== 1, createdAt: new Date(Date.now() - i * 86400000).toISOString(),
+      }));
+    }
+    return demoRows.filter((r) => !campus || r.campus === campus);
+  }
+  let q = supabase
+    .from('portfolios')
+    .select('id, display_name, course_code, branch_location, teacher_name, after_image_url, parent_consent, is_published, created_at')
+    .order('created_at', { ascending: false })
+    .limit(60);
+  if (campus) q = q.eq('branch_location', campus);
+  const { data, error } = await q;
+  if (error) throw new Error(/fetch|network/i.test(error.message) ? 'Mất kết nối mạng. Kiểm tra Internet rồi thử lại.' : 'Không tải được danh sách Before/After.');
+  /* eslint-disable @typescript-eslint/no-explicit-any */
+  return ((data ?? []) as any[]).map((r) => ({
+    id: r.id, displayName: r.display_name, course: r.course_code, campus: r.branch_location, teacherName: r.teacher_name,
+    afterImageUrl: r.after_image_url, parentConsent: !!r.parent_consent, isPublished: !!r.is_published, createdAt: r.created_at,
+  }));
+  /* eslint-enable @typescript-eslint/no-explicit-any */
+}
+
+/** Show / hide a Before/After post. Publishing needs the parent's written consent on record. */
+export async function setPortfolioPublished(row: AdminPortfolioRow, publish: boolean): Promise<void> {
+  if (publish && !row.parentConsent) throw new Error('Chưa có đồng ý của phụ huynh — không thể hiển thị công khai.');
+  if (!supabase) {
+    await sleep(150);
+    demoRows = (demoRows ?? []).map((r) => (r.id === row.id ? { ...r, isPublished: publish } : r));
+    return;
+  }
+  const { error } = await supabase.from('portfolios').update({ is_published: publish } as never).eq('id', row.id);
+  if (error) throw new Error('Không cập nhật được, vui lòng thử lại.');
 }

@@ -1,5 +1,5 @@
 import { useFocusEffect } from '@react-navigation/native';
-import { BarChart3, Bell, CalendarClock, ChevronRight, Clapperboard, GraduationCap, House, HeartHandshake, ImagePlus, LogOut, ShieldCheck, UserCheck, Users, ListChecks, QrCode, School, Settings } from 'lucide-react-native';
+import { BarChart3, Bell, CalendarClock, ChevronRight, Clapperboard, GraduationCap, House, HeartHandshake, ImagePlus, LogOut, ShieldCheck, UserCheck, Users, ListChecks, QrCode, School, Settings, LayoutDashboard } from 'lucide-react-native';
 import type { ReactNode } from 'react';
 import { useCallback, useEffect, useState } from 'react';
 import { Image, Pressable, ScrollView, Text, useWindowDimensions, View, type ImageSourcePropType } from 'react-native';
@@ -15,7 +15,7 @@ import { confirmAsync } from '@/utils/platform';
 
 const LOGO: ImageSourcePropType = typeof logo === 'string' ? { uri: logo } : logo;
 
-type Target = 'Classes' | 'TeacherDashboard' | 'AdvisorTasks' | 'AccountManagement' | 'AdminDashboard' | 'StaffAccounts' | 'StaffRequests' | 'StaffVideos' | 'StaffTrials' | 'TeacherUpload' | 'StaffEnrollments';
+type Target = 'AdminCommandCenter' | 'Classes' | 'TeacherDashboard' | 'AdvisorTasks' | 'AccountManagement' | 'AdminDashboard' | 'StaffAccounts' | 'StaffRequests' | 'StaffVideos' | 'StaffTrials' | 'TeacherUpload' | 'StaffEnrollments';
 
 /** Admin area home (owner / manager). Teachers and staff have their own area at /quan-ly. */
 export default function AdminHomeScreen({ navigation }: RootStackScreenProps<'AdminHome'>) {
@@ -120,6 +120,22 @@ export default function AdminHomeScreen({ navigation }: RootStackScreenProps<'Ad
             <ChevronRight size={18} color="#92400E" />
           </Pressable>
         )}
+
+        <Pressable
+          onPress={() => go('AdminCommandCenter')}
+          accessibilityRole="button"
+          testID="open-command-center"
+          className="flex-row items-center gap-3 rounded-3xl bg-ink p-4 active:opacity-90"
+        >
+          <View className="h-12 w-12 items-center justify-center rounded-2xl bg-white/10">
+            <LayoutDashboard size={24} color="#fff" />
+          </View>
+          <View className="flex-1">
+            <Text className="text-[16px] font-extrabold text-white">Trung tâm điều hành</Text>
+            <Text className="text-[13px] leading-[18px] text-white/75">KPI, học phí, lead, học vụ, nội dung, tài khoản — một màn hình</Text>
+          </View>
+          <ChevronRight size={20} color="#fff" />
+        </Pressable>
 
         <Section title="Kinh doanh & nhân sự" />
         <Tile

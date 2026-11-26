@@ -33,6 +33,8 @@ export type RootStackParamList = {
   StaffTrials: undefined;
   AdminHome: undefined;
   AdminDashboard: undefined;
+  /** Admin Command Center: KPIs, leads, academic queues, moderation, accounts, release — one screen. */
+  AdminCommandCenter: undefined;
   StaffAccounts: undefined;
   StaffRequests: undefined;
   /** Parents: trial bookings made on this device. */

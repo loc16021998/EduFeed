@@ -18,6 +18,7 @@ import MiniGamesScreen from '@/screens/Games/MiniGamesScreen';
 import ParentCommunityScreen from '@/screens/Community/ParentCommunityScreen';
 import DataSettingsScreen from '@/screens/Settings/DataSettingsScreen';
 import SettingsScreen from '@/screens/Settings/SettingsScreen';
+import AdminCommandCenterScreen from '@/screens/Admin/AdminCommandCenterScreen';
 import TeacherDashboardScreen from '@/screens/Teacher/TeacherDashboardScreen';
 import AdvisorTaskScreen from '@/screens/Advisor/AdvisorTaskScreen';
 import ClassesScreen from '@/screens/Admin/ClassesScreen';
@@ -98,6 +99,7 @@ const linking: LinkingOptions<RootStackParamList> = {
       AdminHome: 'quan-tri',
       AdminLogin: 'quan-tri/dang-nhap',
       AdminDashboard: 'quan-tri/tong-quan',
+      AdminCommandCenter: 'quan-tri/dieu-hanh',
       StaffAccounts: 'quan-tri/tai-khoan',
       StaffRequests: 'quan-tri/duyet-tai-khoan',
       VideoEditor: 'quan-ly/video/:id?',
@@ -109,7 +111,7 @@ const linking: LinkingOptions<RootStackParamList> = {
 export const navigationRef = createNavigationContainerRef<RootStackParamList>();
 
 /** Staff screens are not part of the parent funnel. */
-const STAFF_ROUTES = new Set(['StaffLogin', 'StaffVideos', 'StaffTrials', 'VideoEditor', 'AdminHome', 'AdminLogin', 'AdminDashboard', 'StaffAccounts', 'StaffRegister', 'StaffRequests', 'TeacherUpload', 'StaffEnrollments', 'AccountManagement', 'TeacherDashboard', 'AdvisorTasks', 'Classes']);
+const STAFF_ROUTES = new Set(['AdminCommandCenter', 'StaffLogin', 'StaffVideos', 'StaffTrials', 'VideoEditor', 'AdminHome', 'AdminLogin', 'AdminDashboard', 'StaffAccounts', 'StaffRegister', 'StaffRequests', 'TeacherUpload', 'StaffEnrollments', 'AccountManagement', 'TeacherDashboard', 'AdvisorTasks', 'Classes']);
 
 /** Count one anonymous "app open" per session for the dashboard funnel (parents only). */
 // Error reports carry who / where in coarse, non-identifying terms: role + campus + screen name.
@@ -178,6 +180,7 @@ export default function AppNavigator() {
         <Stack.Screen name="MiniGames" component={MiniGamesScreen} options={{ headerShown: false }} />
         <Stack.Screen name="Community" component={ParentCommunityScreen} options={{ headerShown: false }} />
         <Stack.Screen name="Settings" component={SettingsScreen} options={{ headerShown: false }} />
+        <Stack.Screen name="AdminCommandCenter" component={AdminCommandCenterScreen} options={{ headerShown: false }} />
         <Stack.Screen name="DataSettings" component={DataSettingsScreen} options={{ headerShown: false }} />
         <Stack.Screen name="TeacherDashboard" component={TeacherDashboardScreen} options={{ headerShown: false }} />
         <Stack.Screen name="AdvisorTasks" component={AdvisorTaskScreen} options={{ headerShown: false }} />

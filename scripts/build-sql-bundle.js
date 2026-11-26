@@ -98,6 +98,7 @@ const REQUIRES = {
   '20261201090000_weekly_progress_reports.sql': [['public.push_outbox', '20261130090000_push_notifications.sql']],
   '20261202090000_video_social.sql': [['public.weekly_progress_reports', '20261201090000_weekly_progress_reports.sql']],
   '20261203090000_account_center.sql': [['public.video_likes', '20261202090000_video_social.sql']],
+  '20261204090000_admin_command_center.sql': [['public.account_deletion_requests', '20261203090000_account_center.sql']],
 };
 const guard = (f) =>
   (REQUIRES[f] ?? [])

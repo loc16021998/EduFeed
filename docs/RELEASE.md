@@ -210,7 +210,22 @@ và body `{"weekStart":"2026-11-16","force":true}` — chỉ những bé chưa c
 - **Cấu hình phiên bản** (chỉ quản trị): sửa `app_release_config` ngay trong app thay vì Table Editor.
 - **Cơ sở ưu tiên** được chọn sẵn ở màn Đặt lịch học thử (trừ khi ba mẹ đã tự chọn cơ sở khác trên form).
 
-## 11. Sau phát hành (24–48 giờ)
+## 11. Trung tâm điều hành (/quan-tri/dieu-hanh)
+
+1. Chạy `supabase/sql/upgrades/20261204090000_admin_command_center.sql` (sau bản 20261203). Không cần deploy lại Edge Function.
+2. Lối vào: thẻ **Trung tâm điều hành** đầu trang Quản trị, hoặc Cài đặt → Quản trị. Chỉ tài khoản quản trị (admin) mở được.
+
+- **Bộ lọc chung** (nhớ giữa các lần mở): cơ sở (Tất cả / CS1 Xa La / CS2 Ngô Thì Nhậm) và thời gian (Hôm nay / 7 / 30 ngày).
+- **6 mô-đun:** Tổng quan (KPI, học phí đã thu / còn nợ, doanh thu theo khoá, nguồn khách & CPA, đối soát hoá đơn 1 chạm) ·
+  Lead & CRM (lọc theo trạng thái, gọi / Zalo, giao tư vấn, ghi nhận học thử → tin T+2h, chuyển nhập học) · Học vụ (duyệt đơn
+  nghỉ / học bù, lớp hôm nay chưa gửi sổ liên lạc, báo cáo tuần) · Nội dung (trả lời / ẩn bình luận, ẩn hiện video và
+  Before/After) · Tài khoản (khoá / mở phụ huynh, cộng trừ buổi, giao việc nhân viên, yêu cầu xoá tài khoản) · Hệ thống (hàng
+  đợi thông báo, Zalo OA, cấu hình phiên bản, OTA).
+- **CPA cần chi phí quảng cáo:** Tổng quan → Nguồn khách & CPA → **Nhập chi phí** (theo tháng, theo kênh; chọn "Tất cả cơ sở" =
+  chi chung). Chưa nhập thì CPA hiện "—".
+- Trên web / máy tính bảng màn hình dùng toàn bộ chiều rộng và xếp 2 cột; trên điện thoại xếp 1 cột.
+
+## 12. Sau phát hành (24–48 giờ)
 
 - Sentry: số lỗi mới theo `release`; lỗi `area:payment` / `area:zns` / `area:upload` cần xem ngay.
 - Supabase → Logs → Edge Functions: lỗi 5xx.
